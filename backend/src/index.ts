@@ -94,9 +94,10 @@ const buildSummary = (runs: BatchJobResult['runs'], totalRuns: number) => {
   let best = -Infinity;
   let worst = Infinity;
   for (const r of runs) {
-    sum += r.metrics.totalReturn;
-    if (r.metrics.totalReturn > best) best = r.metrics.totalReturn;
-    if (r.metrics.totalReturn < worst) worst = r.metrics.totalReturn;
+    const totalReturn = r.metrics.totalReturn ?? 0;
+    sum += totalReturn;
+    if (totalReturn > best) best = totalReturn;
+    if (totalReturn < worst) worst = totalReturn;
   }
   return {
     totalRuns,
@@ -115,6 +116,7 @@ const generateAllAssignments = (vars: Array<{ name: string; values: string[] }>)
       return;
     }
     const v = vars[idx];
+    if (!v) return;
     const values = v.values.length ? v.values : [''];
     for (const val of values) {
       current[v.name] = String(val);
