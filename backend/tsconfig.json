@@ -40,5 +40,10 @@
     "skipLibCheck": true,
 
     "esModuleInterop": true,
-  }
+  },
+  "exclude": [
+    "**/*.test.ts",
+    "**/test-*.ts",
+    "src/execution/test-executor.ts"
+  ]
 }
