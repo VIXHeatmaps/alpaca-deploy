@@ -3,12 +3,10 @@
    Dashboard + Vertical UI 2 Only
    ============================== */
 
-import React, { useState } from "react";
-import Dashboard from "./components/Dashboard";
+import { useState } from "react";
+import { Dashboard } from "./components/Dashboard";
 import VerticalUI2 from "./components/VerticalUI2";
 import "./App.css";
-
-const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
 
 function App() {
   const [uiTab, setUiTab] = useState<"dashboard" | "vertical2">("dashboard");
