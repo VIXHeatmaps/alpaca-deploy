@@ -115,7 +115,7 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: Batch
             </span>
           );
         default:
-          return <span style={{ ...baseStyle, background: "#f5f5f5", color: "#666", border: "1px solid #ddd" }}>{job.status.toUpperCase()}</span>;
+          return <span style={{ ...baseStyle, background: "#f5f5f5", color: "#666", border: "1px solid #ddd" }}>{String(job.status).toUpperCase()}</span>;
       }
     };
 
