@@ -1,0 +1,117 @@
+from flask import Flask, request, jsonify
+import numpy as np
+
+app = Flask(__name__)
+
+
+def sma(prices: np.ndarray, period: int) -> np.ndarray:
+    if period <= 0:
+        raise ValueError("SMA period must be > 0")
+    ret = np.full_like(prices, fill_value=np.nan, dtype=float)
+    for i in range(period - 1, len(prices)):
+        ret[i] = np.mean(prices[i - period + 1 : i + 1])
+    return ret
+
+
+def ema(prices: np.ndarray, period: int) -> np.ndarray:
+    if period <= 0:
+        raise ValueError("EMA period must be > 0")
+    ema_values = np.full_like(prices, fill_value=np.nan, dtype=float)
+    multiplier = 2 / (period + 1)
+    # Start with SMA for first value
+    sma_initial = np.mean(prices[:period])
+    ema_values[period - 1] = sma_initial
+    # Compute EMA sequentially
+    for i in range(period, len(prices)):
+        ema_values[i] = (prices[i] - ema_values[i - 1]) * multiplier + ema_values[i - 1]
+    return ema_values
+
+
+def rsi(prices: np.ndarray, period: int) -> np.ndarray:
+    if period <= 0:
+        raise ValueError("RSI period must be > 0")
+    deltas = np.diff(prices)
+    gains = np.where(deltas > 0, deltas, 0.0)
+    losses = np.where(deltas < 0, -deltas, 0.0)
+    avg_gain = np.zeros_like(prices)
+    avg_loss = np.zeros_like(prices)
+    # Seed initial averages using simple moving average
+    avg_gain[period] = np.mean(gains[:period])
+    avg_loss[period] = np.mean(losses[:period])
+    # Wilder's smoothing
+    for i in range(period + 1, len(prices)):
+        avg_gain[i] = (avg_gain[i - 1] * (period - 1) + gains[i - 1]) / period
+        avg_loss[i] = (avg_loss[i - 1] * (period - 1) + losses[i - 1]) / period
+    rs = np.zeros_like(prices)
+    rsi = np.full_like(prices, fill_value=np.nan, dtype=float)
+    for i in range(period, len(prices)):
+        if avg_loss[i] == 0:
+            rs[i] = np.inf
+            rsi[i] = 100.0
+        else:
+            rs[i] = avg_gain[i] / avg_loss[i]
+            rsi[i] = 100 - (100 / (1 + rs[i]))
+    return rsi
+
+
+def macd(prices: np.ndarray, fast_period: int, slow_period: int, signal_period: int):
+    ema_fast = ema(prices, fast_period)
+    ema_slow = ema(prices, slow_period)
+    macd_line = ema_fast - ema_slow
+    signal_line = ema(macd_line[~np.isnan(macd_line)], signal_period)
+    # Pad signal line to align lengths
+    padded_signal = np.full_like(macd_line, fill_value=np.nan)
+    # Starting index for signal (fast_period + slow_period difference?)
+    # For simplicity, we align by trailing length
+    valid_start = len(macd_line) - len(signal_line)
+    padded_signal[valid_start:] = signal_line
+    histogram = macd_line - padded_signal
+    return macd_line, padded_signal, histogram
+
+
+@app.route('/indicator', methods=['POST'])
+def indicator_endpoint():
+    data = request.get_json(force=True)
+    indicator = data.get('indicator')
+    prices = data.get('prices')
+    params = data.get('params') or {}
+    if not indicator or prices is None:
+        return jsonify({'error': 'indicator and prices fields are required'}), 400
+    prices_arr = np.array(prices, dtype=float)
+    try:
+        if indicator.lower() == 'sma':
+            period = int(params.get('period', 14))
+            values = sma(prices_arr, period).tolist()
+            return jsonify({'values': values})
+        elif indicator.lower() == 'ema':
+            period = int(params.get('period', 14))
+            values = ema(prices_arr, period).tolist()
+            return jsonify({'values': values})
+        elif indicator.lower() == 'rsi':
+            period = int(params.get('period', 14))
+            values = rsi(prices_arr, period).tolist()
+            return jsonify({'values': values})
+        elif indicator.lower() == 'macd':
+            fast_period = int(params.get('fast_period', 12))
+            slow_period = int(params.get('slow_period', 26))
+            signal_period = int(params.get('signal_period', 9))
+            macd_line, signal_line, histogram = macd(prices_arr, fast_period, slow_period, signal_period)
+            return jsonify({
+                'macd_line': macd_line.tolist(),
+                'signal_line': signal_line.tolist(),
+                'histogram': histogram.tolist(),
+                'values': macd_line.tolist()
+            })
+        else:
+            return jsonify({'error': f'Unknown indicator {indicator}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok'})
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5001)

@@ -1,0 +1,2 @@
+# Data directory for active strategy storage
+# activeStrategy.json will be created here when a strategy is invested

@@ -1,0 +1,96 @@
+{
+  "id": "1759360445876-5dc8x2nym",
+  "name": "MVP [Deployed: 2025-10-01 23:14]",
+  "investAmount": 10000,
+  "currentValue": 0,
+  "flowData": {
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "data": {
+          "label": "MVP",
+          "subLabel": "First flow"
+        }
+      },
+      {
+        "id": "gate-q2c8g6",
+        "type": "gate",
+        "data": {
+          "label": "Gate",
+          "conditions": [
+            {
+              "left": {
+                "symbol": "IBIT",
+                "type": "MFI",
+                "params": {
+                  "timeperiod": 5
+                }
+              },
+              "op": "gt",
+              "rightIndicator": {
+                "symbol": "GLD",
+                "type": "MFI",
+                "params": {
+                  "timeperiod": 5
+                }
+              }
+            }
+          ],
+          "thenTargetId": "port-85mjyg",
+          "elseTargetId": "port-wluwc9"
+        }
+      },
+      {
+        "id": "port-85mjyg",
+        "type": "portfolio",
+        "data": {
+          "label": "Risk-On",
+          "items": [
+            {
+              "symbol": "IBIT",
+              "weightPct": 100
+            }
+          ]
+        }
+      },
+      {
+        "id": "port-wluwc9",
+        "type": "portfolio",
+        "data": {
+          "label": "Risk-Off",
+          "items": [
+            {
+              "symbol": "GLD",
+              "weightPct": 100
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": "start",
+        "to": "gate-q2c8g6"
+      },
+      {
+        "from": "gate-q2c8g6",
+        "to": "port-85mjyg",
+        "label": "then"
+      },
+      {
+        "from": "gate-q2c8g6",
+        "to": "port-wluwc9",
+        "label": "else"
+      }
+    ]
+  },
+  "holdings": [
+    {
+      "symbol": "GLD",
+      "qty": 0
+    }
+  ],
+  "createdAt": "2025-10-01T23:14:05.876Z",
+  "lastRebalance": "2025-10-01T23:14:05.876Z"
+}

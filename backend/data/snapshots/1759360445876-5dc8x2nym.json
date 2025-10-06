@@ -1,0 +1,53 @@
+[
+  {
+    "strategyId": "1759360445876-5dc8x2nym",
+    "date": "2025-10-02",
+    "timestamp": "2025-10-02T20:35:51.733Z",
+    "portfolioValue": 0,
+    "holdings": [
+      {
+        "symbol": "GLD",
+        "qty": 0,
+        "price": 354.84,
+        "value": 0
+      }
+    ],
+    "totalReturn": -10000,
+    "totalReturnPct": -100,
+    "rebalanceType": "daily"
+  },
+  {
+    "strategyId": "1759360445876-5dc8x2nym",
+    "date": "2025-10-03",
+    "timestamp": "2025-10-03T19:50:01.844Z",
+    "portfolioValue": 0,
+    "holdings": [
+      {
+        "symbol": "GLD",
+        "qty": 0,
+        "price": 357.7689,
+        "value": 0
+      }
+    ],
+    "totalReturn": -10000,
+    "totalReturnPct": -100,
+    "rebalanceType": "daily"
+  },
+  {
+    "strategyId": "1759360445876-5dc8x2nym",
+    "date": "2025-10-03",
+    "timestamp": "2025-10-03T20:50:04.319Z",
+    "portfolioValue": 0,
+    "holdings": [
+      {
+        "symbol": "GLD",
+        "qty": 0,
+        "price": 357.62,
+        "value": 0
+      }
+    ],
+    "totalReturn": -10000,
+    "totalReturnPct": -100,
+    "rebalanceType": "daily"
+  }
+]
