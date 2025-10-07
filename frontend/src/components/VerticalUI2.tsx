@@ -2114,6 +2114,7 @@ type StrategyTab = {
 
 interface VerticalUI2Props {
   apiKey?: string;
+  hideInternalTabs?: boolean;
   apiSecret?: string;
 }
 
@@ -2830,6 +2831,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     }}>
       {/* Main Tabs */}
       <div style={{
+        display: "none", // HIDDEN - tabs moved to App.tsx
         padding: '12px 32px 0 32px',
         background: '#fff',
         borderBottom: '1px solid #e5e7eb',
@@ -2888,10 +2890,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
       {/* 1. Main Toolbar */}
       <div style={{
+        background: "#fff",
         padding: '16px 32px',
-        background: '#fff',
         borderBottom: '1px solid #e5e7eb',
-        display: activeTab === "strategy" ? 'block' : 'none',
       }}>
         <div style={{
           display: 'flex',
@@ -3798,15 +3799,15 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       </div>
       )}
 
-      {/* Variables Tab */}
-      {activeTab === "variables" && (
+      {/* Variables Tab - MOVED to Library */}
+      {false && (
         <div style={{ padding: '24px 32px' }}>
           <VariablesTab />
         </div>
       )}
 
-      {/* Batch Tests Tab */}
-      {activeTab === "batchtests" && (
+      {/* Batch Tests Tab - MOVED to Library */}
+      {false && (
         <div style={{ padding: '24px 32px' }}>
           <BatchTestsTab
             jobs={batchJobs}

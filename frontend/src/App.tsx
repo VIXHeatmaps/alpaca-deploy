@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { Dashboard } from "./components/Dashboard";
-import VerticalUI2 from "./components/VerticalUI2";
+import { BuilderWrapper } from "./components/BuilderWrapper";
 import "./App.css";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
@@ -19,7 +19,7 @@ interface User {
 }
 
 function App() {
-  const [uiTab, setUiTab] = useState<"dashboard" | "vertical2">("dashboard");
+  const [uiTab, setUiTab] = useState<"dashboard" | "library" | "builder">("dashboard");
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [mask, setMask] = useState(true);
@@ -206,15 +206,21 @@ function App() {
             Dashboard
           </button>
           <button
-            className={`tabBtn ${uiTab === "vertical2" ? "active" : ""}`}
-            onClick={() => setUiTab("vertical2")}
+            className={`tabBtn ${uiTab === "library" ? "active" : ""}`}
+            onClick={() => setUiTab("library")}
           >
-            Strategy Builder
+            Library
+          </button>
+          <button
+            className={`tabBtn ${uiTab === "builder" ? "active" : ""}`}
+            onClick={() => setUiTab("builder")}
+          >
+            Builder
           </button>
         </div>
 
         {/* Tab Content */}
-        {uiTab === "dashboard" ? (
+        {uiTab === "dashboard" && (
           <Dashboard
             apiKey={apiKey}
             apiSecret={apiSecret}
@@ -223,10 +229,16 @@ function App() {
             onApiKeyChange={setApiKey}
             onApiSecretChange={setApiSecret}
             onMaskToggle={() => setMask(!mask)}
-            onViewStrategyFlow={() => setUiTab("vertical2")}
+            onViewStrategyFlow={() => setUiTab("builder")}
           />
-        ) : (
-          <VerticalUI2 apiKey={apiKey} apiSecret={apiSecret} />
+        )}
+
+        {(uiTab === "library" || uiTab === "builder") && (
+          <BuilderWrapper
+            apiKey={apiKey}
+            apiSecret={apiSecret}
+            view={uiTab}
+          />
         )}
       </div>
     </div>

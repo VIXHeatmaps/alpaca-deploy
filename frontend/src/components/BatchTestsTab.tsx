@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import type { BatchJob } from "../types/batchJobs";
 
 export type BatchTestsTabProps = {
@@ -16,40 +16,18 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: Batch
     background: "#fff",
   };
 
-  const tabBtn = {
-    border: "1px solid #ddd",
-    background: "#f5f5f5",
-    padding: "6px 12px",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontWeight: 700,
-  } as React.CSSProperties;
+  // Sort all jobs: in-progress at top, then completed by most recent
+  const sortedJobs = useMemo(() => {
+    const inProgress = jobs.filter((job) => job.status === "queued" || job.status === "running");
+    const completed = jobs.filter((job) => job.status === "finished" || job.status === "failed");
 
-  const tabBtnActive = {
-    ...tabBtn,
-    background: "#7f3dff",
-    color: "#fff",
-    borderColor: "#7f3dff",
-  };
+    // Sort in-progress by creation time (oldest first)
+    inProgress.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
-  const [batchTab, setBatchTab] = useState<"in-progress" | "complete">("in-progress");
+    // Sort completed by update time (most recent first)
+    completed.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  const PREVIEW_LIMIT = 4;
-
-  const formatVars = (vars: Record<string, string>) => {
-    const entries = Object.entries(vars || {});
-    if (!entries.length) return "All defaults";
-    return entries.map(([key, value]) => `${key}: ${value}`).join(" • ");
-  };
-
-  const inProgress = useMemo(() => {
-    const list = jobs.filter((job) => job.status === "queued" || job.status === "running");
-    return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }, [jobs]);
-
-  const completed = useMemo(() => {
-    const list = jobs.filter((job) => job.status === "finished" || job.status === "failed");
-    return list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return [...inProgress, ...completed];
   }, [jobs]);
 
   const tableStyles = {
@@ -175,16 +153,24 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: Batch
     );
   };
 
-  const renderList = (list: BatchJob[], empty: string) => {
-    if (loading && list.length === 0) {
-      return <div style={{ color: "#666", fontSize: 13, padding: 12 }}>Loading saved batch runs…</div>;
-    }
-
-    if (!list.length) {
-      return <div style={{ color: "#666", fontSize: 13, padding: 12 }}>{empty}</div>;
-    }
-
+  if (loading && sortedJobs.length === 0) {
     return (
+      <div style={box}>
+        <div style={{ color: "#666", fontSize: 13, padding: 12 }}>Loading saved batch runs…</div>
+      </div>
+    );
+  }
+
+  if (sortedJobs.length === 0) {
+    return (
+      <div style={box}>
+        <div style={{ color: "#666", fontSize: 13, padding: 12 }}>No batch backtests yet.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={box}>
       <table style={tableStyles.table}>
         <thead>
           <tr>
@@ -196,34 +182,9 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: Batch
           </tr>
         </thead>
         <tbody>
-          {list.map((job) => <JobRow key={job.id} job={job} />)}
+          {sortedJobs.map((job) => <JobRow key={job.id} job={job} />)}
         </tbody>
       </table>
-    );
-  };
-
-  return (
-    <div style={box}>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button
-          style={batchTab === "in-progress" ? tabBtnActive : tabBtn}
-          onClick={() => setBatchTab("in-progress")}
-        >
-          In Progress
-        </button>
-        <button
-          style={batchTab === "complete" ? tabBtnActive : tabBtn}
-          onClick={() => setBatchTab("complete")}
-        >
-          Complete
-        </button>
-      </div>
-
-      <div>
-        {batchTab === "in-progress"
-          ? renderList(inProgress, "No batch backtests are currently running.")
-          : renderList(completed, "No completed batch backtests yet.")}
-      </div>
     </div>
   );
 }
