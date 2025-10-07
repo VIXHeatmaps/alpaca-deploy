@@ -1076,6 +1076,9 @@ async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: A
   for (let idx = 0; idx < combos.length; idx++) {
     const assignment = combos[idx];
     try {
+      console.log(`\nBatch job ${job.id}: Running backtest ${idx + 1}/${combos.length}...`);
+      console.log('Assignment:', assignment);
+
       const mutatedElements = applyVariablesToElements(job.strategy.elements, assignment);
       const payload = {
         elements: mutatedElements,
@@ -1089,6 +1092,7 @@ async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: A
           'APCA-API-KEY-ID': job.strategy.apiKey,
           'APCA-API-SECRET-KEY': job.strategy.apiSecret,
         },
+        timeout: 300000, // 5 minutes per backtest
       });
 
       const resp = response?.data || {};
@@ -1100,7 +1104,9 @@ async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: A
 
       job.completed = idx + 1;
       job.updatedAt = new Date().toISOString();
+      console.log(`Batch job ${job.id}: Completed ${job.completed}/${job.total}`);
     } catch (err: any) {
+      console.error(`Batch job ${job.id} failed:`, err?.response?.data || err?.message || err);
       job.status = 'failed';
       job.error = err?.response?.data?.error || err?.message || 'Batch strategy backtest failed';
       job.updatedAt = new Date().toISOString();
@@ -1121,25 +1127,26 @@ async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: A
 }
 
 app.post('/api/batch_backtest_strategy', (req: Request, res: Response) => {
-  const body = (req.body || {}) as BatchStrategyRequestBody;
-  const variables = sanitizedVariables(body.variables);
-  const totalFromBody = clampNumber(body.total, 0);
-  const assignmentsRaw = Array.isArray(body.assignments)
-    ? body.assignments.map(normalizeAssignment)
-    : [];
-  const computedTotal = variables.length
-    ? variables.reduce((acc, v) => acc * (v.values.length || 0), 1)
-    : assignmentsRaw.length;
+  try {
+    const body = (req.body || {}) as BatchStrategyRequestBody;
+    const variables = sanitizedVariables(body.variables);
+    const totalFromBody = clampNumber(body.total, 0);
+    const assignmentsRaw = Array.isArray(body.assignments)
+      ? body.assignments.map(normalizeAssignment)
+      : [];
+    const computedTotal = variables.length
+      ? variables.reduce((acc, v) => acc * (v.values.length || 0), 1)
+      : assignmentsRaw.length;
 
-  // Support both direct elements and baseStrategy.elements format (VerticalUI2)
-  const elements = body.baseStrategy?.elements || body.elements;
-  if (!elements || !Array.isArray(elements)) {
-    return res.status(400).json({ error: 'Elements array is required for batch strategy backtests' });
-  }
+    // Support both direct elements and baseStrategy.elements format (VerticalUI2)
+    const elements = body.baseStrategy?.elements || body.elements;
+    if (!elements || !Array.isArray(elements)) {
+      return res.status(400).json({ error: 'Elements array is required for batch strategy backtests' });
+    }
 
-  const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').toString();
-  const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').toString();
-  if (!apiKey || !apiSecret) return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').toString();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').toString();
+    if (!apiKey || !apiSecret) return res.status(400).json({ error: 'Missing Alpaca API credentials' });
 
   const total = totalFromBody > 0 ? totalFromBody : computedTotal;
 
@@ -1190,13 +1197,17 @@ app.post('/api/batch_backtest_strategy', (req: Request, res: Response) => {
     job.csvUrl = `/api/batch_backtest_strategy/${id}/results.csv`;
   }
 
-  return res.status(202).json({
-    jobId: id,
-    status: job.status,
-    total: job.total,
-    completed: job.completed,
-    truncated: job.truncated,
-  });
+    return res.status(202).json({
+      jobId: id,
+      status: job.status,
+      total: job.total,
+      completed: job.completed,
+      truncated: job.truncated,
+    });
+  } catch (err: any) {
+    console.error('Batch backtest strategy endpoint error:', err);
+    return res.status(500).json({ error: err?.message || 'Internal server error' });
+  }
 });
 
 app.get('/api/batch_backtest_strategy/:id', (req: Request, res: Response) => {
@@ -2419,7 +2430,10 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
     tickers.add(bench);
 
     const requestedEnd = endDate || todayYMD();
-    const MAX_START = '1900-01-01';
+    // Use provided startDate, or default to 10 years ago (Alpaca's max is ~10 years anyway)
+    const effectiveStart = startDate === 'max' || !startDate
+      ? new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]
+      : startDate;
     const TF = '1Day';
 
     // Step 2: Fetch all indicator bars and TR bars
@@ -2437,14 +2451,14 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
 
     await Promise.all(Array.from(uniqueIndicatorFetches.values()).map(async (req) => {
       const key = `${req.ticker}|${req.indicator}|${req.period}`;
-      const bars = await fetchBarsPaged(req.ticker, MAX_START, requestedEnd, TF, apiKey, apiSecret, 'split');
+      const bars = await fetchBarsPaged(req.ticker, effectiveStart, requestedEnd, TF, apiKey, apiSecret, 'split');
       console.log(`  Fetched ${bars.length} bars for ${req.ticker} (indicator calc)`);
       indBarsByKey.set(key, bars);
     }));
 
     const trBarsBySym = new Map<string, SimpleBar[]>();
     await Promise.all(Array.from(tickers).map(async (sym) => {
-      const bars = await fetchBarsPaged(sym, MAX_START, requestedEnd, TF, apiKey, apiSecret, 'all');
+      const bars = await fetchBarsPaged(sym, effectiveStart, requestedEnd, TF, apiKey, apiSecret, 'all');
       console.log(`  Fetched ${bars.length} TR bars for ${sym}`);
       trBarsBySym.set(sym, bars);
     }));
