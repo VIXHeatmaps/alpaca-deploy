@@ -26,6 +26,7 @@ function App() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Check authentication status on mount
   useEffect(() => {
@@ -45,6 +46,31 @@ function App() {
       .finally(() => {
         setLoading(false);
       });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      const errorCode = url.searchParams.get('authError');
+      const errorDetail = url.searchParams.get('authErrorDetail');
+      if (errorCode) {
+        let message = errorDetail || 'Sign-in failed. Please contact support.';
+        if (!errorDetail) {
+          if (errorCode === 'discord_email_required') {
+            message = 'Discord has no verified email on this account. Please verify an email or contact an admin.';
+          } else if (errorCode === 'discord_whitelist_denied') {
+            message = 'Your Discord account is not on the approved access list.';
+          }
+        }
+        setAuthError(message);
+        url.searchParams.delete('authError');
+        url.searchParams.delete('authErrorDetail');
+        window.history.replaceState({}, document.title, url.toString());
+      }
+    } catch (err) {
+      console.warn('Failed to parse auth error parameters', err);
+    }
   }, []);
 
   const handleLogin = () => {
@@ -95,6 +121,20 @@ function App() {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           textAlign: 'center'
         }}>
+          {authError && (
+            <div style={{
+              background: '#fdecea',
+              color: '#b00020',
+              padding: '12px 16px',
+              borderRadius: '6px',
+              marginBottom: '24px',
+              border: '1px solid #f8c7c3',
+              textAlign: 'left' as const,
+              fontSize: '14px'
+            }}>
+              {authError}
+            </div>
+          )}
           <h1 style={{ marginBottom: '24px', fontSize: '24px', fontWeight: 600 }}>
             Alpaca Deploy
           </h1>

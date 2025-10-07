@@ -17,6 +17,71 @@ const QUANTSTATS_URL = `${INDICATOR_SERVICE_URL}/metrics/quantstats`;
 const QUANTSTATS_TIMEOUT_MS = Number(process.env.QUANTSTATS_TIMEOUT_MS || 5000);
 const FEED: string = (process.env.ALPACA_FEED || 'sip').toLowerCase();
 const INTERNAL_API_BASE = process.env.INTERNAL_API_BASE || `http://127.0.0.1:${port}`;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+const parseCsvEnv = (value: string | undefined, normalize?: (input: string) => string): Set<string> => {
+  if (!value) return new Set();
+  return new Set(
+    value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => (normalize ? normalize(item) : item))
+  );
+};
+
+const DISCORD_ALLOWED_USER_IDS = parseCsvEnv(process.env.DISCORD_ALLOWED_USER_IDS);
+const DISCORD_ALLOWED_EMAILS = parseCsvEnv(process.env.DISCORD_ALLOWED_EMAILS, (email) => email.toLowerCase());
+const DISCORD_ALLOWED_EMAIL_DOMAINS = parseCsvEnv(
+  process.env.DISCORD_ALLOWED_EMAIL_DOMAINS,
+  (domain) => domain.replace(/^\./, '').toLowerCase()
+);
+
+type DiscordWhitelistResult =
+  | { allowed: true }
+  | { allowed: false; code: 'discord_email_required' | 'discord_whitelist_denied'; detail: string };
+
+const isDiscordWhitelistEnabled =
+  DISCORD_ALLOWED_USER_IDS.size > 0 ||
+  DISCORD_ALLOWED_EMAILS.size > 0 ||
+  DISCORD_ALLOWED_EMAIL_DOMAINS.size > 0;
+
+const checkDiscordWhitelist = (profile: Profile): DiscordWhitelistResult => {
+  if (!isDiscordWhitelistEnabled) {
+    return { allowed: true };
+  }
+
+  const userId = profile.id;
+  if (DISCORD_ALLOWED_USER_IDS.has(userId)) {
+    return { allowed: true };
+  }
+
+  const email = (profile.email || '').toLowerCase();
+  if (!email && (DISCORD_ALLOWED_EMAILS.size > 0 || DISCORD_ALLOWED_EMAIL_DOMAINS.size > 0)) {
+    return {
+      allowed: false,
+      code: 'discord_email_required',
+      detail: 'Discord account must have a verified email to access this application.',
+    };
+  }
+
+  if (email && DISCORD_ALLOWED_EMAILS.has(email)) {
+    return { allowed: true };
+  }
+
+  if (email) {
+    const domain = email.split('@')[1]?.toLowerCase() || '';
+    if (domain && DISCORD_ALLOWED_EMAIL_DOMAINS.has(domain)) {
+      return { allowed: true };
+    }
+  }
+
+  return {
+    allowed: false,
+    code: 'discord_whitelist_denied',
+    detail: 'Your Discord account is not on the approved access list.',
+  };
+};
 
 type BatchJobStatus = 'queued' | 'running' | 'finished' | 'failed';
 
@@ -236,7 +301,7 @@ async function startBatchJob(job: BatchJobRecord, assignments: Array<Record<stri
 }
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: FRONTEND_URL,
   credentials: true
 }));
 app.use(bodyParser.json());
@@ -269,6 +334,16 @@ passport.use(new DiscordStrategy({
   callbackURL: `${process.env.BACKEND_URL || `http://localhost:${port}`}/auth/discord/callback`,
   scope: ['identify', 'email']
 }, (_accessToken: string, _refreshToken: string, profile: Profile, done: any) => {
+  const whitelistResult = checkDiscordWhitelist(profile);
+  if (whitelistResult.allowed === false) {
+    const { code, detail } = whitelistResult;
+    console.warn(`[AUTH] Discord user ${profile.id} rejected: ${detail} (code: ${code})`);
+    return done(null, false, {
+      message: code,
+      detail,
+    });
+  }
+
   // Return user profile (will be encoded in JWT)
   return done(null, {
     id: profile.id,
@@ -319,27 +394,37 @@ const todayYMD = () => new Date().toISOString().slice(0, 10);
 app.get('/auth/discord', passport.authenticate('discord'));
 
 // Discord OAuth callback
-app.get('/auth/discord/callback',
-  passport.authenticate('discord', {
-    failureRedirect: process.env.FRONTEND_URL || 'http://localhost:3000',
-    session: false // Don't use sessions
-  }),
-  (req: Request, res: Response) => {
-    // Generate JWT token
-    const token = generateToken(req.user);
+app.get('/auth/discord/callback', (req: Request, res: Response, next) => {
+  passport.authenticate('discord', { session: false }, (err, user, info) => {
+    if (err) {
+      console.error('[AUTH] Discord callback error:', err);
+      const redirectUrl = new URL(FRONTEND_URL);
+      redirectUrl.searchParams.set('authError', 'auth_internal_error');
+      return res.redirect(redirectUrl.toString());
+    }
 
-    // Set cookie with JWT
+    if (!user) {
+      const redirectUrl = new URL(FRONTEND_URL);
+      const errorCode = typeof info?.message === 'string' ? info.message : 'auth_failed';
+      redirectUrl.searchParams.set('authError', errorCode);
+      if (info?.detail && typeof info.detail === 'string') {
+        redirectUrl.searchParams.set('authErrorDetail', info.detail);
+      }
+      return res.redirect(redirectUrl.toString());
+    }
+
+    const token = generateToken(user);
+
     res.cookie('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    // Redirect to frontend
-    res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
-  }
-);
+    return res.redirect(FRONTEND_URL);
+  })(req, res, next);
+});
 
 // Get current user
 app.get('/auth/user', (req: Request, res: Response) => {
