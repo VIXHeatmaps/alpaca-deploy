@@ -73,6 +73,31 @@ function App() {
     }
   }, []);
 
+  // Check Alpaca connection when API keys change
+  useEffect(() => {
+    if (!apiKey || !apiSecret) {
+      setConnected(null);
+      return;
+    }
+
+    const checkConnection = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/account`, {
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': apiSecret,
+          },
+          credentials: 'include',
+        });
+        setConnected(response.ok);
+      } catch {
+        setConnected(false);
+      }
+    };
+
+    checkConnection();
+  }, [apiKey, apiSecret]);
+
   const handleLogin = () => {
     window.location.href = `${API_BASE}/auth/discord`;
   };
@@ -189,9 +214,30 @@ function App() {
                 Signed in as <strong>{user.username}</strong>
               </div>
               <div style={{ position: 'relative', display: 'inline-block' }}>
-                <details style={{ fontSize: 14, color: '#666' }}>
+                <details
+                  style={{ fontSize: 14, color: '#666' }}
+                  onToggle={(e) => {
+                    const details = e.currentTarget;
+                    const arrow = details.querySelector('.creds-arrow') as HTMLElement;
+                    if (arrow) {
+                      arrow.style.transform = details.open ? 'rotate(90deg)' : 'rotate(0deg)';
+                    }
+                  }}
+                >
                   <summary style={{ cursor: 'pointer', userSelect: 'none', listStyle: 'none', display: 'inline' }}>
-                    <span style={{ display: 'inline-block', transition: 'transform 0.2s' }}>▶</span> Credentials
+                    <span className="creds-arrow" style={{ display: 'inline-block', transition: 'transform 0.2s' }}>▶</span> Credentials
+                    <span style={{
+                      display: 'inline-block',
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: connected ? '#10b981' : (connected === null ? '#9ca3af' : '#ef4444'),
+                      marginLeft: 6,
+                      verticalAlign: 'middle'
+                    }} />
+                    <span style={{ marginLeft: 4, fontSize: 12, color: '#9ca3af' }}>
+                      {connected === null ? '' : (connected ? 'connected' : 'disconnected')}
+                    </span>
                   </summary>
                   <div style={{
                     position: 'absolute',
