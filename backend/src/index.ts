@@ -2431,7 +2431,7 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
 
     const requestedEnd = endDate || todayYMD();
     // Use provided startDate, or default to 10 years ago (Alpaca's max is ~10 years anyway)
-    const effectiveStart = startDate === 'max' || !startDate
+    const backtestStartDate = startDate === 'max' || !startDate
       ? new Date(new Date().setFullYear(new Date().getFullYear() - 10)).toISOString().split('T')[0]
       : startDate;
     const TF = '1Day';
@@ -2451,14 +2451,14 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
 
     await Promise.all(Array.from(uniqueIndicatorFetches.values()).map(async (req) => {
       const key = `${req.ticker}|${req.indicator}|${req.period}`;
-      const bars = await fetchBarsPaged(req.ticker, effectiveStart, requestedEnd, TF, apiKey, apiSecret, 'split');
+      const bars = await fetchBarsPaged(req.ticker, backtestStartDate, requestedEnd, TF, apiKey, apiSecret, 'split');
       console.log(`  Fetched ${bars.length} bars for ${req.ticker} (indicator calc)`);
       indBarsByKey.set(key, bars);
     }));
 
     const trBarsBySym = new Map<string, SimpleBar[]>();
     await Promise.all(Array.from(tickers).map(async (sym) => {
-      const bars = await fetchBarsPaged(sym, effectiveStart, requestedEnd, TF, apiKey, apiSecret, 'all');
+      const bars = await fetchBarsPaged(sym, backtestStartDate, requestedEnd, TF, apiKey, apiSecret, 'all');
       console.log(`  Fetched ${bars.length} TR bars for ${sym}`);
       trBarsBySym.set(sym, bars);
     }));
