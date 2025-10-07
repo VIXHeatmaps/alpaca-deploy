@@ -625,51 +625,6 @@ export function Dashboard({
 
   return (
     <div>
-      <details style={{ marginBottom: 16 }} open>
-        <summary style={{ cursor: "pointer", userSelect: "none", display: "list-item", listStylePosition: "inside" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 12, verticalAlign: "middle" }}>
-            <span>Credentials</span>
-            <span style={styles.badge(connected)}>
-              {connected === null ? "…" : connected ? "connected" : "not connected"}
-            </span>
-          </span>
-        </summary>
-
-        <div style={{ ...styles.credsGrid, marginTop: 10 }}>
-          <div>
-            <div style={styles.label}>API Key</div>
-            <input
-              style={styles.input}
-              type={mask ? "password" : "text"}
-              value={apiKey}
-              onChange={(e) => onApiKeyChange(e.target.value)}
-              placeholder="Your Alpaca API Key"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <div style={styles.label}>API Secret</div>
-            <input
-              style={styles.input}
-              type={mask ? "password" : "text"}
-              value={apiSecret}
-              onChange={(e) => onApiSecretChange(e.target.value)}
-              placeholder="Your Alpaca API Secret"
-              autoComplete="off"
-            />
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-            <button
-              type="button"
-              onClick={onMaskToggle}
-              style={{ ...styles.btn, background: "#666" }}
-            >
-              {mask ? "Show" : "Hide"}
-            </button>
-          </div>
-        </div>
-      </details>
-
       {!apiKey || !apiSecret ? (
         <div style={styles.card}>
           <div style={{ fontSize: 14, color: "#666" }}>

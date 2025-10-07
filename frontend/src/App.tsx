@@ -181,24 +181,99 @@ function App() {
         margin: "0 auto",
         padding: uiTab === "builder" ? "12px 16px 0" : "0"
       }}>
-        {/* Header with user info */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 14, color: '#666' }}>
-            Signed in as <strong>{user.username}</strong>
+        {/* Header with user info and credentials */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ fontSize: 14, color: '#666' }}>
+                Signed in as <strong>{user.username}</strong>
+              </div>
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <details style={{ fontSize: 14, color: '#666' }}>
+                  <summary style={{ cursor: 'pointer', userSelect: 'none', listStyle: 'none', display: 'inline' }}>
+                    <span style={{ display: 'inline-block', transition: 'transform 0.2s' }}>▶</span> Credentials
+                  </summary>
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    left: 0,
+                    display: 'grid',
+                    gridTemplateColumns: '200px 200px auto',
+                    gap: 12,
+                    alignItems: 'end',
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 6,
+                    padding: 16,
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                    zIndex: 1000
+                  }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>API Key</div>
+                    <input
+                      type={mask ? "password" : "text"}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Your Alpaca API Key"
+                      autoComplete="off"
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        fontSize: 13,
+                        border: '1px solid #d1d5db',
+                        borderRadius: '4px'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>API Secret</div>
+                    <input
+                      type={mask ? "password" : "text"}
+                      value={apiSecret}
+                      onChange={(e) => setApiSecret(e.target.value)}
+                      placeholder="Your Alpaca API Secret"
+                      autoComplete="off"
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        fontSize: 13,
+                        border: '1px solid #d1d5db',
+                        borderRadius: '4px'
+                      }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => setMask(!mask)}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 13,
+                      background: '#666',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {mask ? "Show" : "Hide"}
+                  </button>
+                </div>
+              </details>
+            </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              style={{
+                background: '#f5f5f5',
+                border: '1px solid #ddd',
+                padding: '6px 12px',
+                borderRadius: '4px',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              Logout
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              background: '#f5f5f5',
-              border: '1px solid #ddd',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-          >
-            Logout
-          </button>
         </div>
 
         {/* Main Navigation Tabs */}
