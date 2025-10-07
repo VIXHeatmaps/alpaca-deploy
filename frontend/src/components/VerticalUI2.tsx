@@ -3816,7 +3816,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
               setLoadingResults(true);
               try {
-                const response = await fetch(`http://localhost:4000${job.viewUrl}`);
+                const response = await fetch(`${API_BASE}${job.viewUrl}`);
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -3841,7 +3841,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
               if (job.csvUrl) {
                 // Download CSV file
                 const link = document.createElement('a');
-                link.href = `http://localhost:4000${job.csvUrl}`;
+                link.href = `${API_BASE}${job.csvUrl}`;
                 link.download = `${job.name.replace(/[^a-z0-9]/gi, '_')}_results.csv`;
                 document.body.appendChild(link);
                 link.click();
