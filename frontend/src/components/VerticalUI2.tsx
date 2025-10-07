@@ -2112,7 +2112,12 @@ type StrategyTab = {
   updatedAt: string;
 };
 
-export default function VerticalUI2() {
+interface VerticalUI2Props {
+  apiKey?: string;
+  apiSecret?: string;
+}
+
+export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2Props = {}) {
   // Strategy tabs state
   const [strategyTabs, setStrategyTabs] = useState<StrategyTab[]>(() => {
     try {
@@ -2633,6 +2638,8 @@ export default function VerticalUI2() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'APCA-API-KEY-ID': apiKey,
+          'APCA-API-SECRET-KEY': apiSecret,
         },
         body: JSON.stringify(payload),
       });
@@ -2728,6 +2735,8 @@ export default function VerticalUI2() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'APCA-API-KEY-ID': apiKey,
+          'APCA-API-SECRET-KEY': apiSecret,
         },
         body: JSON.stringify({
           assignments,

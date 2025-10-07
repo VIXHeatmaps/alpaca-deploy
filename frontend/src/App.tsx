@@ -53,7 +53,7 @@ function App() {
             onViewStrategyFlow={() => setUiTab("vertical2")}
           />
         ) : (
-          <VerticalUI2 />
+          <VerticalUI2 apiKey={apiKey} apiSecret={apiSecret} />
         )}
       </div>
     </div>
