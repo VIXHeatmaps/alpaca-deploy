@@ -431,6 +431,7 @@ export function Dashboard({
             "APCA-API-KEY-ID": apiKey,
             "APCA-API-SECRET-KEY": apiSecret,
           },
+          withCredentials: true,
           timeout: 10000,
         });
 
@@ -476,6 +477,7 @@ export function Dashboard({
             "APCA-API-KEY-ID": apiKey,
             "APCA-API-SECRET-KEY": apiSecret,
           },
+          withCredentials: true,
           timeout: 10000,
         });
 
@@ -521,6 +523,7 @@ export function Dashboard({
             "APCA-API-KEY-ID": apiKey,
             "APCA-API-SECRET-KEY": apiSecret,
           },
+          withCredentials: true,
           timeout: 10000,
         });
 
@@ -591,6 +594,7 @@ export function Dashboard({
             "APCA-API-KEY-ID": apiKey,
             "APCA-API-SECRET-KEY": apiSecret,
           },
+          withCredentials: true,
           timeout: 120000, // 2 minute timeout
         }
       );
