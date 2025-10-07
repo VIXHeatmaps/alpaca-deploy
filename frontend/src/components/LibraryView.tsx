@@ -19,28 +19,26 @@ export function LibraryView({
   const [libraryTab, setLibraryTab] = useState<"strategies" | "variables" | "batchtests">("strategies");
 
   const tabBtn: React.CSSProperties = {
-    padding: "8px 16px",
+    padding: "6px 12px",
     border: "none",
     background: "transparent",
     cursor: "pointer",
-    fontSize: 14,
-    fontWeight: 500,
-    color: "#6b7280",
-    borderBottom: "2px solid transparent",
-    transition: "all 0.2s",
+    fontSize: 13,
+    fontWeight: 400,
+    color: "#9ca3af",
+    transition: "color 0.2s",
   };
 
   const tabBtnActive: React.CSSProperties = {
     ...tabBtn,
     color: "#1677ff",
-    borderBottom: "2px solid #1677ff",
+    fontWeight: 500,
   };
 
   return (
     <div>
       {/* Library Sub-tabs */}
       <div style={{
-        borderBottom: "1px solid #e5e7eb",
         marginBottom: 24,
         display: "flex",
         gap: 8,

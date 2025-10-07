@@ -197,23 +197,59 @@ function App() {
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="tabs" style={{ marginBottom: 24 }}>
+        {/* Main Navigation Tabs */}
+        <div style={{
+          borderBottom: "1px solid #e5e7eb",
+          marginBottom: 32,
+          display: "flex",
+          justifyContent: "center",
+          gap: 16,
+        }}>
           <button
-            className={`tabBtn ${uiTab === "dashboard" ? "active" : ""}`}
             onClick={() => setUiTab("dashboard")}
+            style={{
+              padding: "10px 20px",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              fontSize: 15,
+              fontWeight: 500,
+              color: uiTab === "dashboard" ? "#1677ff" : "#6b7280",
+              borderBottom: uiTab === "dashboard" ? "2px solid #1677ff" : "2px solid transparent",
+              transition: "all 0.2s",
+            }}
           >
             Dashboard
           </button>
           <button
-            className={`tabBtn ${uiTab === "library" ? "active" : ""}`}
             onClick={() => setUiTab("library")}
+            style={{
+              padding: "10px 20px",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              fontSize: 15,
+              fontWeight: 500,
+              color: uiTab === "library" ? "#1677ff" : "#6b7280",
+              borderBottom: uiTab === "library" ? "2px solid #1677ff" : "2px solid transparent",
+              transition: "all 0.2s",
+            }}
           >
             Library
           </button>
           <button
-            className={`tabBtn ${uiTab === "builder" ? "active" : ""}`}
             onClick={() => setUiTab("builder")}
+            style={{
+              padding: "10px 20px",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              fontSize: 15,
+              fontWeight: 500,
+              color: uiTab === "builder" ? "#1677ff" : "#6b7280",
+              borderBottom: uiTab === "builder" ? "2px solid #1677ff" : "2px solid transparent",
+              transition: "all 0.2s",
+            }}
           >
             Builder
           </button>
