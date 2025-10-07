@@ -5,6 +5,9 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
+import session from 'express-session';
+import passport from 'passport';
+import { Strategy as DiscordStrategy, Profile } from 'passport-discord';
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -236,6 +239,57 @@ app.use(cors({
   credentials: true
 }));
 app.use(bodyParser.json());
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'default-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  }
+}));
+
+// Passport configuration
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user: any, done) => {
+  done(null, user);
+});
+
+passport.deserializeUser((user: any, done) => {
+  done(null, user);
+});
+
+// Discord OAuth Strategy
+passport.use(new DiscordStrategy({
+  clientID: process.env.DISCORD_CLIENT_ID || '',
+  clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
+  callbackURL: `${process.env.BACKEND_URL || `http://localhost:${port}`}/auth/discord/callback`,
+  scope: ['identify', 'email']
+}, (accessToken: string, refreshToken: string, profile: Profile, done: any) => {
+  // Store user profile in session
+  return done(null, {
+    id: profile.id,
+    username: profile.username,
+    discriminator: profile.discriminator,
+    avatar: profile.avatar,
+    email: profile.email
+  });
+}));
+
+// Auth middleware to protect routes
+function requireAuth(req: Request, res: Response, next: any) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ error: 'Authentication required' });
+}
+
 /* ===== END: BLOCK A ===== */
 
 
@@ -252,6 +306,42 @@ const toRFC3339End = (s: string) => {
 const toYMD = (s: string) => (s || '').slice(0, 10);
 const todayYMD = () => new Date().toISOString().slice(0, 10);
 /* ===== END: BLOCK B ===== */
+
+
+/* ===== BEGIN: BLOCK AUTH — Discord OAuth Routes ===== */
+
+// Initiate Discord OAuth
+app.get('/auth/discord', passport.authenticate('discord'));
+
+// Discord OAuth callback
+app.get('/auth/discord/callback',
+  passport.authenticate('discord', { failureRedirect: process.env.FRONTEND_URL || 'http://localhost:3000' }),
+  (req: Request, res: Response) => {
+    // Successful authentication, redirect to frontend
+    res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+  }
+);
+
+// Get current user
+app.get('/auth/user', (req: Request, res: Response) => {
+  if (req.isAuthenticated()) {
+    res.json({ user: req.user });
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
+// Logout
+app.post('/auth/logout', (req: Request, res: Response) => {
+  req.logout((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Logout failed' });
+    }
+    res.json({ success: true });
+  });
+});
+
+/* ===== END: BLOCK AUTH ===== */
 
 
 /* ===== BEGIN: BLOCK C — Health/Debug Endpoints ===== */
@@ -281,7 +371,7 @@ app.get('/api/debug/env', (req: Request, res: Response) => {
   });
 });
 
-app.get('/api/account', async (req: Request, res: Response) => {
+app.get('/api/account', requireAuth, async (req: Request, res: Response) => {
   const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
   const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
 
@@ -319,7 +409,7 @@ import { genId } from './utils/id';
  * GET /api/strategy
  * Get current active strategy with live holdings data
  */
-app.get('/api/strategy', async (req: Request, res: Response) => {
+app.get('/api/strategy', requireAuth, async (req: Request, res: Response) => {
   try {
     const strategy = await getActiveStrategy();
 
@@ -525,7 +615,7 @@ app.post('/api/invest', async (req: Request, res: Response) => {
  * POST /api/rebalance
  * Manually trigger rebalancing of the active strategy
  */
-app.post('/api/rebalance', async (req: Request, res: Response) => {
+app.post('/api/rebalance', requireAuth, async (req: Request, res: Response) => {
   try {
     const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
     const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
@@ -561,7 +651,7 @@ app.post('/api/rebalance', async (req: Request, res: Response) => {
  * Liquidates the active strategy by selling all positions
  * Works immediately if market is open, or queues orders for next market open
  */
-app.post('/api/liquidate', async (req: Request, res: Response) => {
+app.post('/api/liquidate', requireAuth, async (req: Request, res: Response) => {
   try {
     const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
     const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
@@ -918,7 +1008,7 @@ async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: A
   };
 }
 
-app.post('/api/batch_backtest_strategy', (req: Request, res: Response) => {
+app.post('/api/batch_backtest_strategy', requireAuth, (req: Request, res: Response) => {
   const body = (req.body || {}) as BatchStrategyRequestBody;
   const variables = sanitizedVariables(body.variables);
   const totalFromBody = clampNumber(body.total, 0);
@@ -1996,7 +2086,7 @@ app.post('/api/backtest_flow', async (req: Request, res: Response) => {
 
 
 /* ===== BEGIN: BLOCK M — Strategy Execution Endpoint ===== */
-app.post('/api/execute_strategy', async (req: Request, res: Response) => {
+app.post('/api/execute_strategy', requireAuth, async (req: Request, res: Response) => {
   try {
     const { elements } = req.body;
 
@@ -2156,7 +2246,7 @@ app.post('/api/execute_strategy', async (req: Request, res: Response) => {
 
 
 /* ===== BEGIN: BLOCK N — Strategy Backtest Endpoint (Historical) ===== */
-app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
+app.post('/api/backtest_strategy', requireAuth, async (req: Request, res: Response) => {
   try {
     const { elements, benchmarkSymbol, startDate, endDate, debug } = req.body;
 
