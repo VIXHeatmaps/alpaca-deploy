@@ -174,9 +174,13 @@ function App() {
       color: "#111",
       background: "#fff",
       minHeight: "100vh",
-      padding: "12px 16px 40px"
+      padding: uiTab === "builder" ? "0" : "12px 16px 40px"
     }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+      <div style={{
+        maxWidth: uiTab === "builder" ? "none" : 1400,
+        margin: "0 auto",
+        padding: uiTab === "builder" ? "12px 16px 0" : "0"
+      }}>
         {/* Header with user info */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontSize: 14, color: '#666' }}>

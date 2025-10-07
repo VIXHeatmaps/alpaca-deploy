@@ -2114,7 +2114,6 @@ type StrategyTab = {
 
 interface VerticalUI2Props {
   apiKey?: string;
-  hideInternalTabs?: boolean;
   apiSecret?: string;
 }
 
@@ -2827,11 +2826,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       minHeight: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      background: '#fff',
+      background: '#f9fafb',
     }}>
       {/* Main Tabs */}
       <div style={{
-        display: "none", // HIDDEN - tabs moved to App.tsx
         padding: '12px 32px 0 32px',
         background: '#fff',
         borderBottom: '1px solid #e5e7eb',
@@ -2890,9 +2888,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
       {/* 1. Main Toolbar */}
       <div style={{
-        background: "#fff",
         padding: '16px 32px',
+        background: '#fff',
         borderBottom: '1px solid #e5e7eb',
+        display: activeTab === "strategy" ? 'block' : 'none',
       }}>
         <div style={{
           display: 'flex',
@@ -3067,7 +3066,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '16px 24px',
-                background: '#fff',
+                background: '#f9fafb',
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: '18px',
@@ -3097,7 +3096,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                     ].map(({ label, value, format }) => (
                       <div key={label} style={{
                         padding: '12px',
-                        background: '#fff',
+                        background: '#f9fafb',
                         border: '1px solid #e5e7eb',
                         borderRadius: '6px',
                       }}>
@@ -3114,7 +3113,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 {backtestResults.dates && backtestResults.equityCurve && (
                   <div style={{
                     padding: '24px',
-                    background: '#fff',
+                    background: '#f9fafb',
                     border: '1px solid #e5e7eb',
                     borderRadius: '6px',
                     marginBottom: '16px',
@@ -3188,7 +3187,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 {/* Backtest Configuration */}
                 <div style={{
                   padding: '24px',
-                  background: '#fff',
+                  background: '#f9fafb',
                   border: '1px solid #e5e7eb',
                   borderRadius: '6px',
                   marginBottom: '16px',
@@ -3304,17 +3303,17 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                               borderCollapse: 'collapse',
                             }}>
                               <thead>
-                                <tr style={{ background: '#fff', borderBottom: '2px solid #d1d5db' }}>
-                                  <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#fff', zIndex: 1, whiteSpace: 'nowrap' }}>
+                                <tr style={{ background: '#f9fafb', borderBottom: '2px solid #d1d5db' }}>
+                                  <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#f9fafb', zIndex: 1, whiteSpace: 'nowrap' }}>
                                     DATE
                                   </th>
                                   {tickers.map((ticker) => (
-                                    <th key={ticker} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#fff', zIndex: 1, whiteSpace: 'nowrap' }}>
+                                    <th key={ticker} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#f9fafb', zIndex: 1, whiteSpace: 'nowrap' }}>
                                       {ticker}
                                     </th>
                                   ))}
                                   {gates.map((gate) => (
-                                    <th key={gate} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#fff', zIndex: 1, whiteSpace: 'nowrap' }} title={gate}>
+                                    <th key={gate} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#f9fafb', zIndex: 1, whiteSpace: 'nowrap' }} title={gate}>
                                       {gate.slice(0, 5)}
                                     </th>
                                   ))}
@@ -3367,7 +3366,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           display: 'flex',
           gap: 4,
           padding: '8px 32px',
-          background: '#fff',
+          background: '#f9fafb',
           borderBottom: '1px solid #e5e7eb',
           overflowX: 'auto',
         }}>
@@ -3433,7 +3432,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       {activeTab === "strategy" && (
       <div style={{
         padding: '8px 32px',
-        background: '#fff',
+        background: '#f9fafb',
         borderBottom: '1px solid #e5e7eb',
       }}>
         <div style={{
@@ -3799,15 +3798,15 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       </div>
       )}
 
-      {/* Variables Tab - MOVED to Library */}
-      {false && (
+      {/* Variables Tab */}
+      {activeTab === "variables" && (
         <div style={{ padding: '24px 32px' }}>
           <VariablesTab />
         </div>
       )}
 
-      {/* Batch Tests Tab - MOVED to Library */}
-      {false && (
+      {/* Batch Tests Tab */}
+      {activeTab === "batchtests" && (
         <div style={{ padding: '24px 32px' }}>
           <BatchTestsTab
             jobs={batchJobs}
