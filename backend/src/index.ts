@@ -5,9 +5,10 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
-import session from 'express-session';
-import passport from 'passport';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
 import { Strategy as DiscordStrategy, Profile } from 'passport-discord';
+import passport from 'passport';
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -239,31 +240,27 @@ app.use(cors({
   credentials: true
 }));
 app.use(bodyParser.json());
+app.use(cookieParser());
 
-// Session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'default-secret-change-in-production',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+// JWT configuration
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'default-secret-change-in-production';
+const JWT_EXPIRES_IN = '7d'; // 7 days
+
+// Helper functions for JWT
+function generateToken(user: any): string {
+  return jwt.sign(user, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+function verifyToken(token: string): any {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return null;
   }
-}));
+}
 
-// Passport configuration
+// Passport configuration (minimal, just for OAuth)
 app.use(passport.initialize());
-app.use(passport.session());
-
-passport.serializeUser((user: any, done) => {
-  done(null, user);
-});
-
-passport.deserializeUser((user: any, done) => {
-  done(null, user);
-});
 
 // Discord OAuth Strategy
 passport.use(new DiscordStrategy({
@@ -271,8 +268,8 @@ passport.use(new DiscordStrategy({
   clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
   callbackURL: `${process.env.BACKEND_URL || `http://localhost:${port}`}/auth/discord/callback`,
   scope: ['identify', 'email']
-}, (accessToken: string, refreshToken: string, profile: Profile, done: any) => {
-  // Store user profile in session
+}, (_accessToken: string, _refreshToken: string, profile: Profile, done: any) => {
+  // Return user profile (will be encoded in JWT)
   return done(null, {
     id: profile.id,
     username: profile.username,
@@ -284,10 +281,18 @@ passport.use(new DiscordStrategy({
 
 // Auth middleware to protect routes
 function requireAuth(req: Request, res: Response, next: any) {
-  if (req.isAuthenticated()) {
-    return next();
+  const token = req.cookies.auth_token;
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
   }
-  res.status(401).json({ error: 'Authentication required' });
+
+  const user = verifyToken(token);
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  (req as any).user = user;
+  return next();
 }
 
 /* ===== END: BLOCK A ===== */
@@ -315,30 +320,52 @@ app.get('/auth/discord', passport.authenticate('discord'));
 
 // Discord OAuth callback
 app.get('/auth/discord/callback',
-  passport.authenticate('discord', { failureRedirect: process.env.FRONTEND_URL || 'http://localhost:3000' }),
+  passport.authenticate('discord', {
+    failureRedirect: process.env.FRONTEND_URL || 'http://localhost:3000',
+    session: false // Don't use sessions
+  }),
   (req: Request, res: Response) => {
-    // Successful authentication, redirect to frontend
+    // Generate JWT token
+    const token = generateToken(req.user);
+
+    // Set cookie with JWT
+    res.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    // Redirect to frontend
     res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
   }
 );
 
 // Get current user
 app.get('/auth/user', (req: Request, res: Response) => {
-  if (req.isAuthenticated()) {
-    res.json({ user: req.user });
-  } else {
-    res.status(401).json({ error: 'Not authenticated' });
+  const token = req.cookies.auth_token;
+
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
   }
+
+  const user = verifyToken(token);
+
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  res.json({ user });
 });
 
 // Logout
-app.post('/auth/logout', (req: Request, res: Response) => {
-  req.logout((err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Logout failed' });
-    }
-    res.json({ success: true });
+app.post('/auth/logout', (_req: Request, res: Response) => {
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
   });
+  res.json({ success: true });
 });
 
 /* ===== END: BLOCK AUTH ===== */
