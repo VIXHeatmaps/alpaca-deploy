@@ -483,7 +483,7 @@ app.get('/api/debug/env', (req: Request, res: Response) => {
   });
 });
 
-app.get('/api/account', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/account', async (req: Request, res: Response) => {
   const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
   const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
 
@@ -521,7 +521,7 @@ import { genId } from './utils/id';
  * GET /api/strategy
  * Get current active strategy with live holdings data
  */
-app.get('/api/strategy', requireAuth, async (req: Request, res: Response) => {
+app.get('/api/strategy', async (req: Request, res: Response) => {
   try {
     const strategy = await getActiveStrategy();
 
@@ -1120,7 +1120,7 @@ async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: A
   };
 }
 
-app.post('/api/batch_backtest_strategy', requireAuth, (req: Request, res: Response) => {
+app.post('/api/batch_backtest_strategy', (req: Request, res: Response) => {
   const body = (req.body || {}) as BatchStrategyRequestBody;
   const variables = sanitizedVariables(body.variables);
   const totalFromBody = clampNumber(body.total, 0);
@@ -2358,7 +2358,7 @@ app.post('/api/execute_strategy', requireAuth, async (req: Request, res: Respons
 
 
 /* ===== BEGIN: BLOCK N — Strategy Backtest Endpoint (Historical) ===== */
-app.post('/api/backtest_strategy', requireAuth, async (req: Request, res: Response) => {
+app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
   try {
     const { elements, benchmarkSymbol, startDate, endDate, debug } = req.body;
 

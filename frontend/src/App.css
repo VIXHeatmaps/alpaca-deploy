@@ -40,3 +40,13 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Hide scrollbar but keep functionality */
+.scrollable-list {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.scrollable-list::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
+}

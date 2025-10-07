@@ -2733,6 +2733,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       // Send batch request to backend
       const response = await fetch(`${API_BASE}/api/batch_backtest_strategy`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'APCA-API-KEY-ID': apiKey,
@@ -2763,7 +2764,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       // Backend accepted the job (202), now poll for completion
       const pollJobStatus = async () => {
         try {
-          const statusResponse = await fetch(`${API_BASE}/api/batch_backtest_strategy/${jobId}`);
+          const statusResponse = await fetch(`${API_BASE}/api/batch_backtest_strategy/${jobId}`, {
+            credentials: 'include'
+          });
           const statusData = await statusResponse.json();
 
           if (!statusResponse.ok) {
