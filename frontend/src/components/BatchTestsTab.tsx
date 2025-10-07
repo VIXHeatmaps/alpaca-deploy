@@ -6,9 +6,10 @@ export type BatchTestsTabProps = {
   loading: boolean;
   onViewJob: (job: BatchJob) => void;
   onDownloadCsv: (job: BatchJob) => void;
+  onCancelJob: (job: BatchJob) => void;
 };
 
-export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: BatchTestsTabProps) {
+export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCancelJob }: BatchTestsTabProps) {
   const box: React.CSSProperties = {
     border: "1px solid #e6e6e6",
     borderRadius: 10,
@@ -58,6 +59,7 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: Batch
   const JobRow = ({ job }: { job: BatchJob }) => {
     const viewDisabled = job.status !== "finished";
     const downloadDisabled = job.status !== "finished";
+    const cancelDisabled = job.status !== "running" && job.status !== "queued";
 
     const getStatusBadge = () => {
       const baseStyle = {
@@ -149,6 +151,24 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: Batch
             Download CSV
           </button>
         </td>
+        <td style={{ ...tableStyles.td, textAlign: "center" as const }}>
+          <button
+            style={{
+              padding: "6px 12px",
+              fontSize: 11,
+              fontWeight: 600,
+              borderRadius: 4,
+              border: "none",
+              background: !cancelDisabled ? "#ef4444" : "#ddd",
+              color: !cancelDisabled ? "#fff" : "#888",
+              cursor: !cancelDisabled ? "pointer" : "not-allowed",
+            }}
+            disabled={cancelDisabled}
+            onClick={() => !cancelDisabled && onCancelJob(job)}
+          >
+            Cancel
+          </button>
+        </td>
       </tr>
     );
   };
@@ -179,6 +199,7 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv }: Batch
             <th style={tableStyles.th}>Status</th>
             <th style={{ ...tableStyles.th, textAlign: "center" as const }}>View</th>
             <th style={{ ...tableStyles.th, textAlign: "center" as const }}>Download CSV</th>
+            <th style={{ ...tableStyles.th, textAlign: "center" as const }}>Actions</th>
           </tr>
         </thead>
         <tbody>

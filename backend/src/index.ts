@@ -1219,6 +1219,22 @@ app.get('/api/batch_backtest_strategy/:id', (req: Request, res: Response) => {
   });
 });
 
+app.post('/api/batch_backtest_strategy/:id/cancel', (req: Request, res: Response) => {
+  const job = batchStrategyJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'batch strategy job not found' });
+
+  if (job.status !== 'running' && job.status !== 'queued') {
+    return res.status(400).json({ error: 'Can only cancel running or queued jobs' });
+  }
+
+  job.status = 'failed';
+  job.error = 'Cancelled by user';
+  job.updatedAt = new Date().toISOString();
+  job.completedAt = new Date().toISOString();
+
+  return res.json({ success: true, message: 'Job cancelled' });
+});
+
 app.get('/api/batch_backtest_strategy/:id/view', (req: Request, res: Response) => {
   const job = batchStrategyJobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: 'batch strategy job not found' });

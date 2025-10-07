@@ -8,6 +8,7 @@ export type LibraryViewProps = {
   batchJobsLoading: boolean;
   onViewBatchJob: (job: BatchJob) => void;
   onDownloadBatchCsv: (job: BatchJob) => void;
+  onCancelJob: (job: BatchJob) => void;
 };
 
 export function LibraryView({
@@ -15,6 +16,7 @@ export function LibraryView({
   batchJobsLoading,
   onViewBatchJob,
   onDownloadBatchCsv,
+  onCancelJob,
 }: LibraryViewProps) {
   const [libraryTab, setLibraryTab] = useState<"strategies" | "variables" | "batchtests">("strategies");
 
@@ -86,6 +88,7 @@ export function LibraryView({
           loading={batchJobsLoading}
           onViewJob={onViewBatchJob}
           onDownloadCsv={onDownloadBatchCsv}
+          onCancelJob={onCancelJob}
         />
       )}
     </div>
