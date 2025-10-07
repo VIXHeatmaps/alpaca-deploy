@@ -28,6 +28,8 @@ import {
   applyVariablesToElements,
 } from "../utils/verticalVariables";
 
+const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
+
 // ========== TYPES ==========
 
 interface GateCondition {
@@ -2627,7 +2629,7 @@ export default function VerticalUI2() {
 
       console.log('📤 BACKTEST PAYLOAD:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch('http://localhost:4000/api/backtest_strategy', {
+      const response = await fetch(`${API_BASE}/api/backtest_strategy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2722,7 +2724,7 @@ export default function VerticalUI2() {
       ));
 
       // Send batch request to backend
-      const response = await fetch('http://localhost:4000/api/batch_backtest_strategy', {
+      const response = await fetch(`${API_BASE}/api/batch_backtest_strategy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2752,7 +2754,7 @@ export default function VerticalUI2() {
       // Backend accepted the job (202), now poll for completion
       const pollJobStatus = async () => {
         try {
-          const statusResponse = await fetch(`http://localhost:4000/api/batch_backtest_strategy/${jobId}`);
+          const statusResponse = await fetch(`${API_BASE}/api/batch_backtest_strategy/${jobId}`);
           const statusData = await statusResponse.json();
 
           if (!statusResponse.ok) {
