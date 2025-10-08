@@ -8,19 +8,20 @@
 import { Request, Response } from 'express';
 import * as cache from './cacheService';
 import { fetchPriceData } from './dataFetcher';
+import { collectRequiredIndicators, fetchIndicators } from './indicatorCache';
 
 /**
  * V2 backtest engine endpoint handler
  *
- * Current: Testing data fetcher with caching
- * TODO: Implement full backtest logic with:
- * - Phase 1: Request analysis
- * - Phase 2: Redis-cached data fetching ← TESTING NOW
- * - Phase 3: Cached indicator computation
- * - Phase 4: Simulation with benchmark
+ * Current: Testing indicator caching
+ * Progress:
+ * - Phase 1: Request analysis ✓
+ * - Phase 2: Redis-cached data fetching ✓
+ * - Phase 3: Cached indicator computation ← TESTING NOW
+ * - Phase 4: Simulation with benchmark (TODO)
  */
 export async function runV2Backtest(req: Request, res: Response) {
-  console.log('\n=== V2 BACKTEST ENGINE (TESTING DATA FETCHER) ===');
+  console.log('\n=== V2 BACKTEST ENGINE (TESTING INDICATORS) ===');
 
   try {
     const { elements, startDate, endDate } = req.body;
@@ -42,7 +43,9 @@ export async function runV2Backtest(req: Request, res: Response) {
       await cache.initRedis();
     }
 
-    // Extract tickers from strategy elements
+    // Phase 1: Extract tickers and indicators from strategy
+    console.log('\n[V2] === PHASE 1: REQUEST ANALYSIS ===');
+
     const tickers = new Set<string>();
     function collectTickers(els: any[]): void {
       for (const el of els) {
@@ -57,12 +60,19 @@ export async function runV2Backtest(req: Request, res: Response) {
     // Always include SPY for benchmark
     tickers.add('SPY');
 
-    console.log(`[V2] Tickers to fetch: ${Array.from(tickers).join(', ')}`);
+    const requiredIndicators = collectRequiredIndicators(elements);
+
+    console.log(`[V2] Tickers: ${Array.from(tickers).join(', ')}`);
+    console.log(`[V2] Indicators: ${requiredIndicators.length} unique`);
+    for (const ind of requiredIndicators) {
+      console.log(`[V2]   - ${ind.ticker}: ${ind.indicator}(${ind.period})`);
+    }
 
     const reqStartDate = startDate || '2024-01-01';
     const reqEndDate = endDate || '2024-12-31';
 
-    // Test data fetcher with caching
+    // Phase 2: Fetch price data with caching
+    console.log('\n[V2] === PHASE 2: PRICE DATA FETCHING ===');
     const priceData = await fetchPriceData(
       Array.from(tickers),
       reqStartDate,
@@ -79,19 +89,42 @@ export async function runV2Backtest(req: Request, res: Response) {
       console.log(`[V2] ${ticker}: ${barCount} bars`);
     }
 
+    // Phase 3: Fetch indicators with caching
+    console.log('\n[V2] === PHASE 3: INDICATOR COMPUTATION ===');
+    const indicatorData = await fetchIndicators(requiredIndicators, priceData);
+
+    // Count indicator values
+    let totalIndicatorValues = 0;
+    for (const key of Object.keys(indicatorData)) {
+      const valueCount = Object.keys(indicatorData[key]).length;
+      totalIndicatorValues += valueCount;
+      console.log(`[V2] ${key}: ${valueCount} values`);
+    }
+
     // Get cache stats
     const stats = await cache.getCacheStats();
 
+    console.log('\n[V2] === SUMMARY ===');
+    console.log(`[V2] Price data: ${totalBars} bars across ${tickers.size} tickers`);
+    console.log(`[V2] Indicators: ${totalIndicatorValues} values across ${requiredIndicators.length} indicators`);
+    console.log(`[V2] Cache: ${stats.keyCount} keys, ${stats.memoryUsage}`);
+
     // Return test data
     return res.json({
-      message: 'V2 Engine - Data fetcher test',
+      message: 'V2 Engine - Indicator cache test',
       cacheAvailable: cache.isCacheAvailable(),
       cacheStats: stats,
-      tickersFetched: Array.from(tickers),
-      totalBars,
-      dateRange: { start: reqStartDate, end: reqEndDate },
-      sampleData: {
-        SPY: Object.keys(priceData.SPY || {}).slice(0, 5), // First 5 dates
+      phase1: {
+        tickersFetched: Array.from(tickers),
+        indicatorsRequired: requiredIndicators.length,
+      },
+      phase2: {
+        totalBars,
+        dateRange: { start: reqStartDate, end: reqEndDate },
+      },
+      phase3: {
+        totalIndicatorValues,
+        indicatorKeys: Object.keys(indicatorData),
       },
       // Mock backtest results for now
       dates: Object.keys(priceData.SPY || {}).slice(0, 10),
