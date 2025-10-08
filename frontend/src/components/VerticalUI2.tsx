@@ -3626,7 +3626,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           }
         }}
         style={{
-          padding: '0 32px 200px 32px',
+          padding: '0 16px 200px 16px',
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>

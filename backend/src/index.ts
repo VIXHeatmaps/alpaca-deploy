@@ -2742,6 +2742,17 @@ app.post('/api/validate_strategy', async (req: Request, res: Response) => {
 app.listen(port, async () => {
   console.log(`Alpaca algo backend listening on port ${port} (feed=${FEED}, indicator=split, returns=all)`);
 
+  // Start cache purge scheduler for V2 backtest engine
+  if (USE_V2_ENGINE) {
+    try {
+      const { startCachePurgeScheduler } = await import('./backtest/v2/cachePurgeScheduler');
+      await startCachePurgeScheduler();
+    } catch (err: any) {
+      console.error('Failed to start cache purge scheduler:', err.message);
+      console.error('Cache will not be automatically purged at 4pm/8pm ET');
+    }
+  }
+
   // Start T-10 rebalancing scheduler if we have API credentials
   const apiKey = process.env.ALPACA_API_KEY?.trim();
   const apiSecret = process.env.ALPACA_API_SECRET?.trim();

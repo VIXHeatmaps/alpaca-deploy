@@ -117,9 +117,18 @@ CREATE INDEX idx_snapshots_strategy_date ON strategy_snapshots(strategy_id, snap
 ## 3. UI and CSS Improvements
 
 ### Current State
-- Functional but basic UI
-- TailwindCSS 4 setup
-- Dashboard + Strategy Builder tabs
+- Clean, minimal UI with TailwindCSS 4
+- 3-tier navigation: Dashboard | Library (Strategies/Variables/Batch Tests) | Builder
+- Variables tab redesigned with minimal style (Jan 2025)
+- Builder now uses full browser width (Jan 2025)
+
+### Recent Completions (Jan 2025)
+- [✓] **Variables tab redesign** - Clean, minimal style with improved UX
+- [✓] **Batch Tests simplification** - Removed "In Progress"/"Complete" tabs, unified list
+- [✓] **Navigation restructure** - 3 top-level tabs with clear hierarchy
+- [✓] **Tab styling** - Centered top-level tabs, minimal subtabs
+- [✓] **Builder width** - Removed max-width constraint to use full browser space
+- [✓] **Authentication separation** - Discord only gates live trading, not backtesting
 
 ### Improvement Areas
 
@@ -145,10 +154,13 @@ CREATE INDEX idx_snapshots_strategy_date ON strategy_snapshots(strategy_id, snap
 - [ ] Mini-map for large strategies
 - [✓] Undo/redo buttons (already implemented)
 - [✓] Copy/paste nodes (already implemented)
+- [✓] Builder uses full browser width (Jan 2025)
 - [ ] **Copy/paste across strategy tabs** (should work seamlessly)
 - [ ] Generate a FLOW-CHART version of the strategy
 
-#### C. Batch Tests UI
+#### C. Batch Tests UI (PARTIALLY COMPLETE)
+- [✓] **Unified job list** - Removed "In Progress"/"Complete" tabs (Jan 2025)
+- [✓] **In-progress jobs at top** - Auto-sorted by status then date (Jan 2025)
 - [ ] Progress bar with estimated time remaining
 - [ ] Cancel button
 - [ ] Pause button
@@ -175,30 +187,37 @@ CREATE INDEX idx_snapshots_strategy_date ON strategy_snapshots(strategy_id, snap
 
 ---
 
-## 4. Simplify Tabs
+## 4. Simplify Tabs (MOSTLY COMPLETE - Jan 2025)
 
-### Current State
-- Multiple nested tab bars (consuming vertical space)
-- Dashboard/Strategy Builder, then Strat/Variables/Batchtests, plus multiple strategies
-- Batch Tests shows "In Progress" and "Completed" tabs (unnecessary - should be single list)
+### Current State (Updated Jan 2025)
+- [✓] **3-tier navigation implemented:** Dashboard | Library | Builder
+- [✓] **Library subtabs:** Strategies (placeholder) | Variables | Batch Tests
+- [✓] **Builder:** Shows strategy editor with open strategy tabs (KMLM ×, Vix Pop ×, etc.)
+- [✓] **Batch Tests:** Single unified list (removed "In Progress"/"Complete" tabs)
+- [✓] **Tab hierarchy:** Centered top-level tabs, minimal subtabs
+- [✓] **Full-width Builder:** Removed max-width constraints
 
-### Target Structure (CRITICAL)
-**Single tab bar:**
+### Remaining Work
+**Target Structure (Original Goal):**
 ```
 Dashboard | Variables | Batch Tests | Strategy 1 | Strategy 2 | Strategy 3 | +
 ```
 
-**Key Changes:**
-- [ ] **Each "Strategy N" tab is a full builder** (not separate "Strategy Builder" tab)
-- [ ] **Variables tab** - Global library of variables available to all strategies
-- [ ] **Navigate between strategies** - Standard tab switching (click tabs)
-- [ ] **Dashboard remains separate** - Shows all active strategies + aggregate portfolio
-- [ ] **Batch Tests** - Single unified list (no "In Progress" vs "Completed" subtabs)
-- [ ] **"+" button** - Create new strategy tab
+**What's Different from Current Implementation:**
+- [ ] **Variables as top-level tab** (currently in Library subtab)
+- [ ] **Batch Tests as top-level tab** (currently in Library subtab)
+- [ ] **Strategy tabs at top level** (currently nested in Builder)
+- [ ] **"+" button** for new strategy tab (not implemented)
+
+**Current Implementation Works Because:**
+- Only one level of nesting (top-level → subtabs)
+- Clear visual hierarchy (centered/large top vs minimal subtabs)
+- Builder uses full width when active
+- May not need to flatten further unless vertical space becomes critical
 
 ### Constraints
-- **Vertical space is premium** - Only ONE tab bar allowed
-- **Dashboard and Builder separate** - Confirmed requirement
+- **Vertical space is premium** - Only ONE level of nested tabs acceptable
+- **Dashboard and Builder separate** - Confirmed requirement ✓
 - No persistent sidebar (rejected)
 - No breadcrumb navigation (not applicable)
 - No quick-switch dropdown (not needed)
