@@ -38,7 +38,8 @@ function evaluateCondition(
     }
   } else {
     // Compare against another indicator
-    if (!condition.rightTicker || !condition.rightIndicator || !condition.rightPeriod) {
+    // Note: rightPeriod may be empty string for indicators like MACD, CURRENT_PRICE
+    if (!condition.rightTicker || !condition.rightIndicator || condition.rightPeriod === undefined || condition.rightPeriod === null) {
       throw new Error("Missing right-hand indicator specification");
     }
     const rightKey = `${condition.rightTicker}:${condition.rightIndicator}:${condition.rightPeriod}`;

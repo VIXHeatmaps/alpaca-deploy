@@ -64,10 +64,64 @@ interface SimulationResult {
 
 /**
  * Build a lookup map of ticker:indicator -> period from strategy elements
- * This extracts the period values that conditions expect (e.g., "20" for MACD)
+ * This extracts the period values that conditions expect (e.g., "20" for single-param or "12-26-9" for MACD)
+ * Now supports both old period field and new params object
  */
 function buildIndicatorLookupMap(elements: any[]): Map<string, string> {
   const map = new Map<string, string>();
+
+  /**
+   * Convert params object to period string (matches cache key format)
+   */
+  function paramsToPeriodString(indicator: string, params?: Record<string, string>): string {
+    if (!params || Object.keys(params).length === 0) {
+      return ''; // Will use default
+    }
+
+    const ind = indicator.toUpperCase();
+
+    // Multi-param indicators
+    if (ind === 'MACD' || ind.startsWith('MACD_')) {
+      const f = params.fastperiod || '12';
+      const s = params.slowperiod || '26';
+      const sig = params.signalperiod || '9';
+      return `${f}-${s}-${sig}`;
+    }
+
+    if (ind.startsWith('BBANDS_')) {
+      const p = params.period || '20';
+      const up = params.nbdevup || '2';
+      const dn = params.nbdevdn || '2';
+      return `${p}-${up}-${dn}`;
+    }
+
+    if (ind === 'STOCH_K') {
+      const fast = params.fastk_period || '14';
+      const slow = params.slowk_period || '3';
+      return `${fast}-${slow}`;
+    }
+
+    if (ind === 'PPO_LINE') {
+      const f = params.fastperiod || '12';
+      const s = params.slowperiod || '26';
+      return `${f}-${s}`;
+    }
+
+    if (ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
+      const f = params.fastperiod || '12';
+      const s = params.slowperiod || '26';
+      const sig = params.signalperiod || '9';
+      return `${f}-${s}-${sig}`;
+    }
+
+    // Single-param indicators
+    if (params.period) {
+      return params.period;
+    }
+
+    // No params
+    return '0';
+  }
 
   function traverse(els: any[]): void {
     for (const el of els) {
@@ -75,11 +129,19 @@ function buildIndicatorLookupMap(elements: any[]): Map<string, string> {
         for (const cond of el.conditions) {
           if (cond.ticker && cond.indicator) {
             const key = `${cond.ticker.toUpperCase()}:${cond.indicator.toUpperCase()}`;
-            map.set(key, cond.period || '');
+            // Use params if available, otherwise fall back to period
+            const periodStr = cond.params && Object.keys(cond.params).length > 0
+              ? paramsToPeriodString(cond.indicator, cond.params)
+              : (cond.period || '');
+            map.set(key, periodStr);
           }
           if (cond.compareTo === 'indicator' && cond.rightTicker && cond.rightIndicator) {
             const key = `${cond.rightTicker.toUpperCase()}:${cond.rightIndicator.toUpperCase()}`;
-            map.set(key, cond.rightPeriod || '');
+            // Use rightParams if available, otherwise fall back to rightPeriod
+            const periodStr = cond.rightParams && Object.keys(cond.rightParams).length > 0
+              ? paramsToPeriodString(cond.rightIndicator, cond.rightParams)
+              : (cond.rightPeriod || '');
+            map.set(key, periodStr);
           }
         }
       }
@@ -163,23 +225,52 @@ export async function runSimulation(
     const executionDate = dateGrid[i];
 
     // Build indicator map for decision date
-    // Note: We need to map the cache keys back to what the strategy expects
+    // Note: We need to create entries for ALL period values that conditions use
     const indicatorValuesForDate: Array<any> = [];
     const indicatorLookup = buildIndicatorLookupMap(elements);
 
-    for (const [key, values] of Object.entries(indicatorData)) {
-      const [ticker, indicator, periodStr] = key.split('|');
+    // DEBUG: Log what periods the lookup map has
+    if (i === 1) {
+      console.log('[SIM DEBUG] Indicator lookup map:');
+      for (const [key, period] of indicatorLookup.entries()) {
+        console.log(`  ${key} -> period: "${period}"`);
+      }
+    }
+
+    const addedKeys = new Set<string>();
+
+    for (const [cacheKey, values] of Object.entries(indicatorData)) {
+      const [ticker, indicator, periodStr] = cacheKey.split('|');
       const value = values[decisionDate];
       if (value !== undefined) {
-        // Find what period the condition expects (may differ from cache key for multi-param indicators)
-        const expectedPeriod = indicatorLookup.get(`${ticker}:${indicator}`) || periodStr;
+        const lookupKey = `${ticker}:${indicator}`;
 
-        indicatorValuesForDate.push({
-          ticker,
-          indicator,
-          period: expectedPeriod, // Use period from condition, not cache key
-          value,
-        });
+        // Find ALL period strings that conditions use for this ticker:indicator
+        const periodsUsed: string[] = [];
+        for (const [k, v] of indicatorLookup.entries()) {
+          if (k === lookupKey) {
+            periodsUsed.push(v);
+          }
+        }
+
+        // If no conditions use this indicator, use cache period
+        if (periodsUsed.length === 0) {
+          periodsUsed.push(periodStr);
+        }
+
+        // Create indicator value entry for each unique period string
+        for (const period of periodsUsed) {
+          const entryKey = `${ticker}:${indicator}:${period}`;
+          if (!addedKeys.has(entryKey)) {
+            indicatorValuesForDate.push({
+              ticker,
+              indicator,
+              period, // Use exact period from condition (may be empty string)
+              value,
+            });
+            addedKeys.add(entryKey);
+          }
+        }
       }
     }
 

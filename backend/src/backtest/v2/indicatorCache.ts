@@ -15,7 +15,8 @@ const INDICATOR_SERVICE_URL = process.env.INDICATOR_SERVICE_URL || 'http://local
 interface IndicatorRequest {
   ticker: string;
   indicator: string;
-  period: number;
+  period: number;  // Deprecated: kept for backward compat, now computed from params
+  params?: Record<string, string>;  // NEW: actual indicator params from frontend
 }
 
 interface Bar {
@@ -75,9 +76,12 @@ export async function fetchIndicators(
     const tickerData = priceData[req.ticker];
     if (!tickerData) continue;
 
+    // Extract the period part from the indicator key (handles composite keys)
+    const periodPart = indKey.split('|')[2];
+
     const dates = Object.keys(tickerData).sort();
     for (const date of dates) {
-      const cacheKey = `indicator:${req.ticker}:${req.indicator}:${req.period}:${date}`;
+      const cacheKey = `indicator:${req.ticker}:${req.indicator}:${periodPart}:${date}`;
       cacheKeys.push(cacheKey);
       cacheKeyMap.set(cacheKey, { indKey, date });
     }
@@ -140,7 +144,9 @@ export async function fetchIndicators(
         // Cache if T-2 or older (Decision #7)
         if (cache.shouldCache(date)) {
           const req = indicatorsToCompute.get(indKey)!;
-          const cacheKey = `indicator:${req.ticker}:${req.indicator}:${req.period}:${date}`;
+          // Extract the period part from the indicator key (handles composite keys)
+          const periodPart = indKey.split('|')[2];
+          const cacheKey = `indicator:${req.ticker}:${req.indicator}:${periodPart}:${date}`;
           itemsToCache.push({
             key: cacheKey,
             value: value.toString(),
@@ -192,11 +198,28 @@ async function computeIndicator(
     const volumes = bars.map(b => b.v);
 
     // Build payload based on indicator type
-    const params = getIndicatorParams(req.indicator, req.period);
+    // Use params from request if available, otherwise use defaults
+    let params: any;
+    if (req.params && Object.keys(req.params).length > 0) {
+      // Convert string params to appropriate types (numbers for most params)
+      params = {};
+      for (const [key, value] of Object.entries(req.params)) {
+        // Keep matype as number, convert periods to numbers
+        const numValue = parseFloat(value);
+        params[key] = isNaN(numValue) ? value : numValue;
+      }
+      console.log(`[INDICATOR] Using params from request for ${req.ticker} ${req.indicator}:`, JSON.stringify(params));
+    } else {
+      // Fall back to old behavior for backward compatibility
+      params = getIndicatorParams(req.indicator, req.period);
+      console.log(`[INDICATOR] Using default params for ${req.ticker} ${req.indicator}:`, JSON.stringify(params));
+    }
+
     let payload: any = {
       indicator: req.indicator,
       params,
     };
+    console.log(`[INDICATOR] Full payload for ${req.ticker} ${req.indicator}:`, JSON.stringify(payload));
 
     // Add appropriate data based on indicator type
     const ind = req.indicator.toUpperCase();
@@ -231,6 +254,11 @@ async function computeIndicator(
     }
 
     // Call indicator service
+    console.log(`[INDICATOR] Calling indicator service for ${req.ticker} ${req.indicator}:`);
+    console.log(`[INDICATOR]   URL: ${INDICATOR_SERVICE_URL}/indicator`);
+    console.log(`[INDICATOR]   Payload keys: ${Object.keys(payload).join(', ')}`);
+    console.log(`[INDICATOR]   Data array lengths: high=${payload.high?.length}, low=${payload.low?.length}, close=${payload.close?.length}`);
+
     const response = await axios.post(`${INDICATOR_SERVICE_URL}/indicator`, payload, {
       timeout: 30000,
     });
@@ -248,6 +276,10 @@ async function computeIndicator(
     console.log(`[INDICATOR] Computed ${req.indicator}(${req.period}) for ${req.ticker}: ${Object.keys(values).length} values`);
   } catch (err: any) {
     console.error(`[INDICATOR] Error computing ${req.indicator} for ${req.ticker}:`, err.message);
+    if (err.response) {
+      console.error(`[INDICATOR]   Status: ${err.response.status}`);
+      console.error(`[INDICATOR]   Response data:`, JSON.stringify(err.response.data));
+    }
   }
 
   return { key, values };
@@ -255,9 +287,15 @@ async function computeIndicator(
 
 /**
  * Create indicator key for lookup
- * Format: "ticker|indicator|period"
+ * Format: "ticker|indicator|period" or "ticker|indicator|param1-param2-param3"
  */
 function createIndicatorKey(req: IndicatorRequest): string {
+  // If params are provided, use them to create the key
+  if (req.params && Object.keys(req.params).length > 0) {
+    return createCacheKey(req.ticker, req.indicator, req.params);
+  }
+
+  // Otherwise fall back to period-based key (backward compat)
   return `${req.ticker}|${req.indicator}|${req.period}`;
 }
 
@@ -341,6 +379,157 @@ function getIndicatorPeriod(indicator: string, providedPeriod?: string): number 
 }
 
 /**
+ * Get default params object for an indicator
+ * Used when frontend doesn't provide params (backward compatibility)
+ */
+function getDefaultParams(indicator: string): Record<string, string> {
+  const ind = indicator.toUpperCase();
+
+  if (ind === 'MACD' || ind.startsWith('MACD_')) {
+    return { fastperiod: '12', slowperiod: '26', signalperiod: '9' };
+  }
+  if (ind.startsWith('BBANDS_')) {
+    return { period: '20', nbdevup: '2', nbdevdn: '2' };
+  }
+  if (ind === 'STOCH_K') {
+    return { fastk_period: '14', slowk_period: '3', slowk_matype: '0' };
+  }
+  if (ind === 'PPO_LINE') {
+    return { fastperiod: '12', slowperiod: '26', matype: '0' };
+  }
+  if (ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
+    return { fastperiod: '12', slowperiod: '26', matype: '0', signalperiod: '9' };
+  }
+  if (ind === 'RSI' || ind === 'SMA' || ind === 'EMA') {
+    return { period: '14' };
+  }
+  if (ind === 'ATR' || ind === 'ADX' || ind === 'MFI') {
+    return { period: '14' };
+  }
+  if (ind === 'VOLATILITY') {
+    return { period: '20' };
+  }
+  if (ind === 'CURRENT_PRICE' || ind === 'OBV' || ind === 'CUMULATIVE_RETURN') {
+    return {};
+  }
+
+  // Default: single period parameter
+  return { period: '14' };
+}
+
+/**
+ * Create cache key from ticker, indicator, and params
+ * For multi-param indicators, creates composite key like "12-26-9"
+ * This allows different param combinations to be cached separately
+ */
+function createCacheKey(ticker: string, indicator: string, params: Record<string, string>): string {
+  const ind = indicator.toUpperCase();
+
+  if (ind === 'MACD' || ind.startsWith('MACD_')) {
+    const f = params.fastperiod || '12';
+    const s = params.slowperiod || '26';
+    const sig = params.signalperiod || '9';
+    return `${ticker}|${indicator}|${f}-${s}-${sig}`;
+  }
+
+  if (ind.startsWith('BBANDS_')) {
+    const p = params.period || '20';
+    const up = params.nbdevup || '2';
+    const dn = params.nbdevdn || '2';
+    return `${ticker}|${indicator}|${p}-${up}-${dn}`;
+  }
+
+  if (ind === 'STOCH_K') {
+    const fast = params.fastk_period || '14';
+    const slow = params.slowk_period || '3';
+    return `${ticker}|${indicator}|${fast}-${slow}`;
+  }
+
+  if (ind === 'PPO_LINE') {
+    const f = params.fastperiod || '12';
+    const s = params.slowperiod || '26';
+    return `${ticker}|${indicator}|${f}-${s}`;
+  }
+
+  if (ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
+    const f = params.fastperiod || '12';
+    const s = params.slowperiod || '26';
+    const sig = params.signalperiod || '9';
+    return `${ticker}|${indicator}|${f}-${s}-${sig}`;
+  }
+
+  // Single-param indicators (or no params)
+  if (params.period) {
+    return `${ticker}|${indicator}|${params.period}`;
+  }
+
+  // No-param indicators (CURRENT_PRICE, etc.)
+  return `${ticker}|${indicator}|0`;
+}
+
+/**
+ * Parse params from a cache key period string
+ * Handles both composite keys like "12-26-9" and simple period numbers
+ */
+function parseParamsFromPeriodKey(indicator: string, periodKey: string): Record<string, string> {
+  const ind = indicator.toUpperCase();
+
+  // Multi-param indicators with composite keys
+  if (periodKey.includes('-')) {
+    const parts = periodKey.split('-');
+
+    if (ind === 'MACD' || ind.startsWith('MACD_')) {
+      return {
+        fastperiod: parts[0] || '12',
+        slowperiod: parts[1] || '26',
+        signalperiod: parts[2] || '9',
+      };
+    }
+
+    if (ind.startsWith('BBANDS_')) {
+      return {
+        period: parts[0] || '20',
+        nbdevup: parts[1] || '2',
+        nbdevdn: parts[2] || '2',
+      };
+    }
+
+    if (ind === 'STOCH_K') {
+      return {
+        fastk_period: parts[0] || '14',
+        slowk_period: parts[1] || '3',
+        slowk_matype: '0',
+      };
+    }
+
+    if (ind === 'PPO_LINE') {
+      return {
+        fastperiod: parts[0] || '12',
+        slowperiod: parts[1] || '26',
+        matype: '0',
+      };
+    }
+
+    if (ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
+      return {
+        fastperiod: parts[0] || '12',
+        slowperiod: parts[1] || '26',
+        matype: '0',
+        signalperiod: parts[2] || '9',
+      };
+    }
+  }
+
+  // Single-param indicators
+  if (periodKey !== '0') {
+    return { period: periodKey };
+  }
+
+  // No-param indicators
+  return {};
+}
+
+/**
  * Extract required indicators from strategy elements
  */
 export function collectRequiredIndicators(elements: any[]): IndicatorRequest[] {
@@ -356,12 +545,17 @@ export function collectRequiredIndicators(elements: any[]): IndicatorRequest[] {
           if (cond.ticker && cond.indicator) {
             const ticker = cond.ticker.toUpperCase();
             const indicator = cond.indicator.toUpperCase();
-            const period = getIndicatorPeriod(indicator, cond.period);
 
-            const key = `${ticker}|${indicator}|${period}`;
+            // Use params object if available, otherwise fall back to defaults
+            const params = cond.params && Object.keys(cond.params).length > 0
+              ? cond.params
+              : getDefaultParams(indicator);
+
+            const key = createCacheKey(ticker, indicator, params);
             if (!indicators.has(key)) {
               indicators.add(key);
-              result.push({ ticker, indicator, period });
+              // Period is only used for old cache key format - not needed anymore since we have params
+              result.push({ ticker, indicator, period: 0, params });
             }
           }
 
@@ -369,12 +563,17 @@ export function collectRequiredIndicators(elements: any[]): IndicatorRequest[] {
           if (cond.compareTo === 'indicator' && cond.rightTicker && cond.rightIndicator) {
             const ticker = cond.rightTicker.toUpperCase();
             const indicator = cond.rightIndicator.toUpperCase();
-            const period = getIndicatorPeriod(indicator, cond.rightPeriod);
 
-            const key = `${ticker}|${indicator}|${period}`;
+            // Use rightParams if available, otherwise fall back to defaults
+            const params = cond.rightParams && Object.keys(cond.rightParams).length > 0
+              ? cond.rightParams
+              : getDefaultParams(indicator);
+
+            const key = createCacheKey(ticker, indicator, params);
             if (!indicators.has(key)) {
               indicators.add(key);
-              result.push({ ticker, indicator, period });
+              // Period is only used for old cache key format - not needed anymore since we have params
+              result.push({ ticker, indicator, period: 0, params });
             }
           }
         }

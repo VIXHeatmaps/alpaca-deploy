@@ -237,7 +237,11 @@ function validateGate(
 
     const indicatorsRequiringPeriod = ["RSI", "SMA", "EMA", "ATR", "ADX", "MFI", "STOCH_K", "AROONOSC"];
     if (indicatorsRequiringPeriod.includes(cond.indicator?.toUpperCase() || "")) {
-      if (!cond.period || cond.period.trim() === "") {
+      // Check params object first (new approach), then fall back to period field
+      const hasPeriodParam = cond.params?.period && cond.params.period.trim() !== "";
+      const hasPeriodField = cond.period && cond.period.trim() !== "";
+
+      if (!hasPeriodParam && !hasPeriodField) {
         errors.push({
           elementId: gate.id,
           elementType: "gate",
@@ -245,17 +249,21 @@ function validateGate(
           message: `Indicator "${cond.indicator}" requires a period`,
           severity: "error",
         });
-      } else if (!isVariableToken(cond.period)) {
-        // Only validate as number if it's not a variable token
-        const periodNum = parseInt(cond.period, 10);
-        if (isNaN(periodNum) || periodNum < 1) {
-          errors.push({
-            elementId: gate.id,
-            elementType: "gate",
-            field: `${fieldPrefix}.period`,
-            message: `Period must be a positive integer or variable (currently "${cond.period}")`,
-            severity: "error",
-          });
+      } else {
+        // Validate the period value (prefer params.period)
+        const periodValue = hasPeriodParam ? cond.params.period : cond.period;
+        if (periodValue && !isVariableToken(periodValue)) {
+          // Only validate as number if it's not a variable token
+          const periodNum = parseInt(periodValue, 10);
+          if (isNaN(periodNum) || periodNum < 1) {
+            errors.push({
+              elementId: gate.id,
+              elementType: "gate",
+              field: `${fieldPrefix}.period`,
+              message: `Period must be a positive integer or variable (currently "${periodValue}")`,
+              severity: "error",
+            });
+          }
         }
       }
     }
@@ -325,7 +333,11 @@ function validateGate(
 
       const indicatorsRequiringPeriod = ["RSI", "SMA", "EMA", "ATR", "ADX", "MFI", "STOCH_K", "AROONOSC"];
       if (indicatorsRequiringPeriod.includes(cond.rightIndicator?.toUpperCase() || "")) {
-        if (!cond.rightPeriod || cond.rightPeriod.trim() === "") {
+        // Check rightParams object first (new approach), then fall back to rightPeriod field
+        const hasPeriodParam = cond.rightParams?.period && cond.rightParams.period.trim() !== "";
+        const hasPeriodField = cond.rightPeriod && cond.rightPeriod.trim() !== "";
+
+        if (!hasPeriodParam && !hasPeriodField) {
           errors.push({
             elementId: gate.id,
             elementType: "gate",
@@ -333,17 +345,21 @@ function validateGate(
             message: `Right side indicator "${cond.rightIndicator}" requires a period`,
             severity: "error",
           });
-        } else if (!isVariableToken(cond.rightPeriod)) {
-          // Only validate as number if it's not a variable token
-          const periodNum = parseInt(cond.rightPeriod, 10);
-          if (isNaN(periodNum) || periodNum < 1) {
-            errors.push({
-              elementId: gate.id,
-              elementType: "gate",
-              field: `${fieldPrefix}.rightPeriod`,
-              message: `Right side period must be a positive integer or variable (currently "${cond.rightPeriod}")`,
-              severity: "error",
-            });
+        } else {
+          // Validate the period value (prefer rightParams.period)
+          const periodValue = hasPeriodParam ? cond.rightParams.period : cond.rightPeriod;
+          if (periodValue && !isVariableToken(periodValue)) {
+            // Only validate as number if it's not a variable token
+            const periodNum = parseInt(periodValue, 10);
+            if (isNaN(periodNum) || periodNum < 1) {
+              errors.push({
+                elementId: gate.id,
+                elementType: "gate",
+                field: `${fieldPrefix}.rightPeriod`,
+                message: `Right side period must be a positive integer or variable (currently "${periodValue}")`,
+                severity: "error",
+              });
+            }
           }
         }
       }

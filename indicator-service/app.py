@@ -392,6 +392,11 @@ def indicator_router(payload: dict):
             out = talib.NATR(high, low, close, timeperiod=period)
             return {"values": _nan_to_none(out)}
 
+        if ind == "ATR":
+            period = int(req.params.get("period", 14))
+            out = talib.ATR(high, low, close, timeperiod=period)
+            return {"values": _nan_to_none(out)}
+
         raise HTTPException(status_code=400, detail=f"Unsupported HLC indicator '{ind}'")
 
     # ---- HLCV path (new) ----

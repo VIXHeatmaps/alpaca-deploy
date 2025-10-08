@@ -3,7 +3,7 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { motion, AnimatePresence } from "framer-motion";
 import { Copy } from "lucide-react";
 import type { IndicatorName } from "../types/indicators";
-import { indicatorOptions } from "../types/indicators";
+import { indicatorOptions, keysForIndicator, PARAM_LABELS, getEffectiveParams } from "../types/indicators";
 import {
   LineChart,
   Line,
@@ -35,13 +35,15 @@ const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
 interface GateCondition {
   ticker: string;
   indicator: IndicatorName;
-  period: string;
+  period: string; // Deprecated: kept for backward compatibility
+  params?: Record<string, string>; // New: indicator parameters
   operator: "gt" | "lt";
   compareTo: "threshold" | "indicator";
   threshold: string;
   rightTicker?: string;
   rightIndicator?: IndicatorName;
-  rightPeriod?: string;
+  rightPeriod?: string; // Deprecated: kept for backward compatibility
+  rightParams?: Record<string, string>; // New: right indicator parameters
 }
 
 interface GateElement {
@@ -817,6 +819,76 @@ function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyO
   );
 }
 
+// ========== INDICATOR PARAMS COMPONENT ==========
+
+interface IndicatorParamsProps {
+  indicator: IndicatorName;
+  params: Record<string, string>;
+  onUpdate: (params: Record<string, string>) => void;
+  conditionIndex: number;
+  elementId: string;
+  validationErrors: ValidationError[];
+  definedVariables: Set<string>;
+}
+
+function IndicatorParams({
+  indicator,
+  params,
+  onUpdate,
+  conditionIndex,
+  elementId,
+  validationErrors,
+  definedVariables,
+}: IndicatorParamsProps) {
+  const paramKeys = keysForIndicator(indicator);
+
+  if (paramKeys.length === 0) {
+    return null; // Don't show anything for no-param indicators
+  }
+
+  const handleParamChange = (key: string, value: string) => {
+    onUpdate({ ...params, [key]: value });
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '13px', color: '#9ca3af' }}>(</span>
+      {paramKeys.map((key, idx) => {
+        const value = params[key] || '';
+        const hasUndefinedVar = hasUndefinedVariableInField(value, definedVariables);
+        const defaultValue = getEffectiveParams(indicator)[key];
+
+        return (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {idx > 0 && <span style={{ fontSize: '13px', color: '#9ca3af' }}>,</span>}
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => handleParamChange(key, e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              placeholder={String(defaultValue)}
+              style={{
+                border: hasUndefinedVar ? '2px solid #ef4444' : '1px solid #d1d5db',
+                outline: 'none',
+                padding: '3px 6px',
+                background: hasUndefinedVar ? '#fee2e2' : (value ? '#fff' : '#f9fafb'),
+                fontSize: '13px',
+                color: value ? '#111827' : '#9ca3af',
+                width: '45px',
+                borderRadius: '3px',
+                textAlign: 'center',
+              }}
+              className="focus:ring-2 focus:ring-blue-500"
+              title={hasUndefinedVar ? `Variable ${value} is not defined` : PARAM_LABELS[key]}
+            />
+          </div>
+        );
+      })}
+      <span style={{ fontSize: '13px', color: '#9ca3af' }}>)</span>
+    </div>
+  );
+}
+
 // ========== CONDITION ROW COMPONENT ==========
 
 interface ConditionRowProps {
@@ -860,30 +932,7 @@ function ConditionRow({
       flexWrap: 'wrap',
       position: 'relative',
     }}>
-      {/* Left side: DAYS INDICATOR of TICKER */}
-      <input
-        type="text"
-        value={condition.period}
-        onChange={(e) => onUpdate({ period: e.target.value })}
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          border: (hasFieldError(elementId, `conditions.${conditionIndex}.period`, validationErrors) || periodHasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
-          outline: 'none',
-          padding: '4px 8px',
-          background: (hasFieldError(elementId, `conditions.${conditionIndex}.period`, validationErrors) || periodHasUndefinedVar) ? '#fee2e2' : '#fff',
-          fontSize: '13px',
-          color: condition.period ? '#111827' : '#9ca3af',
-          width: '50px',
-          flexShrink: 0,
-          borderRadius: '4px',
-        }}
-        className="focus:ring-2 focus:ring-blue-500"
-        placeholder="0"
-        title={periodHasUndefinedVar ? `Variable ${condition.period} is not defined in Variables tab` : undefined}
-      />
-
-      <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>day</span>
-
+      {/* Left side: INDICATOR(params) of TICKER */}
       <select
         value={condition.indicator}
         onChange={(e) => onUpdate({ indicator: e.target.value as IndicatorName })}
@@ -906,6 +955,22 @@ function ConditionRow({
           <option key={opt} value={opt}>{opt}</option>
         ))}
       </select>
+
+      {/* Indicator params */}
+      <IndicatorParams
+        indicator={condition.indicator}
+        params={condition.params || {}}
+        onUpdate={(params) => {
+          // Also update the legacy 'period' field for backward compatibility with executor
+          // The executor looks for condition.period, so we need to populate it from params
+          const period = params.period || '';
+          onUpdate({ params, period });
+        }}
+        conditionIndex={conditionIndex}
+        elementId={elementId}
+        validationErrors={validationErrors}
+        definedVariables={definedVariables}
+      />
 
       <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
 
@@ -1006,29 +1071,6 @@ function ConditionRow({
         />
       ) : (
         <>
-          <input
-            type="text"
-            value={condition.rightPeriod || ""}
-            onChange={(e) => onUpdate({ rightPeriod: e.target.value })}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              border: (hasFieldError(elementId, `conditions.${conditionIndex}.rightPeriod`, validationErrors) || rightPeriodHasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
-              outline: 'none',
-              padding: '4px 8px',
-              background: (hasFieldError(elementId, `conditions.${conditionIndex}.rightPeriod`, validationErrors) || rightPeriodHasUndefinedVar) ? '#fee2e2' : '#fff',
-              fontSize: '13px',
-              color: condition.rightPeriod ? '#111827' : '#9ca3af',
-              width: '50px',
-              flexShrink: 0,
-              borderRadius: '4px',
-            }}
-            className="focus:ring-2 focus:ring-blue-500"
-            placeholder="0"
-            title={rightPeriodHasUndefinedVar ? `Variable ${condition.rightPeriod} is not defined in Variables tab` : undefined}
-          />
-
-          <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>day</span>
-
           <select
             value={condition.rightIndicator || "RSI"}
             onChange={(e) => onUpdate({ rightIndicator: e.target.value as IndicatorName })}
@@ -1051,6 +1093,21 @@ function ConditionRow({
               <option key={opt} value={opt}>{opt}</option>
             ))}
           </select>
+
+          {/* Right indicator params */}
+          <IndicatorParams
+            indicator={condition.rightIndicator || "RSI"}
+            params={condition.rightParams || {}}
+            onUpdate={(rightParams) => {
+              // Also update the legacy 'rightPeriod' field for backward compatibility with executor
+              const rightPeriod = rightParams.period || '';
+              onUpdate({ rightParams, rightPeriod });
+            }}
+            conditionIndex={conditionIndex}
+            elementId={elementId}
+            validationErrors={validationErrors}
+            definedVariables={definedVariables}
+          />
 
           <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
 
@@ -1134,12 +1191,14 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
     ticker: "",
     indicator: "RSI",
     period: "",
+    params: {},
     operator: "gt",
     compareTo: "indicator",
     threshold: "",
     rightTicker: "",
     rightIndicator: "RSI",
     rightPeriod: "",
+    rightParams: {},
   }]);
 
   // Helper functions for managing conditions
@@ -1156,14 +1215,16 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
       ticker: "",
       indicator: "RSI",
       period: "",
+      params: {},
       operator: "gt",
       compareTo: "indicator",
       threshold: "",
       rightTicker: "",
       rightIndicator: "RSI",
       rightPeriod: "",
+      rightParams: {},
     };
-    const { condition, ...rest } = element; // Remove old condition field
+    const { condition, ...rest} = element; // Remove old condition field
     onUpdate({ ...rest, conditions: [...conditions, newCondition] });
   };
 
@@ -3224,8 +3285,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                       </label>
                       <input
                         type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        defaultValue={startDate === "max" ? "" : startDate}
+                        onBlur={(e) => setStartDate(e.target.value || "max")}
+                        placeholder="Max (earliest available)"
                         style={{
                           width: '100%',
                           padding: '8px',
