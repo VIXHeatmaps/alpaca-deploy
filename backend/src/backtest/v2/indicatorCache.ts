@@ -192,24 +192,39 @@ async function computeIndicator(
     const volumes = bars.map(b => b.v);
 
     // Build payload based on indicator type
+    const params = getIndicatorParams(req.indicator, req.period);
     let payload: any = {
       indicator: req.indicator,
-      params: { period: req.period },
+      params,
     };
 
     // Add appropriate data based on indicator type
-    if (req.indicator === 'RSI' || req.indicator === 'SMA' || req.indicator === 'EMA') {
+    const ind = req.indicator.toUpperCase();
+    if (ind === 'RSI' || ind === 'SMA' || ind === 'EMA') {
       payload.close = closes;
       payload.prices = closes;
-    } else if (req.indicator === 'ATR' || req.indicator === 'ADX') {
+    } else if (ind === 'ATR' || ind === 'ADX') {
       payload.high = highs;
       payload.low = lows;
       payload.close = closes;
-    } else if (req.indicator === 'MFI') {
+    } else if (ind === 'MFI') {
       payload.high = highs;
       payload.low = lows;
       payload.close = closes;
       payload.volume = volumes;
+    } else if (ind.startsWith('MACD') || ind.startsWith('PPO')) {
+      // MACD/PPO need close prices
+      payload.close = closes;
+      payload.prices = closes;
+    } else if (ind.startsWith('BBANDS')) {
+      // Bollinger Bands need close prices
+      payload.close = closes;
+      payload.prices = closes;
+    } else if (ind === 'STOCH_K') {
+      // Stochastic needs high, low, close
+      payload.high = highs;
+      payload.low = lows;
+      payload.close = closes;
     } else {
       payload.close = closes;
       payload.prices = closes;
@@ -247,6 +262,85 @@ function createIndicatorKey(req: IndicatorRequest): string {
 }
 
 /**
+ * Get indicator parameters for API call
+ * Returns proper params object for each indicator type
+ */
+function getIndicatorParams(indicator: string, period: number): any {
+  const ind = indicator.toUpperCase();
+
+  // Multi-parameter indicators
+  if (ind === 'MACD' || ind === 'MACD_LINE' || ind === 'MACD_SIGNAL' || ind === 'MACD_HIST') {
+    return { fastperiod: 12, slowperiod: 26, signalperiod: 9 };
+  }
+  if (ind === 'PPO_LINE') {
+    return { fastperiod: 12, slowperiod: 26, matype: 0 };
+  }
+  if (ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
+    return { fastperiod: 12, slowperiod: 26, matype: 0, signalperiod: 9 };
+  }
+  if (ind === 'BBANDS_UPPER' || ind === 'BBANDS_MIDDLE' || ind === 'BBANDS_LOWER') {
+    return { period: 20, nbdevup: 2.0, nbdevdn: 2.0, matype: 0 };
+  }
+  if (ind === 'STOCH_K') {
+    return { fastk_period: 14, slowk_period: 3, slowk_matype: 0 };
+  }
+
+  // Standard single-period indicators
+  if (ind === 'VOLATILITY') {
+    return { period: period || 20, annualize: 1 };
+  }
+
+  // No-parameter indicators
+  if (ind === 'CURRENT_PRICE' || ind === 'OBV' || ind === 'CUMULATIVE_RETURN') {
+    return {};
+  }
+
+  // Default: single period parameter
+  return { period: period || 14 };
+}
+
+/**
+ * Get default period for indicator based on type
+ * Returns a string representation suitable for cache keys
+ */
+function getIndicatorPeriod(indicator: string, providedPeriod?: string): number {
+  const ind = indicator.toUpperCase();
+
+  // Multi-parameter indicators: ALWAYS use composite defaults (ignore provided period)
+  // These indicators need 3+ params that frontend doesn't support yet
+  if (ind === 'MACD' || ind === 'MACD_LINE' || ind === 'MACD_SIGNAL' || ind === 'MACD_HIST') {
+    return 12269; // Represents 12-26-9 default
+  }
+  if (ind === 'PPO_LINE' || ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
+    return 12269; // Same as MACD
+  }
+  if (ind === 'STOCH_K') {
+    return 143; // Represents 14-3 default (fastk_period-slowk_period)
+  }
+
+  // Single-period indicators: Use provided period if valid, otherwise default
+  if (providedPeriod && providedPeriod.trim() !== '') {
+    const parsed = parseInt(providedPeriod);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+
+  // Defaults for single-period indicators
+  if (ind === 'BBANDS_UPPER' || ind === 'BBANDS_MIDDLE' || ind === 'BBANDS_LOWER') {
+    return 20; // BB has other params too, but period is the main one
+  }
+  if (ind === 'RSI' || ind === 'SMA' || ind === 'EMA') return 14;
+  if (ind === 'ATR' || ind === 'ADX' || ind === 'MFI') return 14;
+  if (ind === 'AROON_UP' || ind === 'AROON_DOWN' || ind === 'AROONOSC') return 14;
+  if (ind === 'VOLATILITY') return 20;
+
+  // No-parameter indicators
+  if (ind === 'CURRENT_PRICE' || ind === 'OBV' || ind === 'CUMULATIVE_RETURN') return 0;
+
+  // Default fallback
+  return 14;
+}
+
+/**
  * Extract required indicators from strategy elements
  */
 export function collectRequiredIndicators(elements: any[]): IndicatorRequest[] {
@@ -255,14 +349,45 @@ export function collectRequiredIndicators(elements: any[]): IndicatorRequest[] {
 
   function traverse(els: any[]): void {
     for (const el of els) {
-      // Check for indicator references in conditions
+      // Check for gate conditions array
+      if (el.type === 'gate' && el.conditions && Array.isArray(el.conditions)) {
+        for (const cond of el.conditions) {
+          // Extract left-side indicator (accept even if period is empty)
+          if (cond.ticker && cond.indicator) {
+            const ticker = cond.ticker.toUpperCase();
+            const indicator = cond.indicator.toUpperCase();
+            const period = getIndicatorPeriod(indicator, cond.period);
+
+            const key = `${ticker}|${indicator}|${period}`;
+            if (!indicators.has(key)) {
+              indicators.add(key);
+              result.push({ ticker, indicator, period });
+            }
+          }
+
+          // Extract right-side indicator (if comparing two indicators)
+          if (cond.compareTo === 'indicator' && cond.rightTicker && cond.rightIndicator) {
+            const ticker = cond.rightTicker.toUpperCase();
+            const indicator = cond.rightIndicator.toUpperCase();
+            const period = getIndicatorPeriod(indicator, cond.rightPeriod);
+
+            const key = `${ticker}|${indicator}|${period}`;
+            if (!indicators.has(key)) {
+              indicators.add(key);
+              result.push({ ticker, indicator, period });
+            }
+          }
+        }
+      }
+
+      // Check for old-style condition with field string (legacy support)
       if (el.type === 'condition' && el.field) {
         const field = el.field;
         // Parse field like "AAPL:SMA:50"
         const parts = field.split(':');
         if (parts.length === 3) {
-          const ticker = parts[0];
-          const indicator = parts[1];
+          const ticker = parts[0].toUpperCase();
+          const indicator = parts[1].toUpperCase();
           const period = parseInt(parts[2]) || 14;
 
           const key = `${ticker}|${indicator}|${period}`;

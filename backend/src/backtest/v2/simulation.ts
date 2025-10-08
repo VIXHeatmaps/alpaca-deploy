@@ -43,17 +43,54 @@ interface SimulationResult {
   metrics: {
     totalReturn: number;
     cagr: number;
+    CAGR: number;
     volatility: number;
+    annualVolatility: number;
     sharpe: number;
+    sortino: number;
     maxDrawdown: number;
   };
   benchmarkMetrics: {
     totalReturn: number;
     cagr: number;
+    CAGR: number;
     volatility: number;
+    annualVolatility: number;
     sharpe: number;
+    sortino: number;
     maxDrawdown: number;
   };
+}
+
+/**
+ * Build a lookup map of ticker:indicator -> period from strategy elements
+ * This extracts the period values that conditions expect (e.g., "20" for MACD)
+ */
+function buildIndicatorLookupMap(elements: any[]): Map<string, string> {
+  const map = new Map<string, string>();
+
+  function traverse(els: any[]): void {
+    for (const el of els) {
+      if (el.type === 'gate' && el.conditions && Array.isArray(el.conditions)) {
+        for (const cond of el.conditions) {
+          if (cond.ticker && cond.indicator) {
+            const key = `${cond.ticker.toUpperCase()}:${cond.indicator.toUpperCase()}`;
+            map.set(key, cond.period || '');
+          }
+          if (cond.compareTo === 'indicator' && cond.rightTicker && cond.rightIndicator) {
+            const key = `${cond.rightTicker.toUpperCase()}:${cond.rightIndicator.toUpperCase()}`;
+            map.set(key, cond.rightPeriod || '');
+          }
+        }
+      }
+      if (el.children) traverse(el.children);
+      if (el.thenChildren) traverse(el.thenChildren);
+      if (el.elseChildren) traverse(el.elseChildren);
+    }
+  }
+
+  traverse(elements);
+  return map;
 }
 
 /**
@@ -81,6 +118,22 @@ export async function runSimulation(
 
   // Filter to requested date range
   dateGrid = dateGrid.filter(d => d >= startDate && d <= endDate);
+
+  // Find the first date where ALL indicators are available
+  // This ensures the strategy can execute from day 1
+  if (Object.keys(indicatorData).length > 0) {
+    let firstIndicatorDate = dateGrid[0]; // Start with earliest date
+    for (const values of Object.values(indicatorData)) {
+      const indicatorDates = Object.keys(values).sort();
+      if (indicatorDates.length > 0 && indicatorDates[0] > firstIndicatorDate) {
+        firstIndicatorDate = indicatorDates[0]; // Take the latest "first date" (most restrictive)
+      }
+    }
+    // Filter date grid to start from first indicator date
+    dateGrid = dateGrid.filter(d => d >= firstIndicatorDate);
+    console.log(`[SIMULATION] Adjusted start date to ${firstIndicatorDate} (first date with all indicators)`);
+  }
+
   console.log(`[SIMULATION] Date grid: ${dateGrid.length} trading days`);
 
   if (dateGrid.length < 2) {
@@ -104,20 +157,27 @@ export async function runSimulation(
   console.log(`[SIMULATION] SPY initial price: $${spyInitialPrice.toFixed(2)}`);
 
   // Day-by-day simulation (Decision #2: benchmark in same loop)
+  let positionDays = 0; // Track days with positions
   for (let i = 1; i < dateGrid.length; i++) {
     const decisionDate = dateGrid[i - 1];
     const executionDate = dateGrid[i];
 
     // Build indicator map for decision date
+    // Note: We need to map the cache keys back to what the strategy expects
     const indicatorValuesForDate: Array<any> = [];
+    const indicatorLookup = buildIndicatorLookupMap(elements);
+
     for (const [key, values] of Object.entries(indicatorData)) {
       const [ticker, indicator, periodStr] = key.split('|');
       const value = values[decisionDate];
       if (value !== undefined) {
+        // Find what period the condition expects (may differ from cache key for multi-param indicators)
+        const expectedPeriod = indicatorLookup.get(`${ticker}:${indicator}`) || periodStr;
+
         indicatorValuesForDate.push({
           ticker,
           indicator,
-          period: parseInt(periodStr),
+          period: expectedPeriod, // Use period from condition, not cache key
           value,
         });
       }
@@ -128,6 +188,20 @@ export async function runSimulation(
     // Execute strategy to get positions
     const result: ExecutionResult = executeStrategy(elements, indicatorMap);
     const positions = result.positions;
+
+    // Debug: log first few days
+    if (i <= 5) {
+      console.log(`[SIM DEBUG] Day ${i} (${executionDate}):`);
+      console.log(`  Indicators available: ${indicatorValuesForDate.length}`);
+      if (indicatorValuesForDate.length > 0) {
+        console.log(`  Indicator values:`, JSON.stringify(indicatorValuesForDate));
+      }
+      console.log(`  Positions: ${positions.length}`);
+      if (positions.length > 0) {
+        console.log(`  Position values:`, JSON.stringify(positions));
+      }
+    }
+    if (positions.length > 0) positionDays++;
 
     // Normalize position weights
     const totalWeight = positions.reduce((sum, p) => sum + p.weight, 0);
@@ -165,6 +239,7 @@ export async function runSimulation(
 
   console.log(`[SIMULATION] Final equity: ${equity.toFixed(4)}x (${((equity - 1) * 100).toFixed(2)}% return)`);
   console.log(`[SIMULATION] Final benchmark: ${benchmarkCurve[benchmarkCurve.length - 1].toFixed(4)}x`);
+  console.log(`[SIMULATION] Days with positions: ${positionDays}/${dateGrid.length - 1} (${(positionDays / (dateGrid.length - 1) * 100).toFixed(1)}%)`);
 
   // Verify benchmark is not flat (bug check)
   const benchmarkVariance = calculateVariance(benchmarkCurve);
@@ -210,16 +285,22 @@ function calculateMetrics(
 ): {
   totalReturn: number;
   cagr: number;
+  CAGR: number;
   volatility: number;
+  annualVolatility: number;
   sharpe: number;
+  sortino: number;
   maxDrawdown: number;
 } {
   if (equityCurve.length < 2) {
     return {
       totalReturn: 0,
       cagr: 0,
+      CAGR: 0,
       volatility: 0,
+      annualVolatility: 0,
       sharpe: 0,
+      sortino: 0,
       maxDrawdown: 0,
     };
   }
@@ -258,8 +339,11 @@ function calculateMetrics(
   return {
     totalReturn,
     cagr,
+    CAGR: cagr,  // Frontend expects uppercase
     volatility,
+    annualVolatility: volatility,  // Frontend expects this name
     sharpe,
+    sortino: sharpe,  // TODO: Implement proper sortino (using sharpe as placeholder)
     maxDrawdown: maxDD,
   };
 }

@@ -12,6 +12,60 @@ import { collectRequiredIndicators, fetchIndicators } from './indicatorCache';
 import { runSimulation } from './simulation';
 
 /**
+ * Calculate warmup days needed for indicators
+ */
+function calculateWarmupDays(indicators: Array<{ ticker: string; indicator: string; period: number }>): number {
+  if (indicators.length === 0) return 0;
+
+  let maxWarmup = 0;
+
+  for (const ind of indicators) {
+    const indicator = ind.indicator.toUpperCase();
+    let warmup = 0;
+
+    // Multi-parameter indicators
+    if (indicator === 'MACD' || indicator === 'MACD_LINE' || indicator === 'MACD_SIGNAL' || indicator === 'MACD_HIST') {
+      warmup = 26 + 9; // slow(26) + signal(9) = 35
+    } else if (indicator === 'PPO_LINE') {
+      warmup = 26; // slow period
+    } else if (indicator === 'PPO_SIGNAL' || indicator === 'PPO_HIST') {
+      warmup = 26 + 9;
+    } else if (indicator.startsWith('BBANDS')) {
+      warmup = 20 + 2; // period + stddev buffer
+    } else if (indicator === 'STOCH_K') {
+      warmup = 14 + 3; // fastk + slowk
+    } else if (indicator === 'VOLATILITY') {
+      warmup = 20;
+    } else if (indicator === 'ATR' || indicator === 'ADX' || indicator === 'RSI' || indicator === 'MFI') {
+      warmup = ind.period || 14;
+    } else if (indicator === 'SMA' || indicator === 'EMA') {
+      warmup = ind.period || 14;
+    } else if (indicator.startsWith('AROON')) {
+      warmup = ind.period || 14;
+    } else {
+      // Default: use period or 0
+      warmup = ind.period || 0;
+    }
+
+    if (warmup > maxWarmup) maxWarmup = warmup;
+  }
+
+  // Add extra buffer for safety (indicators need data to stabilize)
+  return maxWarmup + 10;
+}
+
+/**
+ * Subtract trading days from a date (approximate - uses calendar days * 1.4)
+ */
+function subtractTradingDays(dateStr: string, tradingDays: number): string {
+  const date = new Date(dateStr);
+  // Rough approximation: 1 trading day ≈ 1.4 calendar days (accounts for weekends)
+  const calendarDays = Math.ceil(tradingDays * 1.4);
+  date.setDate(date.getDate() - calendarDays);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
  * V2 backtest engine endpoint handler
  *
  * Complete Redis-cached backtest with simulation
@@ -63,20 +117,35 @@ export async function runV2Backtest(req: Request, res: Response) {
 
     const requiredIndicators = collectRequiredIndicators(elements);
 
+    // Add indicator tickers to price data fetch (they need price bars for indicator calculation)
+    for (const ind of requiredIndicators) {
+      tickers.add(ind.ticker.toUpperCase());
+    }
+
     console.log(`[V2] Tickers: ${Array.from(tickers).join(', ')}`);
     console.log(`[V2] Indicators: ${requiredIndicators.length} unique`);
     for (const ind of requiredIndicators) {
       console.log(`[V2]   - ${ind.ticker}: ${ind.indicator}(${ind.period})`);
     }
 
-    const reqStartDate = startDate || '2024-01-01';
-    const reqEndDate = endDate || '2024-12-31';
+    // Handle 'max' startDate (means "as far back as possible")
+    const MAX_START = '2015-01-01'; // 10 years back (Alpaca doesn't have data before ~2015)
+    const reqStartDate = (startDate && startDate !== 'max') ? startDate : MAX_START;
+    const reqEndDate = endDate || new Date().toISOString().slice(0, 10);
 
-    // Phase 2: Fetch price data with caching
+    // Calculate warmup period needed for indicators
+    const warmupDays = calculateWarmupDays(requiredIndicators);
+    console.log(`[V2] Warmup needed: ${warmupDays} trading days`);
+
+    // Extend start date backwards for indicator warmup
+    const dataStartDate = subtractTradingDays(reqStartDate, warmupDays);
+    console.log(`[V2] Fetching data from ${dataStartDate} (${warmupDays}d warmup) to ${reqEndDate}`);
+
+    // Phase 2: Fetch price data with caching (extended range for warmup)
     console.log('\n[V2] === PHASE 2: PRICE DATA FETCHING ===');
     const priceData = await fetchPriceData(
       Array.from(tickers),
-      reqStartDate,
+      dataStartDate,
       reqEndDate,
       apiKey,
       apiSecret
@@ -86,8 +155,9 @@ export async function runV2Backtest(req: Request, res: Response) {
     let totalBars = 0;
     for (const ticker of Object.keys(priceData)) {
       const barCount = Object.keys(priceData[ticker]).length;
+      const dates = Object.keys(priceData[ticker]).sort();
       totalBars += barCount;
-      console.log(`[V2] ${ticker}: ${barCount} bars`);
+      console.log(`[V2] ${ticker}: ${barCount} bars (${dates[0]} to ${dates[dates.length - 1]})`);
     }
 
     // Phase 3: Fetch indicators with caching
@@ -100,6 +170,14 @@ export async function runV2Backtest(req: Request, res: Response) {
       const valueCount = Object.keys(indicatorData[key]).length;
       totalIndicatorValues += valueCount;
       console.log(`[V2] ${key}: ${valueCount} values`);
+    }
+
+    // Debug: Check first indicator date
+    const indicatorKeys = Object.keys(indicatorData);
+    if (indicatorKeys.length > 0) {
+      const firstKey = indicatorKeys[0];
+      const dates = Object.keys(indicatorData[firstKey]).sort();
+      console.log(`[V2] First indicator (${firstKey}) date range: ${dates[0]} to ${dates[dates.length - 1]}`);
     }
 
     // Phase 4: Run simulation with pre-fetched data
