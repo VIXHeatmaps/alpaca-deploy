@@ -1089,6 +1089,7 @@ async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: A
           'APCA-API-KEY-ID': job.strategy.apiKey,
           'APCA-API-SECRET-KEY': job.strategy.apiSecret,
         },
+        timeout: 300000, // 5 minutes per backtest
       });
 
       const resp = response?.data || {};
@@ -2374,7 +2375,20 @@ app.post('/api/execute_strategy', requireAuth, async (req: Request, res: Respons
 
 
 /* ===== BEGIN: BLOCK N — Strategy Backtest Endpoint (Historical) ===== */
+
+// Toggle between legacy and v2 backtest engines
+const USE_V2_ENGINE = process.env.USE_NEW_ENGINE === 'true';
+
 app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
+  if (USE_V2_ENGINE) {
+    console.log('[ROUTER] Using V2 backtest engine');
+    const { runV2Backtest } = await import('./backtest/v2/engine');
+    return runV2Backtest(req, res);
+  }
+
+  console.log('[ROUTER] Using LEGACY backtest engine');
+
+  // LEGACY ENGINE - kept inline for now to avoid complex refactoring
   try {
     const { elements, benchmarkSymbol, startDate, endDate, debug } = req.body;
 
@@ -2419,7 +2433,8 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
     tickers.add(bench);
 
     const requestedEnd = endDate || todayYMD();
-    const MAX_START = '1900-01-01';
+    // Use 2015 (10 years) as reasonable default instead of 1900 (Alpaca doesn't have data that old anyway)
+    const MAX_START = '2015-01-01';
     const TF = '1Day';
 
     // Step 2: Fetch all indicator bars and TR bars
