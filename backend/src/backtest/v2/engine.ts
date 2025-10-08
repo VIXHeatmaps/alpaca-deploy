@@ -9,19 +9,20 @@ import { Request, Response } from 'express';
 import * as cache from './cacheService';
 import { fetchPriceData } from './dataFetcher';
 import { collectRequiredIndicators, fetchIndicators } from './indicatorCache';
+import { runSimulation } from './simulation';
 
 /**
  * V2 backtest engine endpoint handler
  *
- * Current: Testing indicator caching
+ * Complete Redis-cached backtest with simulation
  * Progress:
  * - Phase 1: Request analysis ✓
  * - Phase 2: Redis-cached data fetching ✓
- * - Phase 3: Cached indicator computation ← TESTING NOW
- * - Phase 4: Simulation with benchmark (TODO)
+ * - Phase 3: Cached indicator computation ✓
+ * - Phase 4: Simulation with benchmark ✓
  */
 export async function runV2Backtest(req: Request, res: Response) {
-  console.log('\n=== V2 BACKTEST ENGINE (TESTING INDICATORS) ===');
+  console.log('\n=== V2 BACKTEST ENGINE ===');
 
   try {
     const { elements, startDate, endDate } = req.body;
@@ -101,50 +102,56 @@ export async function runV2Backtest(req: Request, res: Response) {
       console.log(`[V2] ${key}: ${valueCount} values`);
     }
 
+    // Phase 4: Run simulation with pre-fetched data
+    console.log('\n[V2] === PHASE 4: SIMULATION ===');
+    const simulationResult = await runSimulation(
+      elements,
+      priceData,
+      indicatorData,
+      reqStartDate,
+      reqEndDate
+    );
+
     // Get cache stats
     const stats = await cache.getCacheStats();
 
     console.log('\n[V2] === SUMMARY ===');
     console.log(`[V2] Price data: ${totalBars} bars across ${tickers.size} tickers`);
     console.log(`[V2] Indicators: ${totalIndicatorValues} values across ${requiredIndicators.length} indicators`);
+    console.log(`[V2] Simulation: ${simulationResult.dates.length} days`);
+    console.log(`[V2] Final equity: ${simulationResult.equityCurve[simulationResult.equityCurve.length - 1].toFixed(4)}`);
+    console.log(`[V2] CAGR: ${(simulationResult.metrics.cagr * 100).toFixed(2)}%`);
+    console.log(`[V2] Sharpe: ${simulationResult.metrics.sharpe.toFixed(2)}`);
+    console.log(`[V2] Max Drawdown: ${(simulationResult.metrics.maxDrawdown * 100).toFixed(2)}%`);
     console.log(`[V2] Cache: ${stats.keyCount} keys, ${stats.memoryUsage}`);
 
-    // Return test data
+    // Return real backtest results
     return res.json({
-      message: 'V2 Engine - Indicator cache test',
-      cacheAvailable: cache.isCacheAvailable(),
-      cacheStats: stats,
-      phase1: {
-        tickersFetched: Array.from(tickers),
-        indicatorsRequired: requiredIndicators.length,
-      },
-      phase2: {
-        totalBars,
-        dateRange: { start: reqStartDate, end: reqEndDate },
-      },
-      phase3: {
-        totalIndicatorValues,
-        indicatorKeys: Object.keys(indicatorData),
-      },
-      // Mock backtest results for now
-      dates: Object.keys(priceData.SPY || {}).slice(0, 10),
-      equityCurve: [1.0, 1.01, 1.02, 1.03, 1.04, 1.05, 1.06, 1.07, 1.08, 1.09],
-      metrics: {
-        totalReturn: 0.09,
-        cagr: 0.15,
-        volatility: 0.18,
-        sharpe: 0.83,
-        maxDrawdown: 0.05,
-      },
+      dates: simulationResult.dates,
+      equityCurve: simulationResult.equityCurve,
+      metrics: simulationResult.metrics,
       benchmark: {
-        dates: Object.keys(priceData.SPY || {}).slice(0, 10),
-        equityCurve: [1.0, 1.005, 1.01, 1.015, 1.02, 1.025, 1.03, 1.035, 1.04, 1.045],
-        metrics: {
-          totalReturn: 0.045,
-          cagr: 0.08,
-          volatility: 0.12,
-          sharpe: 0.67,
-          maxDrawdown: 0.02,
+        dates: simulationResult.dates,
+        equityCurve: simulationResult.benchmark,
+        metrics: simulationResult.benchmarkMetrics,
+      },
+      // Metadata for debugging
+      _v2Metadata: {
+        cacheAvailable: cache.isCacheAvailable(),
+        cacheStats: stats,
+        phase1: {
+          tickersFetched: Array.from(tickers),
+          indicatorsRequired: requiredIndicators.length,
+        },
+        phase2: {
+          totalBars,
+          dateRange: { start: reqStartDate, end: reqEndDate },
+        },
+        phase3: {
+          totalIndicatorValues,
+        },
+        phase4: {
+          daysSimulated: simulationResult.dates.length,
         },
       },
     });
