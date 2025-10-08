@@ -5,6 +5,8 @@
  * No API calls during simulation - all data is in memory.
  */
 
+import { paramsToPeriodString } from '../../utils/indicatorKeys';
+
 interface Bar {
   t: string;
   o: number;
@@ -70,58 +72,7 @@ interface SimulationResult {
 function buildIndicatorLookupMap(elements: any[]): Map<string, string> {
   const map = new Map<string, string>();
 
-  /**
-   * Convert params object to period string (matches cache key format)
-   */
-  function paramsToPeriodString(indicator: string, params?: Record<string, string>): string {
-    if (!params || Object.keys(params).length === 0) {
-      return ''; // Will use default
-    }
-
-    const ind = indicator.toUpperCase();
-
-    // Multi-param indicators
-    if (ind === 'MACD' || ind.startsWith('MACD_')) {
-      const f = params.fastperiod || '12';
-      const s = params.slowperiod || '26';
-      const sig = params.signalperiod || '9';
-      return `${f}-${s}-${sig}`;
-    }
-
-    if (ind.startsWith('BBANDS_')) {
-      const p = params.period || '20';
-      const up = params.nbdevup || '2';
-      const dn = params.nbdevdn || '2';
-      return `${p}-${up}-${dn}`;
-    }
-
-    if (ind === 'STOCH_K') {
-      const fast = params.fastk_period || '14';
-      const slow = params.slowk_period || '3';
-      return `${fast}-${slow}`;
-    }
-
-    if (ind === 'PPO_LINE') {
-      const f = params.fastperiod || '12';
-      const s = params.slowperiod || '26';
-      return `${f}-${s}`;
-    }
-
-    if (ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
-      const f = params.fastperiod || '12';
-      const s = params.slowperiod || '26';
-      const sig = params.signalperiod || '9';
-      return `${f}-${s}-${sig}`;
-    }
-
-    // Single-param indicators
-    if (params.period) {
-      return params.period;
-    }
-
-    // No params
-    return '0';
-  }
+  // Note: paramsToPeriodString is imported from ../utils/indicatorKeys
 
   function traverse(els: any[]): void {
     for (const el of els) {
@@ -129,18 +80,14 @@ function buildIndicatorLookupMap(elements: any[]): Map<string, string> {
         for (const cond of el.conditions) {
           if (cond.ticker && cond.indicator) {
             const key = `${cond.ticker.toUpperCase()}:${cond.indicator.toUpperCase()}`;
-            // Use params if available, otherwise fall back to period
-            const periodStr = cond.params && Object.keys(cond.params).length > 0
-              ? paramsToPeriodString(cond.indicator, cond.params)
-              : (cond.period || '');
+            // Always use params as single source of truth (ignore period field)
+            const periodStr = paramsToPeriodString(cond.indicator, cond.params);
             map.set(key, periodStr);
           }
           if (cond.compareTo === 'indicator' && cond.rightTicker && cond.rightIndicator) {
             const key = `${cond.rightTicker.toUpperCase()}:${cond.rightIndicator.toUpperCase()}`;
-            // Use rightParams if available, otherwise fall back to rightPeriod
-            const periodStr = cond.rightParams && Object.keys(cond.rightParams).length > 0
-              ? paramsToPeriodString(cond.rightIndicator, cond.rightParams)
-              : (cond.rightPeriod || '');
+            // Always use rightParams as single source of truth (ignore rightPeriod field)
+            const periodStr = paramsToPeriodString(cond.rightIndicator, cond.rightParams);
             map.set(key, periodStr);
           }
         }
@@ -238,10 +185,24 @@ export async function runSimulation(
     }
 
     const addedKeys = new Set<string>();
+    const missingIndicators: string[] = [];
 
     for (const [cacheKey, values] of Object.entries(indicatorData)) {
       const [ticker, indicator, periodStr] = cacheKey.split('|');
       const value = values[decisionDate];
+
+      // Check if indicator value is missing/null for required indicators
+      if (value === undefined || value === null || !isFinite(value)) {
+        const lookupKey = `${ticker}:${indicator}`;
+        // Check if this indicator is actually used in conditions
+        const isUsed = indicatorLookup.has(lookupKey);
+        if (isUsed && i <= 10) {
+          // Only track missing indicators in first 10 days (after warmup should be available)
+          missingIndicators.push(`${ticker} ${indicator}(${periodStr}) on ${decisionDate}`);
+        }
+        continue; // Skip this indicator
+      }
+
       if (value !== undefined) {
         const lookupKey = `${ticker}:${indicator}`;
 
@@ -272,6 +233,12 @@ export async function runSimulation(
           }
         }
       }
+    }
+
+    // If there are missing indicators early in the simulation, throw error
+    if (missingIndicators.length > 0 && i === 1) {
+      console.error('[SIMULATION] Missing indicator values on first day:', missingIndicators);
+      throw new Error(`Missing indicator values: ${missingIndicators.join(', ')}. Check indicator parameters and warmup period.`);
     }
 
     const indicatorMap = buildIndicatorMap(indicatorValuesForDate);

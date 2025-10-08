@@ -248,6 +248,11 @@ async function computeIndicator(
       payload.high = highs;
       payload.low = lows;
       payload.close = closes;
+    } else if (ind.startsWith('AROON')) {
+      // AROON indicators need high, low (close not used but required by API)
+      payload.high = highs;
+      payload.low = lows;
+      payload.close = closes;
     } else {
       payload.close = closes;
       payload.prices = closes;
@@ -389,10 +394,10 @@ function getDefaultParams(indicator: string): Record<string, string> {
     return { fastperiod: '12', slowperiod: '26', signalperiod: '9' };
   }
   if (ind.startsWith('BBANDS_')) {
-    return { period: '20', nbdevup: '2', nbdevdn: '2' };
+    return { period: '20', nbdevup: '2', nbdevdn: '2', matype: '0' };
   }
   if (ind === 'STOCH_K') {
-    return { fastk_period: '14', slowk_period: '3', slowk_matype: '0' };
+    return { fastk_period: '14', slowk_period: '3', slowk_matype: '0', slowd_period: '3', slowd_matype: '0' };
   }
   if (ind === 'PPO_LINE') {
     return { fastperiod: '12', slowperiod: '26', matype: '0' };
@@ -440,9 +445,12 @@ function createCacheKey(ticker: string, indicator: string, params: Record<string
   }
 
   if (ind === 'STOCH_K') {
-    const fast = params.fastk_period || '14';
-    const slow = params.slowk_period || '3';
-    return `${ticker}|${indicator}|${fast}-${slow}`;
+    const fastk = params.fastk_period || '14';
+    const slowk = params.slowk_period || '3';
+    const slowd = params.slowd_period || '3';
+    const slowk_ma = params.slowk_matype || '0';
+    const slowd_ma = params.slowd_matype || '0';
+    return `${ticker}|${indicator}|${fastk}-${slowk}-${slowd}-${slowk_ma}-${slowd_ma}`;
   }
 
   if (ind === 'PPO_LINE') {
@@ -498,7 +506,9 @@ function parseParamsFromPeriodKey(indicator: string, periodKey: string): Record<
       return {
         fastk_period: parts[0] || '14',
         slowk_period: parts[1] || '3',
-        slowk_matype: '0',
+        slowd_period: parts[2] || '3',
+        slowk_matype: parts[3] || '0',
+        slowd_matype: parts[4] || '0',
       };
     }
 

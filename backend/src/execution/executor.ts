@@ -10,6 +10,7 @@ import type {
   ExecutionResult,
   GateEvaluation,
 } from "./types";
+import { buildIndicatorKey } from "../utils/indicatorKeys";
 
 /**
  * Evaluates a gate condition against indicator data
@@ -19,12 +20,16 @@ function evaluateCondition(
   indicatorData: Map<string, IndicatorValue>
 ): boolean {
   // Build key for left side of comparison
-  const leftKey = `${condition.ticker}:${condition.indicator}:${condition.period}`;
+  // Use params as source of truth, fallback to period for backward compatibility
+  const leftKey = condition.params
+    ? buildIndicatorKey(condition.ticker, condition.indicator, condition.params)
+    : `${condition.ticker}:${condition.indicator}:${condition.period || ''}`;
+
   const leftValue = indicatorData.get(leftKey);
 
   if (!leftValue) {
     throw new Error(
-      `Missing indicator data for ${condition.ticker} ${condition.indicator} ${condition.period}`
+      `Missing indicator data for key "${leftKey}" (ticker=${condition.ticker}, indicator=${condition.indicator})`
     );
   }
 
@@ -38,15 +43,19 @@ function evaluateCondition(
     }
   } else {
     // Compare against another indicator
-    // Note: rightPeriod may be empty string for indicators like MACD, CURRENT_PRICE
-    if (!condition.rightTicker || !condition.rightIndicator || condition.rightPeriod === undefined || condition.rightPeriod === null) {
+    if (!condition.rightTicker || !condition.rightIndicator) {
       throw new Error("Missing right-hand indicator specification");
     }
-    const rightKey = `${condition.rightTicker}:${condition.rightIndicator}:${condition.rightPeriod}`;
+
+    // Use rightParams as source of truth, fallback to rightPeriod for backward compatibility
+    const rightKey = condition.rightParams
+      ? buildIndicatorKey(condition.rightTicker, condition.rightIndicator, condition.rightParams)
+      : `${condition.rightTicker}:${condition.rightIndicator}:${condition.rightPeriod || ''}`;
+
     const rightIndicator = indicatorData.get(rightKey);
     if (!rightIndicator) {
       throw new Error(
-        `Missing indicator data for ${condition.rightTicker} ${condition.rightIndicator} ${condition.rightPeriod}`
+        `Missing indicator data for key "${rightKey}" (ticker=${condition.rightTicker}, indicator=${condition.rightIndicator})`
       );
     }
     rightValue = rightIndicator.value;

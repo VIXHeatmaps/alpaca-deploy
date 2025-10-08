@@ -19,13 +19,15 @@ export interface WeightElement {
 export interface GateCondition {
   ticker: string;
   indicator: string;
-  period: string;
+  params?: Record<string, string>; // Source of truth for indicator parameters
+  period?: string; // DEPRECATED: Computed from params, kept for backward compatibility
   operator: "gt" | "lt" | "gte" | "lte" | "eq" | "neq";
   compareTo: "indicator" | "value" | "threshold";
   threshold: string;
   rightTicker?: string;
   rightIndicator?: string;
-  rightPeriod?: string;
+  rightParams?: Record<string, string>; // Source of truth for right indicator parameters
+  rightPeriod?: string; // DEPRECATED: Computed from rightParams, kept for backward compatibility
 }
 
 export interface GateElement {

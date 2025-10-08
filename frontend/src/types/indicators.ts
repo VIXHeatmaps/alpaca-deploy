@@ -63,9 +63,11 @@ export function defaultParams(t: IndicatorName): Record<string, string> {
       return {};
 
     case "RSI":
+      return { period: "14" };
+
     case "SMA":
     case "EMA":
-      return { period: "14" };
+      return { period: "20" };
 
     case "VOLATILITY":
       return { period: "20", annualize: "true" };
@@ -100,18 +102,74 @@ export function defaultParams(t: IndicatorName): Record<string, string> {
 
     case "ATR":
     case "ADX":
-    case "AROON_UP":
-    case "AROON_DOWN":
-    case "AROONOSC":
     case "MFI":
       return { period: "14" };
 
+    case "AROON_UP":
+    case "AROON_DOWN":
+    case "AROONOSC":
+      return { period: "25" };
+
     case "STOCH_K":
-      return { fastk_period: "14", slowk_period: "3", slowk_matype: "0" };
+      return { fastk_period: "14", slowk_period: "3", slowk_matype: "0", slowd_period: "3", slowd_matype: "0" };
 
     default:
       return { period: "14" };
   }
+}
+
+/**
+ * Convert params object to period string for backend cache lookup
+ *
+ * IMPORTANT: This must match backend/src/utils/indicatorKeys.ts exactly!
+ * Any changes here must be synchronized with the backend implementation.
+ */
+export function paramsToPeriodString(indicator: IndicatorName, params?: Record<string, string>): string {
+  if (!params || Object.keys(params).length === 0) {
+    return '';
+  }
+
+  const ind = indicator.toUpperCase();
+
+  // Multi-param indicators
+  if (ind === 'MACD' || ind.startsWith('MACD_')) {
+    const f = params.fastperiod || '12';
+    const s = params.slowperiod || '26';
+    const sig = params.signalperiod || '9';
+    return `${f}-${s}-${sig}`;
+  }
+
+  if (ind.startsWith('BBANDS_')) {
+    const p = params.period || '20';
+    const up = params.nbdevup || '2';
+    const dn = params.nbdevdn || '2';
+    return `${p}-${up}-${dn}`;
+  }
+
+  if (ind === 'STOCH_K') {
+    const fastk = params.fastk_period || '14';
+    const slowk = params.slowk_period || '3';
+    const slowd = params.slowd_period || '3';
+    const slowk_ma = params.slowk_matype || '0';
+    const slowd_ma = params.slowd_matype || '0';
+    return `${fastk}-${slowk}-${slowd}-${slowk_ma}-${slowd_ma}`;
+  }
+
+  if (ind === 'PPO_LINE') {
+    const f = params.fastperiod || '12';
+    const s = params.slowperiod || '26';
+    return `${f}-${s}`;
+  }
+
+  if (ind === 'PPO_SIGNAL' || ind === 'PPO_HIST') {
+    const f = params.fastperiod || '12';
+    const s = params.slowperiod || '26';
+    const sig = params.signalperiod || '9';
+    return `${f}-${s}-${sig}`;
+  }
+
+  // Single-param indicators (RSI, SMA, EMA, ATR, etc.)
+  return params.period || '';
 }
 
 // ——— Factory defaults (source of truth) ———
@@ -135,11 +193,11 @@ export const FACTORY_DEFAULTS: Record<IndicatorName, Record<string, number>> = {
   BBANDS_LOWER: { period: 20, nbdevup: 2.0, nbdevdn: 2.0, matype: 0 },
   ATR: { period: 14 },
   ADX: { period: 14 },
-  AROON_UP: { period: 14 },
-  AROON_DOWN: { period: 14 },
-  AROONOSC: { period: 14 },
+  AROON_UP: { period: 25 },
+  AROON_DOWN: { period: 25 },
+  AROONOSC: { period: 25 },
   MFI: { period: 14 },
-  STOCH_K: { fastk_period: 14, slowk_period: 3, slowk_matype: 0 },
+  STOCH_K: { fastk_period: 14, slowk_period: 3, slowk_matype: 0, slowd_period: 3, slowd_matype: 0 },
 };
 
 // ——— Param UI labels (plain-English, no code hints in labels) ———
@@ -155,6 +213,8 @@ export const PARAM_LABELS: Record<string, string> = {
   fastk_period: "Fast %K days",
   slowk_period: "Slow %K days",
   slowk_matype: "Slow %K MA Type",
+  slowd_period: "Slow %D days",
+  slowd_matype: "Slow %D MA Type",
   annualize: "Annualize",
 };
 
@@ -274,7 +334,7 @@ export function keysForIndicator(type: IndicatorName): string[] {
       return ["period", "nbdevup", "nbdevdn", "matype"];
 
     case "STOCH_K":
-      return ["fastk_period", "slowk_period", "slowk_matype"];
+      return ["fastk_period", "slowk_period", "slowk_matype", "slowd_period", "slowd_matype"];
 
     default:
       return Object.keys(getEffectiveParams(type));
