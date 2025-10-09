@@ -2333,6 +2333,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
   // Tab management
   const [activeTab, setActiveTab] = useState<"strategy" | "variables" | "batchtests">("strategy");
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
 
   // Batch jobs state
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
@@ -3073,6 +3074,114 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         </div>
       </div>
 
+      {/* Strategy Tabs - Editable */}
+      {activeTab === "strategy" && (
+        <div style={{
+          display: 'flex',
+          gap: 4,
+          padding: '8px 32px',
+          background: '#fff',
+          borderBottom: '1px solid #e5e7eb',
+          overflowX: 'auto',
+        }}>
+          {strategyTabs.map(tab => (
+            <div
+              key={tab.id}
+              onClick={() => {
+                if (editingTabId !== tab.id) {
+                  setActiveStrategyTabId(tab.id);
+                }
+              }}
+              onDoubleClick={() => {
+                if (tab.id === activeStrategyTabId) {
+                  setEditingTabId(tab.id);
+                }
+              }}
+              style={{
+                padding: '4px 12px',
+                fontSize: 12,
+                background: tab.id === activeStrategyTabId ? '#ffffff' : 'transparent',
+                border: tab.id === activeStrategyTabId ? '1px solid #d1d5db' : '1px solid transparent',
+                borderRadius: '4px 4px 0 0',
+                cursor: 'pointer',
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {editingTabId === tab.id ? (
+                <input
+                  type="text"
+                  value={tab.strategyName || ''}
+                  onChange={(e) => {
+                    setStrategyTabs(tabs => tabs.map(t =>
+                      t.id === tab.id ? { ...t, strategyName: e.target.value } : t
+                    ));
+                  }}
+                  onBlur={() => setEditingTabId(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setEditingTabId(null);
+                    } else if (e.key === 'Escape') {
+                      setEditingTabId(null);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  autoFocus
+                  placeholder="Strategy name..."
+                  style={{
+                    width: 150,
+                    padding: '2px 4px',
+                    fontSize: 12,
+                    border: '1px solid #3b82f6',
+                    borderRadius: '2px',
+                    outline: 'none',
+                  }}
+                />
+              ) : (
+                <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {tab.strategyName || 'Untitled Strategy'}
+                </span>
+              )}
+              {strategyTabs.length > 1 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                  style={{
+                    fontSize: 14,
+                    padding: 0,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#6b7280',
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={addTab}
+            style={{
+              padding: '4px 12px',
+              fontSize: 12,
+              background: 'transparent',
+              border: '1px solid #d1d5db',
+              borderRadius: 4,
+              cursor: 'pointer',
+              color: '#6b7280',
+            }}
+          >
+            +
+          </button>
+        </div>
+      )}
+
       {/* 1. Main Toolbar */}
       <div style={{
         background: "#fff",
@@ -3118,6 +3227,153 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           >
             ↷ Redo
           </button>
+
+          {/* Versioning Controls */}
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            color: '#666',
+            cursor: 'pointer',
+            marginLeft: '8px',
+          }}>
+            <input
+              type="checkbox"
+              checked={versioningEnabled}
+              onChange={(e) => setVersioningEnabled(e.target.checked)}
+            />
+            Versions
+          </label>
+
+          {versioningEnabled ? (
+            <>
+              {/* Version badge */}
+              <div style={{
+                padding: '4px 8px',
+                background: '#e0e7ff',
+                border: '1px solid #c7d2fe',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: '#4338ca',
+              }}>
+                {formatVersion(version)}
+              </div>
+
+              {/* Save new label */}
+              <span style={{ fontSize: '11px', color: '#666', fontWeight: '500' }}>SAVE NEW:</span>
+
+              {/* Save buttons */}
+              <button
+                onClick={handleSavePatch}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+              >
+                Patch
+              </button>
+              <button
+                onClick={handleSaveMinor}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+              >
+                Minor
+              </button>
+              <button
+                onClick={handleSaveMajor}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+              >
+                Major
+              </button>
+              <button
+                onClick={handleSaveFork}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+              >
+                Fork
+              </button>
+              <button
+                onClick={handleResetVersions}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: '#dc2626',
+                  background: '#fff',
+                  border: '1px solid #fca5a5',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+              >
+                Reset Versions
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Simple save button */}
+              <button
+                onClick={handleSaveSimple}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+              >
+                Save
+              </button>
+            </>
+          )}
+
           <div style={{ marginLeft: 'auto' }} />
           <button
             onClick={backtestStrategy}
@@ -3545,262 +3801,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         </Collapsible.Root>
       )}
 
-      {/* Strategy Tabs - Minimal UI */}
-      {activeTab === "strategy" && (
-        <div style={{
-          display: 'flex',
-          gap: 4,
-          padding: '8px 32px',
-          background: '#fff',
-          borderBottom: '1px solid #e5e7eb',
-          overflowX: 'auto',
-        }}>
-          {strategyTabs.map(tab => (
-            <div
-              key={tab.id}
-              onClick={() => setActiveStrategyTabId(tab.id)}
-              style={{
-                padding: '4px 12px',
-                fontSize: 12,
-                background: tab.id === activeStrategyTabId ? '#ffffff' : 'transparent',
-                border: tab.id === activeStrategyTabId ? '1px solid #d1d5db' : '1px solid transparent',
-                borderRadius: '4px 4px 0 0',
-                cursor: 'pointer',
-                display: 'flex',
-                gap: 8,
-                alignItems: 'center',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {tab.strategyName || 'Untitled Strategy'}
-              </span>
-              {strategyTabs.length > 1 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(tab.id);
-                  }}
-                  style={{
-                    fontSize: 14,
-                    padding: 0,
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#6b7280',
-                    lineHeight: 1,
-                  }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            onClick={addTab}
-            style={{
-              padding: '4px 12px',
-              fontSize: 12,
-              background: 'transparent',
-              border: '1px solid #d1d5db',
-              borderRadius: 4,
-              cursor: 'pointer',
-              color: '#6b7280',
-            }}
-          >
-            +
-          </button>
-        </div>
-      )}
-
-      {/* 3. Name Bar with Versioning */}
-      {activeTab === "strategy" && (
-      <div style={{
-        padding: '8px 32px',
-        background: '#fff',
-        borderBottom: '1px solid #e5e7eb',
-      }}>
-        <div style={{
-          display: 'flex',
-          gap: '12px',
-          alignItems: 'center',
-        }}>
-          {/* Name input */}
-          <input
-            type="text"
-            value={strategyName}
-            onChange={(e) => setStrategyName(e.target.value)}
-            placeholder="Strategy name..."
-            style={{
-              width: '240px',
-              padding: '6px 8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-            }}
-          />
-
-          {/* Versioning toggle */}
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            color: '#666',
-            cursor: 'pointer',
-          }}>
-            <input
-              type="checkbox"
-              checked={versioningEnabled}
-              onChange={(e) => setVersioningEnabled(e.target.checked)}
-            />
-            Versions
-          </label>
-
-          {/* Version display and save buttons */}
-          {versioningEnabled ? (
-            <>
-              {/* Version badge */}
-              <div style={{
-                padding: '4px 8px',
-                background: '#e0e7ff',
-                border: '1px solid #c7d2fe',
-                borderRadius: '4px',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#4338ca',
-              }}>
-                {formatVersion(version)}
-              </div>
-
-              {/* Save new label */}
-              <span style={{ fontSize: '11px', color: '#666', fontWeight: '500' }}>SAVE NEW:</span>
-
-              {/* Save buttons */}
-              <button
-                onClick={handleSavePatch}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Patch
-              </button>
-              <button
-                onClick={handleSaveMinor}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Minor
-              </button>
-              <button
-                onClick={handleSaveMajor}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Major
-              </button>
-              <button
-                onClick={handleSaveFork}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Fork
-              </button>
-              <button
-                onClick={handleResetVersions}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#dc2626',
-                  background: '#fff',
-                  border: '1px solid #fca5a5',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Reset Versions
-              </button>
-            </>
-          ) : (
-            <>
-              {/* Simple save button */}
-              <button
-                onClick={handleSaveSimple}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Save
-              </button>
-            </>
-          )}
-
-          {/* Updated timestamp */}
-          <div style={{ marginLeft: 'auto', fontSize: '11px', color: '#999' }}>
-            Updated: {new Date(updatedAt).toLocaleString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* 4. Strategy Builder */}
+      {/* 3. Strategy Builder */}
       {activeTab === "strategy" && (
       <div
         onClick={() => {
