@@ -68,6 +68,18 @@ type StrategySnapshot = {
   rebalanceType?: "initial" | "daily" | "liquidation";
 };
 
+type AccountPosition = {
+  symbol: string;
+  qty: number;
+  avgEntryPrice: number;
+  currentPrice: number;
+  marketValue: number;
+  costBasis: number;
+  unrealizedPl: number;
+  unrealizedPlpc: number;
+  side: string;
+};
+
 export type DashboardProps = {
   apiKey: string;
   apiSecret: string;
@@ -412,6 +424,9 @@ export function Dashboard({
   const [strategyLoading, setStrategyLoading] = useState(false);
   const [liquidating, setLiquidating] = useState(false);
   const [snapshots, setSnapshots] = useState<StrategySnapshot[]>([]);
+  const [positions, setPositions] = useState<AccountPosition[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Fetch account info
   useEffect(() => {
@@ -549,6 +564,53 @@ export function Dashboard({
     };
   }, [apiKey, apiSecret, activeStrategy]);
 
+  // Fetch account positions
+  useEffect(() => {
+    if (!apiKey || !apiSecret) {
+      setPositions([]);
+      return;
+    }
+
+    let cancelled = false;
+    setPositionsLoading(true);
+
+    const fetchPositions = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/api/positions`, {
+          headers: {
+            "APCA-API-KEY-ID": apiKey,
+            "APCA-API-SECRET-KEY": apiSecret,
+          },
+          withCredentials: true,
+          timeout: 10000,
+        });
+
+        if (!cancelled && response.data.positions) {
+          setPositions(response.data.positions);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          console.error("Failed to fetch positions:", err);
+          setPositions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setPositionsLoading(false);
+        }
+      }
+    };
+
+    fetchPositions();
+
+    // Poll every 30 seconds to get latest positions
+    const interval = setInterval(fetchPositions, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [apiKey, apiSecret]);
+
   const formatCurrency = (value: string | number) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
     if (!Number.isFinite(num)) return "$0.00";
@@ -570,6 +632,45 @@ export function Dashboard({
       return new Date(dateStr).toLocaleDateString();
     } catch {
       return dateStr;
+    }
+  };
+
+  const handleSyncHoldings = async () => {
+    if (!activeStrategy || !apiKey || !apiSecret) return;
+
+    setSyncing(true);
+
+    try {
+      const response = await axios.post(
+        `${API_BASE}/api/strategy/sync-holdings`,
+        {},
+        {
+          headers: {
+            "APCA-API-KEY-ID": apiKey,
+            "APCA-API-SECRET-KEY": apiSecret,
+          },
+          withCredentials: true,
+          timeout: 10000,
+        }
+      );
+
+      if (response.data.success) {
+        alert(
+          `Holdings synced successfully!\n\n` +
+          `Updated holdings: ${response.data.holdings.map((h: any) => `${h.qty.toFixed(4)} ${h.symbol}`).join(", ")}\n` +
+          `Current value: ${formatCurrency(response.data.currentValue)}`
+        );
+
+        // Refresh strategy data
+        window.location.reload();
+      }
+    } catch (err: any) {
+      console.error("Sync failed:", err);
+      alert(
+        `Failed to sync holdings:\n${err?.response?.data?.error || err?.message || "Unknown error"}`
+      );
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -817,26 +918,49 @@ export function Dashboard({
                           </strong>
                         </td>
                         <td style={{ ...styles.tableCell, textAlign: "right" as const }}>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleLiquidate();
-                            }}
-                            disabled={liquidating}
-                            style={{
-                              background: "#b00020",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: 4,
-                              padding: "6px 10px",
-                              fontSize: 11,
-                              fontWeight: 600,
-                              cursor: liquidating ? "not-allowed" : "pointer",
-                              opacity: liquidating ? 0.6 : 1,
-                            }}
-                          >
-                            {liquidating ? "Liquidating..." : "Liquidate"}
-                          </button>
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSyncHoldings();
+                              }}
+                              disabled={syncing}
+                              style={{
+                                background: "#1677ff",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: 4,
+                                padding: "6px 10px",
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: syncing ? "not-allowed" : "pointer",
+                                opacity: syncing ? 0.6 : 1,
+                              }}
+                              title="Sync holdings from Alpaca positions"
+                            >
+                              {syncing ? "Syncing..." : "Sync"}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLiquidate();
+                              }}
+                              disabled={liquidating}
+                              style={{
+                                background: "#b00020",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: 4,
+                                padding: "6px 10px",
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: liquidating ? "not-allowed" : "pointer",
+                                opacity: liquidating ? 0.6 : 1,
+                              }}
+                            >
+                              {liquidating ? "Liquidating..." : "Liquidate"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     </tbody>
@@ -873,6 +997,69 @@ export function Dashboard({
                   </table>
                 </div>
               </details>
+            )}
+          </div>
+
+          {/* Current Account Holdings */}
+          <div style={styles.card}>
+            <div style={styles.cardTitle}>Current Account Holdings</div>
+            {positionsLoading ? (
+              <div style={styles.emptyState}>Loading positions...</div>
+            ) : positions.length === 0 ? (
+              <div style={styles.emptyState}>No positions in account</div>
+            ) : (
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.tableHeader}>Symbol</th>
+                    <th style={styles.tableHeader}>Quantity</th>
+                    <th style={styles.tableHeader}>Avg Entry</th>
+                    <th style={styles.tableHeader}>Current Price</th>
+                    <th style={styles.tableHeader}>Market Value</th>
+                    <th style={styles.tableHeader}>Cost Basis</th>
+                    <th style={styles.tableHeader}>Unrealized P/L</th>
+                    <th style={styles.tableHeader}>Return %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {positions.map((position) => (
+                    <tr key={position.symbol}>
+                      <td style={styles.tableCell}>
+                        <strong>{position.symbol}</strong>
+                      </td>
+                      <td style={styles.tableCell}>
+                        {position.qty.toFixed(4)}
+                      </td>
+                      <td style={styles.tableCell}>
+                        {formatCurrency(position.avgEntryPrice)}
+                      </td>
+                      <td style={styles.tableCell}>
+                        {formatCurrency(position.currentPrice)}
+                      </td>
+                      <td style={styles.tableCell}>
+                        <strong>{formatCurrency(position.marketValue)}</strong>
+                      </td>
+                      <td style={styles.tableCell}>
+                        {formatCurrency(position.costBasis)}
+                      </td>
+                      <td style={{
+                        ...styles.tableCell,
+                        color: position.unrealizedPl >= 0 ? "#0f7a3a" : "#b00020",
+                        fontWeight: 600,
+                      }}>
+                        {position.unrealizedPl >= 0 ? "+" : ""}{formatCurrency(position.unrealizedPl)}
+                      </td>
+                      <td style={{
+                        ...styles.tableCell,
+                        color: position.unrealizedPlpc >= 0 ? "#0f7a3a" : "#b00020",
+                        fontWeight: 600,
+                      }}>
+                        {position.unrealizedPlpc >= 0 ? "+" : ""}{(position.unrealizedPlpc * 100).toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </>

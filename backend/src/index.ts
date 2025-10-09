@@ -511,6 +511,49 @@ app.get('/api/account', async (req: Request, res: Response) => {
     });
   }
 });
+
+/**
+ * GET /api/positions
+ * Get all current positions in the account
+ */
+app.get('/api/positions', async (req: Request, res: Response) => {
+  const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+  const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+  if (!apiKey || !apiSecret) {
+    return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+  }
+
+  try {
+    const response = await axios.get('https://paper-api.alpaca.markets/v2/positions', {
+      headers: {
+        'APCA-API-KEY-ID': apiKey,
+        'APCA-API-SECRET-KEY': apiSecret,
+      },
+      timeout: 10000,
+    });
+
+    // Return positions with relevant fields
+    const positions = response.data.map((pos: any) => ({
+      symbol: pos.symbol,
+      qty: parseFloat(pos.qty),
+      avgEntryPrice: parseFloat(pos.avg_entry_price),
+      currentPrice: parseFloat(pos.current_price),
+      marketValue: parseFloat(pos.market_value),
+      costBasis: parseFloat(pos.cost_basis),
+      unrealizedPl: parseFloat(pos.unrealized_pl),
+      unrealizedPlpc: parseFloat(pos.unrealized_plpc),
+      side: pos.side,
+    }));
+
+    return res.json({ positions });
+  } catch (err: any) {
+    console.error('GET /api/positions error:', err?.response?.data || err?.message);
+    return res.status(err?.response?.status || 500).json({
+      error: err?.response?.data?.message || err?.message || 'Failed to fetch positions',
+    });
+  }
+});
 /* ===== END: BLOCK C ===== */
 
 
@@ -519,6 +562,9 @@ import { getActiveStrategy, setActiveStrategy, clearActiveStrategy, hasActiveStr
 import { placeMarketOrder, waitForFill, getCurrentPrice, getAlpacaPositions } from './services/orders';
 import { evaluateFlowWithCurrentPrices, extractSymbols } from './services/flowEval';
 import { genId } from './utils/id';
+import { createActiveStrategy, getAllActiveStrategies, getActiveStrategyById, updateActiveStrategy } from './db/activeStrategiesDb';
+import { upsertSnapshot } from './db/activeStrategySnapshotsDb';
+import { calculateAttributionOnDeploy, removeStrategyFromAttribution } from './services/positionAttribution';
 
 /**
  * GET /api/strategy
@@ -597,20 +643,162 @@ app.get('/api/strategy/snapshots', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/invest/preview
+ * Preview positions that would be purchased for a given amount (no actual deployment)
+ * Uses most recent CLOSE prices - same as final backtest position would be
+ */
+app.post('/api/invest/preview', async (req: Request, res: Response) => {
+  try {
+    const { amount, elements } = req.body;
+
+    if (!amount || !elements) {
+      return res.status(400).json({ error: 'Missing required fields: amount, elements' });
+    }
+
+    if (!Array.isArray(elements)) {
+      return res.status(400).json({ error: 'elements must be an array' });
+    }
+
+    const investAmount = parseFloat(amount);
+    if (!Number.isFinite(investAmount) || investAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid investment amount' });
+    }
+
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    }
+
+    // Import execution engine
+    const { executeStrategy, collectRequiredIndicators, buildIndicatorMap } = await import('./execution');
+
+    // Collect required indicators
+    const requiredIndicators = collectRequiredIndicators(elements);
+
+    // Fetch indicator data
+    const indicatorValues: Array<any> = [];
+    for (const req of requiredIndicators) {
+      try {
+        // Fetch bars for indicator calculation
+        const barsUrl = `https://data.alpaca.markets/v2/stocks/${req.ticker}/bars`;
+        const barsResponse = await axios.get(barsUrl, {
+          params: {
+            feed: FEED,
+            timeframe: '1Day',
+            start: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+            end: todayYMD(),
+            adjustment: 'split',
+            limit: 500,
+          },
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': apiSecret,
+          },
+        });
+
+        const bars = barsResponse.data.bars || [];
+        if (!bars.length) continue;
+
+        let indicatorValue: number;
+        if (req.indicator === 'PRICE' || req.indicator === 'CURRENT_PRICE') {
+          indicatorValue = bars[bars.length - 1].c;
+        } else {
+          const closes = bars.map((b: any) => b.c);
+          const highs = bars.map((b: any) => b.h);
+          const lows = bars.map((b: any) => b.l);
+          const volumes = bars.map((b: any) => b.v);
+          const period = parseInt(req.period) || 14;
+
+          let payload: any = {
+            indicator: req.indicator,
+            params: { period },
+          };
+
+          if (req.indicator === 'RSI' || req.indicator === 'SMA' || req.indicator === 'EMA') {
+            payload.close = closes;
+            payload.prices = closes;
+          } else if (req.indicator === 'ATR' || req.indicator === 'ADX') {
+            payload.high = highs;
+            payload.low = lows;
+            payload.close = closes;
+          } else if (req.indicator === 'MFI') {
+            payload.high = highs;
+            payload.low = lows;
+            payload.close = closes;
+            payload.volume = volumes;
+          } else {
+            payload.close = closes;
+            payload.prices = closes;
+          }
+
+          const indResponse = await axios.post(`${INDICATOR_SERVICE_URL}/indicator`, payload, {
+            timeout: 10000,
+          });
+          const values = indResponse.data.values || [];
+          indicatorValue = values[values.length - 1];
+        }
+
+        indicatorValues.push({
+          ticker: req.ticker,
+          indicator: req.indicator,
+          period: req.period,
+          value: indicatorValue,
+        });
+      } catch (err: any) {
+        console.error(`Error fetching indicator ${req.ticker} ${req.indicator}:`, err.message);
+      }
+    }
+
+    // Build indicator map and execute strategy
+    const indicatorData = buildIndicatorMap(indicatorValues);
+    const result = executeStrategy(elements, indicatorData);
+
+    if (!result.positions || result.positions.length === 0) {
+      return res.status(400).json({ error: 'Strategy did not produce any positions' });
+    }
+
+    // Calculate position preview using previous close prices
+    const positions = [];
+    const totalWeight = result.positions.reduce((sum: number, p: any) => sum + p.weight, 0);
+
+    for (const position of result.positions) {
+      const allocationPct = position.weight / totalWeight;
+      const targetDollars = investAmount * allocationPct;
+      const price = await getCurrentPrice(position.ticker, apiKey, apiSecret); // Gets previous close
+      const qty = targetDollars / price;
+
+      positions.push({
+        symbol: position.ticker,
+        allocation_pct: allocationPct,
+        target_dollars: targetDollars,
+        current_price: price, // Previous close price
+        estimated_qty: qty,
+      });
+    }
+
+    return res.json({ positions });
+  } catch (err: any) {
+    console.error('POST /api/invest/preview error:', err);
+    return res.status(500).json({ error: err.message || 'Preview failed' });
+  }
+});
+
+/**
  * POST /api/invest
- * Deploy a strategy with initial investment
+ * Deploy a strategy with initial investment (MULTI-STRATEGY SUPPORT)
  */
 app.post('/api/invest', async (req: Request, res: Response) => {
   try {
-    // Check if strategy already exists
-    if (await hasActiveStrategy()) {
-      return res.status(400).json({ error: 'A strategy is already active. Liquidate it first.' });
+    const { name, amount, elements, benchmarkSymbol } = req.body;
+
+    if (!name || !amount || !elements) {
+      return res.status(400).json({ error: 'Missing required fields: name, amount, elements' });
     }
 
-    const { name, amount, flow, benchmarkSymbol } = req.body;
-
-    if (!name || !amount || !flow) {
-      return res.status(400).json({ error: 'Missing required fields: name, amount, flow' });
+    if (!Array.isArray(elements)) {
+      return res.status(400).json({ error: 'elements must be an array' });
     }
 
     const investAmount = parseFloat(amount);
@@ -627,14 +815,105 @@ app.post('/api/invest', async (req: Request, res: Response) => {
 
     console.log(`\n=== INVEST: ${name} with $${investAmount} ===`);
 
-    // Step 1: Evaluate Flow logic
-    console.log('Step 1: Evaluating Flow logic...');
-    const allocation = await evaluateFlowWithCurrentPrices(flow, apiKey, apiSecret);
+    // Step 1: Execute strategy to get allocation
+    console.log('Step 1: Executing strategy to determine allocation...');
+    const { executeStrategy, collectRequiredIndicators, buildIndicatorMap } = await import('./execution');
+
+    // Collect required indicators
+    const requiredIndicators = collectRequiredIndicators(elements);
+
+    // Fetch indicator data
+    const indicatorValues: Array<any> = [];
+    for (const req of requiredIndicators) {
+      try {
+        const barsUrl = `https://data.alpaca.markets/v2/stocks/${req.ticker}/bars`;
+        const barsResponse = await axios.get(barsUrl, {
+          params: {
+            feed: FEED,
+            timeframe: '1Day',
+            start: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+            end: todayYMD(),
+            adjustment: 'split',
+            limit: 500,
+          },
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': apiSecret,
+          },
+        });
+
+        const bars = barsResponse.data.bars || [];
+        if (!bars.length) continue;
+
+        let indicatorValue: number;
+        if (req.indicator === 'PRICE' || req.indicator === 'CURRENT_PRICE') {
+          indicatorValue = bars[bars.length - 1].c;
+        } else {
+          const closes = bars.map((b: any) => b.c);
+          const highs = bars.map((b: any) => b.h);
+          const lows = bars.map((b: any) => b.l);
+          const volumes = bars.map((b: any) => b.v);
+          const period = parseInt(req.period) || 14;
+
+          let payload: any = {
+            indicator: req.indicator,
+            params: { period },
+          };
+
+          if (req.indicator === 'RSI' || req.indicator === 'SMA' || req.indicator === 'EMA') {
+            payload.close = closes;
+            payload.prices = closes;
+          } else if (req.indicator === 'ATR' || req.indicator === 'ADX') {
+            payload.high = highs;
+            payload.low = lows;
+            payload.close = closes;
+          } else if (req.indicator === 'MFI') {
+            payload.high = highs;
+            payload.low = lows;
+            payload.close = closes;
+            payload.volume = volumes;
+          } else {
+            payload.close = closes;
+            payload.prices = closes;
+          }
+
+          const indResponse = await axios.post(`${INDICATOR_SERVICE_URL}/indicator`, payload, {
+            timeout: 10000,
+          });
+          const values = indResponse.data.values || [];
+          indicatorValue = values[values.length - 1];
+        }
+
+        indicatorValues.push({
+          ticker: req.ticker,
+          indicator: req.indicator,
+          period: req.period,
+          value: indicatorValue,
+        });
+      } catch (err: any) {
+        console.error(`Error fetching indicator ${req.ticker} ${req.indicator}:`, err.message);
+      }
+    }
+
+    // Build indicator map and execute strategy
+    const indicatorData = buildIndicatorMap(indicatorValues);
+    const result = executeStrategy(elements, indicatorData);
+
+    if (!result.positions || result.positions.length === 0) {
+      return res.status(400).json({ error: 'Strategy did not produce any positions' });
+    }
+
+    // Convert positions to allocation percentages
+    const totalWeight = result.positions.reduce((sum: number, p: any) => sum + p.weight, 0);
+    const allocation: Record<string, number> = {};
+    for (const position of result.positions) {
+      allocation[position.ticker] = position.weight / totalWeight;
+    }
     console.log('Target allocation:', allocation);
 
     // Step 2: Place orders
     console.log('Step 2: Placing orders...');
-    const holdings: Array<{ symbol: string; qty: number }> = [];
+    const holdings: Array<{ symbol: string; qty: number; entry_price?: number }> = [];
     const pendingOrders: Array<{ orderId: string; symbol: string; side: 'buy' | 'sell'; qty: number }> = [];
     let totalInvested = 0;
 
@@ -656,68 +935,77 @@ app.post('/api/invest', async (req: Request, res: Response) => {
         console.log(`  Order pending (market closed) - will fill when market opens`);
         // Store order info for later verification
         pendingOrders.push({ orderId: order.id, symbol, side: 'buy', qty });
-        holdings.push({ symbol, qty: 0 }); // Will update after market opens
+        holdings.push({ symbol, qty: 0, entry_price: 0 }); // Will update after market opens
       } else {
         console.log(`  Filled: ${filledQty} @ $${avgPrice.toFixed(2)}`);
-        holdings.push({ symbol, qty: filledQty });
+        holdings.push({ symbol, qty: filledQty, entry_price: avgPrice });
         totalInvested += filledQty * avgPrice;
       }
     }
 
-    // Step 3: Create and save strategy
-    console.log('Step 3: Saving strategy...');
+    // Step 3: Create and save strategy in DATABASE
+    console.log('Step 3: Saving strategy to database...');
     const deployedAt = new Date();
     const deployTimestamp = deployedAt.toISOString().slice(0, 16).replace('T', ' '); // YYYY-MM-DD HH:mm
     const deployedName = `${name} [Deployed: ${deployTimestamp}]`;
 
-    const strategy = {
-      id: genId(),
+    const dbStrategy = await createActiveStrategy({
       name: deployedName,
-      investAmount,
-      currentValue: totalInvested,
-      flowData: flow,
+      flow_data: { elements }, // Store elements in flow_data
+      mode: 'paper',
+      initial_capital: investAmount,
+      current_capital: totalInvested,
       holdings,
-      pendingOrders: pendingOrders.length > 0 ? pendingOrders : undefined,
-      createdAt: deployedAt.toISOString(),
-      lastRebalance: deployedAt.toISOString(),
-    };
+      pending_orders: pendingOrders.length > 0 ? pendingOrders : undefined,
+    });
 
-    await setActiveStrategy(strategy);
-    console.log(`Strategy saved: ${strategy.id}`);
+    console.log(`Strategy saved to database with ID: ${dbStrategy.id}`);
 
     // Create initial snapshot (only if orders filled immediately)
     if (pendingOrders.length === 0 && holdings.length > 0) {
       console.log('Creating initial snapshot...');
-      const { createSnapshot } = await import('./storage/strategySnapshots');
 
       // Get prices for snapshot
       const holdingsWithPrices = await Promise.all(
         holdings.map(async h => ({
           symbol: h.symbol,
           qty: h.qty,
-          price: await getCurrentPrice(h.symbol, apiKey, apiSecret),
+          price: h.entry_price || await getCurrentPrice(h.symbol, apiKey, apiSecret),
+          value: h.qty * (h.entry_price || await getCurrentPrice(h.symbol, apiKey, apiSecret)),
         }))
       );
 
-      await createSnapshot(
-        strategy.id,
-        investAmount,
-        holdingsWithPrices,
-        'initial'
-      );
+      const totalReturn = totalInvested - investAmount;
+      const cumulativeReturn = investAmount > 0 ? totalReturn / investAmount : 0;
+
+      await upsertSnapshot({
+        active_strategy_id: dbStrategy.id,
+        snapshot_date: new Date().toISOString().split('T')[0],
+        equity: totalInvested,
+        holdings: holdingsWithPrices,
+        cumulative_return: cumulativeReturn,
+        total_return: totalReturn,
+        rebalance_type: 'initial',
+      });
+
       console.log('Initial snapshot created');
     }
+
+    // Step 4: Calculate position attribution across all strategies
+    console.log('Step 4: Calculating position attribution...');
+    await calculateAttributionOnDeploy(dbStrategy.id, holdings);
 
     console.log('=== INVEST COMPLETE ===\n');
 
     return res.json({
       success: true,
       strategy: {
-        id: strategy.id,
-        name: strategy.name,
-        investAmount: strategy.investAmount,
-        currentValue: strategy.currentValue,
-        holdings: strategy.holdings,
+        id: dbStrategy.id,
+        name: dbStrategy.name,
+        initial_capital: parseFloat(dbStrategy.initial_capital),
+        current_capital: dbStrategy.current_capital ? parseFloat(dbStrategy.current_capital) : 0,
+        holdings: dbStrategy.holdings,
+        status: dbStrategy.status,
       },
     });
   } catch (err: any) {
@@ -758,6 +1046,63 @@ app.post('/api/rebalance', requireAuth, async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('POST /api/rebalance error:', err);
     return res.status(500).json({ error: err.message || 'Rebalance failed' });
+  }
+});
+
+/**
+ * POST /api/strategy/sync-holdings
+ * Manually sync strategy holdings from actual Alpaca positions
+ * Useful when holdings get out of sync (e.g., orders filled but not recorded)
+ */
+app.post('/api/strategy/sync-holdings', async (req: Request, res: Response) => {
+  try {
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    }
+
+    const strategy = await getActiveStrategy();
+    if (!strategy) {
+      return res.status(400).json({ error: 'No active strategy to sync' });
+    }
+
+    console.log(`\n=== SYNCING HOLDINGS FOR STRATEGY: ${strategy.name} ===`);
+
+    // Get current positions from Alpaca
+    const positions = await getAlpacaPositions(apiKey, apiSecret);
+    console.log(`Found ${positions.length} positions in Alpaca account`);
+
+    // Update holdings to match actual positions
+    const updatedHoldings = positions.map(pos => ({
+      symbol: pos.symbol,
+      qty: pos.qty,
+    }));
+
+    // Calculate current value
+    const currentValue = positions.reduce((sum, pos) => sum + pos.market_value, 0);
+
+    // Update strategy
+    await setActiveStrategy({
+      ...strategy,
+      holdings: updatedHoldings,
+      currentValue,
+      pendingOrders: undefined, // Clear any pending orders
+    });
+
+    console.log('Holdings synced:', updatedHoldings);
+    console.log(`Current value: $${currentValue.toFixed(2)}`);
+
+    return res.json({
+      success: true,
+      message: 'Holdings synced from Alpaca positions',
+      holdings: updatedHoldings,
+      currentValue,
+    });
+  } catch (err: any) {
+    console.error('POST /api/strategy/sync-holdings error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to sync holdings' });
   }
 });
 
@@ -841,6 +1186,106 @@ app.post('/api/liquidate', requireAuth, async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('POST /api/liquidate error:', err);
+    return res.status(500).json({ error: err.message || 'Liquidation failed' });
+  }
+});
+
+/**
+ * POST /api/strategy/:id/liquidate
+ * Liquidate a specific strategy (multi-strategy support)
+ */
+app.post('/api/strategy/:id/liquidate', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const strategyId = parseInt(req.params.id);
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    }
+
+    const strategy = await getActiveStrategyById(strategyId);
+    if (!strategy) {
+      return res.status(404).json({ error: `Strategy ${strategyId} not found` });
+    }
+
+    if (strategy.status === 'stopped') {
+      return res.status(400).json({ error: 'Strategy already stopped' });
+    }
+
+    console.log(`\n=== LIQUIDATING STRATEGY ${strategyId}: ${strategy.name} ===`);
+
+    const soldPositions: Array<{ symbol: string; qty: number; proceeds: number }> = [];
+    let totalProceeds = 0;
+
+    // Calculate this strategy's virtual holdings using attribution
+    const attribution = strategy.position_attribution || {};
+    const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
+
+    // Sell only this strategy's attributed shares
+    for (const holding of holdings) {
+      if (holding.qty <= 0) continue;
+
+      const attr = (attribution as any)[holding.symbol];
+      const qtyToSell = attr?.qty || holding.qty; // Use attributed qty
+
+      try {
+        console.log(`Selling ${qtyToSell.toFixed(4)} ${holding.symbol} (${((attr?.allocation_pct || 1) * 100).toFixed(1)}% of total)...`);
+        const order = await placeMarketOrder(holding.symbol, qtyToSell, 'sell', apiKey, apiSecret);
+        const { filledQty, avgPrice, pending } = await waitForFill(order.id, apiKey, apiSecret);
+
+        if (pending) {
+          console.log(`Sell order pending for ${holding.symbol} - will fill when market opens`);
+          soldPositions.push({ symbol: holding.symbol, qty: filledQty, proceeds: 0 });
+        } else {
+          const proceeds = filledQty * avgPrice;
+          totalProceeds += proceeds;
+          soldPositions.push({ symbol: holding.symbol, qty: filledQty, proceeds });
+          console.log(`Sold ${filledQty} ${holding.symbol} @ $${avgPrice.toFixed(2)} = $${proceeds.toFixed(2)}`);
+        }
+      } catch (err: any) {
+        console.error(`Failed to sell ${holding.symbol}:`, err.message);
+        // Continue selling other positions
+      }
+    }
+
+    // Create final snapshot
+    if (totalProceeds > 0) {
+      console.log('Creating final liquidation snapshot...');
+      await upsertSnapshot({
+        active_strategy_id: strategyId,
+        snapshot_date: new Date().toISOString().split('T')[0],
+        equity: totalProceeds,
+        holdings: [],
+        cumulative_return: (totalProceeds - parseFloat(strategy.initial_capital)) / parseFloat(strategy.initial_capital),
+        total_return: totalProceeds - parseFloat(strategy.initial_capital),
+        rebalance_type: 'liquidation',
+      });
+      console.log('Final snapshot created');
+    }
+
+    // Stop the strategy
+    await updateActiveStrategy(strategyId, {
+      status: 'stopped',
+      stopped_at: new Date().toISOString(),
+      current_capital: totalProceeds,
+      holdings: [],
+    });
+
+    // Remove from attribution (redistribute to remaining strategies)
+    await removeStrategyFromAttribution(strategyId);
+
+    console.log('=== LIQUIDATION COMPLETE ===');
+    console.log(`Total proceeds: $${totalProceeds.toFixed(2)}`);
+
+    return res.json({
+      success: true,
+      message: 'Strategy liquidated successfully',
+      soldPositions,
+      totalProceeds,
+    });
+  } catch (err: any) {
+    console.error('POST /api/strategy/:id/liquidate error:', err);
     return res.status(500).json({ error: err.message || 'Liquidation failed' });
   }
 });

@@ -29,6 +29,7 @@ import {
   generateAssignments,
   applyVariablesToElements,
 } from "../utils/verticalVariables";
+import { InvestModal } from "./InvestModal";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
 
@@ -2345,6 +2346,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   const [variableLists, setVariableLists] = useState<variablesApi.VariableList[]>([]);
   const [variablesLoading, setVariablesLoading] = useState(false);
 
+  // Invest modal state
+  const [showInvestModal, setShowInvestModal] = useState(false);
+
   // Load variables from API
   const loadVariables = async () => {
     try {
@@ -3463,6 +3467,32 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
             </>
           )}
 
+          {/* Invest Button */}
+          <button
+            onClick={() => setShowInvestModal(true)}
+            disabled={!apiKey || !apiSecret}
+            style={{
+              padding: '6px 14px',
+              fontSize: '13px',
+              fontWeight: '700',
+              color: '#fff',
+              background: (!apiKey || !apiSecret) ? '#93c5fd' : '#1677ff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: (!apiKey || !apiSecret) ? 'not-allowed' : 'pointer',
+              marginLeft: '12px',
+            }}
+            onMouseEnter={(e) => {
+              if (apiKey && apiSecret) e.currentTarget.style.background = '#1366d6';
+            }}
+            onMouseLeave={(e) => {
+              if (apiKey && apiSecret) e.currentTarget.style.background = '#1677ff';
+            }}
+            title={!apiKey || !apiSecret ? 'Connect Alpaca account to deploy' : 'Deploy this strategy with real money'}
+          >
+            💰 Invest
+          </button>
+
           <div style={{ marginLeft: 'auto' }} />
           <button
             onClick={uploadStrategy}
@@ -4546,6 +4576,28 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
             </div>
           </div>
         </div>
+      )}
+
+      {/* Invest Modal */}
+      {showInvestModal && (
+        <InvestModal
+          apiKey={apiKey}
+          apiSecret={apiSecret}
+          strategyName={strategyName}
+          elements={elements}
+          onClose={() => setShowInvestModal(false)}
+          onSuccess={(result) => {
+            setShowInvestModal(false);
+            alert(
+              `Strategy deployed successfully!\n\n` +
+              `ID: ${result.strategy.id}\n` +
+              `Name: ${result.strategy.name}\n` +
+              `Investment: $${result.strategy.initial_capital.toFixed(2)}\n` +
+              `Status: ${result.strategy.status}\n\n` +
+              `View it in the Dashboard tab.`
+            );
+          }}
+        />
       )}
     </div>
   );

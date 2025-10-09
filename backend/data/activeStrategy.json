@@ -2,7 +2,7 @@
   "id": "1759360445876-5dc8x2nym",
   "name": "MVP [Deployed: 2025-10-01 23:14]",
   "investAmount": 10000,
-  "currentValue": 0,
+  "currentValue": 10474.046982,
   "flowData": {
     "nodes": [
       {
@@ -88,7 +88,7 @@
   "holdings": [
     {
       "symbol": "GLD",
-      "qty": 0
+      "qty": 28.133352088
     }
   ],
   "createdAt": "2025-10-01T23:14:05.876Z",
