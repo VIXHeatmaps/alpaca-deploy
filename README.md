@@ -11,6 +11,7 @@ Clean production deployment of the Alpaca trading strategy app with multi-strate
 - **Daily Snapshots**: Track daily performance at 4:05pm ET using actual trade prices
 - **Bug Reporting**: Built-in feedback system for alpha testers
 - **Discord Authentication**: Whitelist-based user access control
+- **Multi-User Isolation**: Each user has their own strategies, variables, batch tests, and active strategies
 
 ## Structure
 
@@ -55,9 +56,30 @@ PORT=8001
 
 ## Deployment
 
-1. **Backend**: Deploy to Railway from `/backend` directory
-2. **Indicator Service**: Deploy to Railway from `/indicator-service` directory
-3. **Frontend**: Deploy to Vercel from `/frontend` directory
+### Services
+1. **Backend**: Railway (auto-deploys from GitHub main branch)
+2. **Indicator Service**: Railway (auto-deploys from GitHub main branch)
+3. **Frontend**: Vercel (auto-deploys from GitHub main branch)
+4. **Database**: PostgreSQL on Railway
+
+### Initial Setup
+
+1. **Create PostgreSQL database on Railway**:
+   - Add PostgreSQL service to your Railway project
+   - Railway will auto-generate `DATABASE_URL` variable
+
+2. **Link database to backend**:
+   - In backend service Variables, add: `DATABASE_URL = ${{Postgres.DATABASE_URL}}`
+   - Backend will restart automatically
+
+3. **Run migrations**:
+   - From local machine: `DATABASE_URL="<production-url>" npx knex migrate:latest`
+   - Or use Railway CLI: `railway run npx knex migrate:latest`
+
+### Continuous Deployment
+- Push to `main` branch triggers automatic deployment on Railway and Vercel
+- Backend and indicator service rebuild and redeploy (~2 minutes)
+- Frontend rebuilds and redeploys (~1 minute)
 
 ## Database Setup
 
@@ -69,12 +91,13 @@ npx knex migrate:latest
 ```
 
 **Tables:**
-- `active_strategies` - Live trading strategies
+- `active_strategies` - Live trading strategies (user-isolated via `user_id`)
 - `active_strategy_snapshots` - Daily performance snapshots
 - `position_attribution` - Multi-strategy position ownership tracking
-- `strategies` - Saved strategy library
-- `batch_jobs` - Batch backtest jobs
-- `variable_lists` - Parameter lists for batch testing
+- `strategies` - Saved strategy library (user-isolated via `user_id`)
+- `batch_jobs` - Batch backtest jobs (user-isolated via `user_id`)
+- `batch_job_runs` - Individual batch test runs
+- `variable_lists` - Parameter lists for batch testing (user-isolated via `user_id`)
 
 ## API Endpoints
 
@@ -139,3 +162,10 @@ npx knex migrate:latest
 - Screenshot upload capability
 - Stored as JSON files in `backend/feedback/`
 - All users can view all feedback (collaborative alpha testing)
+
+### Multi-User Isolation
+- Each user authenticated via Discord OAuth
+- All strategies, variables, batch jobs, and active strategies are isolated by `user_id`
+- Users can only view and modify their own data
+- Variable names are unique per-user (multiple users can have variables with same names)
+- All API endpoints require authentication and filter data by user
