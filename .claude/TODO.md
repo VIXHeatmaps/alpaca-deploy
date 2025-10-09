@@ -28,10 +28,15 @@
 ## 📋 Feature Backlog
 
 ### Builder Enhancement
+- [x] **UI Reorganization (Completed 2025-10-09)**
+  - [x] Move strategy tabs to top (editable via double-click)
+  - [x] Move version controls to toolbar
+  - [x] Move backtest button and config to results header
+  - [x] Make backtest bar always visible
+  - [x] Add animated collapse/expand controls
 - [ ] Scale logic
 - [ ] Sort logic
 - [ ] Filter logic
-- [ ] Equity Curve graph placement and UI
 
 ### Strategy Management
 - [ ] Strategy templates/library
