@@ -11,8 +11,12 @@
     "moduleResolution": "node",
     "resolveJsonModule": true
   },
+  "include": [
+    "src/**/*"
+  ],
   "exclude": [
     "**/*.test.ts",
-    "**/test-*.ts"
+    "**/test-*.ts",
+    "knexfile.ts"
   ]
 }
