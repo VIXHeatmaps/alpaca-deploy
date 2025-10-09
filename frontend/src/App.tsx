@@ -6,6 +6,8 @@
 import { useState, useEffect } from "react";
 import { Dashboard } from "./components/Dashboard";
 import { BuilderWrapper } from "./components/BuilderWrapper";
+import { BugReportModal } from "./components/BugReportModal";
+import { FeedbackView } from "./components/FeedbackView";
 import type { Strategy } from "./api/strategies";
 import "./App.css";
 
@@ -37,6 +39,8 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showBugReport, setShowBugReport] = useState(false);
+  const [showFeedbackView, setShowFeedbackView] = useState(false);
 
   // Check authentication status on mount
   useEffect(() => {
@@ -361,19 +365,38 @@ function App() {
               </details>
             </div>
             </div>
-            <button
-              onClick={handleLogout}
-              style={{
-                background: '#f5f5f5',
-                border: '1px solid #ddd',
-                padding: '6px 12px',
-                borderRadius: '4px',
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}
-            >
-              Logout
-            </button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                onClick={() => setShowFeedbackView(true)}
+                style={{
+                  background: '#fff',
+                  border: '1px solid #ddd',
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                title="View feedback and report bugs"
+              >
+                🐛 Feedback
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{
+                  background: '#f5f5f5',
+                  border: '1px solid #ddd',
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
 
@@ -457,7 +480,82 @@ function App() {
             onLoadStrategy={handleLoadStrategy}
           />
         )}
+
       </div>
+
+      {/* Modals */}
+      {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
+
+      {showFeedbackView && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 20,
+          }}
+          onClick={() => setShowFeedbackView(false)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 8,
+              width: "100%",
+              maxWidth: 1400,
+              maxHeight: "90vh",
+              overflow: "auto",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ position: "sticky", top: 0, background: "#fff", padding: "20px 20px 10px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 1 }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Feedback & Bug Reports</h2>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  onClick={() => {
+                    setShowFeedbackView(false);
+                    setShowBugReport(true);
+                  }}
+                  style={{
+                    background: "#1677ff",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 4,
+                    padding: "8px 16px",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  + Submit Feedback
+                </button>
+                <button
+                  onClick={() => setShowFeedbackView(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: 24,
+                    cursor: "pointer",
+                    color: "#666",
+                    padding: 0,
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <FeedbackView />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

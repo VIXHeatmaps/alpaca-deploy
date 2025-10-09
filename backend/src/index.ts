@@ -9,6 +9,9 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { Strategy as DiscordStrategy, Profile } from 'passport-discord';
 import passport from 'passport';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import * as batchJobsDb from './db/batchJobsDb';
 import * as variableListsDb from './db/variableListsDb';
 import * as strategiesDb from './db/strategiesDb';
@@ -457,6 +460,140 @@ app.post('/auth/logout', (_req: Request, res: Response) => {
 });
 
 /* ===== END: BLOCK AUTH ===== */
+
+/* ===== BEGIN: BLOCK FEEDBACK ===== */
+
+// Configure multer for file uploads
+const feedbackStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../feedback_uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const feedbackUpload = multer({
+  storage: feedbackStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images are allowed'));
+    }
+  }
+});
+
+/**
+ * POST /api/feedback
+ * Submit bug report or feature request
+ */
+app.post('/api/feedback', feedbackUpload.single('screenshot'), async (req: Request, res: Response) => {
+  try {
+    const { type, title, description } = req.body;
+    const screenshot = req.file;
+
+    if (!type || !title) {
+      return res.status(400).json({ error: 'Type and title are required' });
+    }
+
+    // Create feedback record
+    const feedback = {
+      id: randomUUID(),
+      type,
+      title,
+      description: description || '',
+      screenshot: screenshot ? screenshot.filename : null,
+      user_id: (req as any).user?.id || null,
+      created_at: new Date().toISOString(),
+    };
+
+    // Save to JSON file (simple approach for alpha)
+    const feedbackDir = path.join(__dirname, '../feedback');
+    if (!fs.existsSync(feedbackDir)) {
+      fs.mkdirSync(feedbackDir, { recursive: true });
+    }
+
+    const feedbackFile = path.join(feedbackDir, `${feedback.id}.json`);
+    fs.writeFileSync(feedbackFile, JSON.stringify(feedback, null, 2));
+
+    console.log(`[FEEDBACK] ${type.toUpperCase()} submitted: ${title}`);
+
+    return res.json({ success: true, id: feedback.id });
+  } catch (err: any) {
+    console.error('POST /api/feedback error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to submit feedback' });
+  }
+});
+
+/**
+ * GET /api/feedback
+ * List all feedback submissions
+ */
+app.get('/api/feedback', async (req: Request, res: Response) => {
+  try {
+    const feedbackDir = path.join(__dirname, '../feedback');
+
+    if (!fs.existsSync(feedbackDir)) {
+      return res.json({ feedback: [] });
+    }
+
+    const files = fs.readdirSync(feedbackDir).filter(f => f.endsWith('.json'));
+    const feedback = files.map(file => {
+      const content = fs.readFileSync(path.join(feedbackDir, file), 'utf-8');
+      return JSON.parse(content);
+    });
+
+    // Sort by created_at descending (newest first)
+    feedback.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return res.json({ feedback });
+  } catch (err: any) {
+    console.error('GET /api/feedback error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch feedback' });
+  }
+});
+
+/**
+ * GET /api/feedback/:id/screenshot
+ * View screenshot for a feedback submission
+ */
+app.get('/api/feedback/:id/screenshot', async (req: Request, res: Response) => {
+  try {
+    const feedbackId = req.params.id;
+    const feedbackDir = path.join(__dirname, '../feedback');
+    const feedbackFile = path.join(feedbackDir, `${feedbackId}.json`);
+
+    if (!fs.existsSync(feedbackFile)) {
+      return res.status(404).json({ error: 'Feedback not found' });
+    }
+
+    const feedback = JSON.parse(fs.readFileSync(feedbackFile, 'utf-8'));
+
+    if (!feedback.screenshot) {
+      return res.status(404).json({ error: 'No screenshot attached' });
+    }
+
+    const screenshotPath = path.join(__dirname, '../feedback_uploads', feedback.screenshot);
+
+    if (!fs.existsSync(screenshotPath)) {
+      return res.status(404).json({ error: 'Screenshot file not found' });
+    }
+
+    return res.sendFile(screenshotPath);
+  } catch (err: any) {
+    console.error('GET /api/feedback/:id/screenshot error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch screenshot' });
+  }
+});
+
+/* ===== END: BLOCK FEEDBACK ===== */
 
 
 /* ===== BEGIN: BLOCK C — Health/Debug Endpoints ===== */
@@ -1304,7 +1441,7 @@ app.post('/api/strategy/:id/sync-holdings', requireAuth, async (req: Request, re
     console.log(`\n=== SYNCING HOLDINGS FOR STRATEGY: ${strategy.name} (ID: ${strategyId}) ===`);
 
     // Get current positions from Alpaca
-    const { getAlpacaPositions } = await import('./services/alpaca');
+    const { getAlpacaPositions } = await import('./services/orders');
     const positions = await getAlpacaPositions(apiKey, apiSecret);
     console.log(`Found ${positions.length} total positions in Alpaca account`);
 
@@ -1314,13 +1451,12 @@ app.post('/api/strategy/:id/sync-holdings', requireAuth, async (req: Request, re
 
     const updatedHoldings = positions.map(pos => ({
       symbol: pos.symbol,
-      qty: parseFloat(pos.qty),
-      entry_price: parseFloat(pos.avg_entry_price),
-      marketValue: parseFloat(pos.market_value),
+      qty: pos.qty,
+      marketValue: pos.market_value,
     }));
 
     // Calculate current value
-    const currentValue = positions.reduce((sum, pos) => sum + parseFloat(pos.market_value), 0);
+    const currentValue = positions.reduce((sum, pos) => sum + pos.market_value, 0);
 
     // Update strategy in database
     await updateActiveStrategy(strategyId, {
