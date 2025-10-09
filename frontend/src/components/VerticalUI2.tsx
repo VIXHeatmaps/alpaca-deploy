@@ -2757,21 +2757,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     await saveStrategyToDb(strategyData);
   };
 
-  const handleResetVersions = async () => {
-    if (!window.confirm('Reset version to v0.0.1? This cannot be undone.')) return;
-    const now = new Date().toISOString();
+  const handleResetVersions = () => {
     const newVersion = { major: 0, minor: 0, patch: 1, fork: "" };
     setVersion(newVersion);
-    setUpdatedAt(now);
-    const strategyData = {
-      name: strategyName,
-      versioningEnabled,
-      version: newVersion,
-      createdAt,
-      updatedAt: now,
-      elements,
-    };
-    await saveStrategyToDb(strategyData);
   };
 
   const exportStrategy = () => {
@@ -2913,11 +2901,42 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       reader.onload = (event) => {
         try {
           const json = JSON.parse(event.target?.result as string);
-          if (json.elements && Array.isArray(json.elements)) {
-            saveToHistory(json.elements);
-          } else {
+          if (!json.elements || !Array.isArray(json.elements)) {
             alert('Invalid JSON format. Expected a "elements" array.');
+            return;
           }
+
+          // Load elements into strategy tree
+          saveToHistory(json.elements);
+
+          // Restore metadata if available
+          if (json.name) {
+            updateCurrentTab({ strategyName: json.name });
+          }
+
+          if (json.versioningEnabled !== undefined) {
+            updateCurrentTab({ versioningEnabled: json.versioningEnabled });
+          }
+
+          if (json.strategyVersion) {
+            const importedVersion = {
+              major: json.strategyVersion.major ?? 0,
+              minor: json.strategyVersion.minor ?? 0,
+              patch: json.strategyVersion.patch ?? 1,
+              fork: json.strategyVersion.fork ?? "",
+            };
+            updateCurrentTab({ version: importedVersion });
+          }
+
+          if (json.createdAt) {
+            updateCurrentTab({ createdAt: json.createdAt });
+          }
+
+          if (json.updatedAt) {
+            updateCurrentTab({ updatedAt: json.updatedAt });
+          }
+
+          alert(`Strategy "${json.name || 'Untitled'}" imported successfully!`);
         } catch (error) {
           alert('Error parsing JSON file: ' + (error as Error).message);
         }
