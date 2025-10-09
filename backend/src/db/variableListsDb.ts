@@ -15,6 +15,7 @@ export interface VariableListDb {
   values: string[]; // JSONB array
   description: string | null;
   is_shared: boolean;
+  user_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -25,6 +26,7 @@ export interface CreateVariableListInput {
   values: string[];
   description?: string;
   is_shared?: boolean;
+  user_id: string;
 }
 
 export interface UpdateVariableListInput {
@@ -96,6 +98,44 @@ export async function getAllVariableLists(filters?: {
   limit?: number;
 }): Promise<VariableListDb[]> {
   let query = db('variable_lists').orderBy('created_at', 'desc');
+
+  if (filters?.type) {
+    query = query.where({ type: filters.type });
+  }
+
+  if (filters?.is_shared !== undefined) {
+    query = query.where({ is_shared: filters.is_shared });
+  }
+
+  if (filters?.limit) {
+    query = query.limit(filters.limit);
+  }
+
+  const results = await query;
+
+  // Parse JSONB values
+  return results.map((varList) => {
+    if (typeof varList.values === 'string') {
+      varList.values = JSON.parse(varList.values);
+    }
+    return varList;
+  });
+}
+
+/**
+ * Get all variable lists for a specific user
+ */
+export async function getVariableListsByUserId(
+  userId: string,
+  filters?: {
+    type?: VarType;
+    is_shared?: boolean;
+    limit?: number;
+  }
+): Promise<VariableListDb[]> {
+  let query = db('variable_lists')
+    .where({ user_id: userId })
+    .orderBy('created_at', 'desc');
 
   if (filters?.type) {
     query = query.where({ type: filters.type });

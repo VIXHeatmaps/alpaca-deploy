@@ -34,7 +34,9 @@ export interface SaveStrategyInput {
  * Get all strategies
  */
 export async function getAllStrategies(): Promise<Strategy[]> {
-  const response = await fetch(`${API_BASE}/api/strategies`);
+  const response = await fetch(`${API_BASE}/api/strategies`, {
+    credentials: 'include', // Send cookies for authentication
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch strategies: ${response.statusText}`);
@@ -47,7 +49,9 @@ export async function getAllStrategies(): Promise<Strategy[]> {
  * Get strategy by ID
  */
 export async function getStrategyById(id: number): Promise<Strategy> {
-  const response = await fetch(`${API_BASE}/api/strategies/${id}`);
+  const response = await fetch(`${API_BASE}/api/strategies/${id}`, {
+    credentials: 'include', // Send cookies for authentication
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch strategy: ${response.statusText}`);
@@ -63,6 +67,7 @@ export async function saveStrategy(input: SaveStrategyInput): Promise<Strategy> 
   const response = await fetch(`${API_BASE}/api/strategies`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // Send cookies for authentication
     body: JSON.stringify(input),
   });
 
@@ -80,6 +85,7 @@ export async function saveStrategy(input: SaveStrategyInput): Promise<Strategy> 
 export async function deleteStrategy(id: number): Promise<void> {
   const response = await fetch(`${API_BASE}/api/strategies/${id}`, {
     method: 'DELETE',
+    credentials: 'include', // Send cookies for authentication
   });
 
   if (!response.ok) {

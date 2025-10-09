@@ -15,6 +15,7 @@ export interface StrategyDb {
   version_patch: number;
   version_fork: string;
   elements: any; // JSONB - the entire strategy element tree
+  user_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -27,6 +28,7 @@ export interface CreateStrategyInput {
   version_patch: number;
   version_fork: string;
   elements: any;
+  user_id: string;
   created_at?: string; // Optional - preserve original creation time if provided
 }
 
@@ -44,7 +46,7 @@ export interface UpdateStrategyInput {
  * Create a new strategy or update if name+version already exists (upsert)
  */
 export async function saveStrategy(input: CreateStrategyInput): Promise<StrategyDb> {
-  // Check if strategy with same name and version exists
+  // Check if strategy with same name, version, AND user_id exists
   const existing = await db('strategies')
     .where({
       name: input.name,
@@ -52,6 +54,7 @@ export async function saveStrategy(input: CreateStrategyInput): Promise<Strategy
       version_minor: input.version_minor,
       version_patch: input.version_patch,
       version_fork: input.version_fork,
+      user_id: input.user_id,
     })
     .first();
 
@@ -81,6 +84,7 @@ export async function saveStrategy(input: CreateStrategyInput): Promise<Strategy
       version_patch: input.version_patch,
       version_fork: input.version_fork,
       elements: JSON.stringify(input.elements),
+      user_id: input.user_id,
     };
 
     // Preserve original created_at if provided (for importing old strategies)
@@ -119,6 +123,23 @@ export async function getStrategyById(id: number): Promise<StrategyDb | null> {
  */
 export async function getAllStrategies(): Promise<StrategyDb[]> {
   const strategies = await db('strategies').orderBy('updated_at', 'desc');
+
+  // Parse JSONB fields
+  return strategies.map(s => {
+    if (typeof s.elements === 'string') {
+      s.elements = JSON.parse(s.elements);
+    }
+    return s;
+  });
+}
+
+/**
+ * Get all strategies for a specific user, ordered by updated_at DESC
+ */
+export async function getStrategiesByUserId(userId: string): Promise<StrategyDb[]> {
+  const strategies = await db('strategies')
+    .where({ user_id: userId })
+    .orderBy('updated_at', 'desc');
 
   // Parse JSONB fields
   return strategies.map(s => {

@@ -15,6 +15,7 @@ export interface BatchJobDb {
   status: BatchJobStatus;
   total: number;
   completed: number;
+  user_id: string | null;
   created_at: Date;
   updated_at: Date;
   completed_at: Date | null;
@@ -78,6 +79,31 @@ export async function getAllBatchJobs(filters?: {
   limit?: number;
 }): Promise<BatchJobDb[]> {
   let query = db('batch_jobs').orderBy('created_at', 'desc');
+
+  if (filters?.status) {
+    query = query.where({ status: filters.status });
+  }
+
+  if (filters?.limit) {
+    query = query.limit(filters.limit);
+  }
+
+  return query;
+}
+
+/**
+ * Get all batch jobs for a specific user (with optional filters)
+ */
+export async function getBatchJobsByUserId(
+  userId: string,
+  filters?: {
+    status?: BatchJobStatus;
+    limit?: number;
+  }
+): Promise<BatchJobDb[]> {
+  let query = db('batch_jobs')
+    .where({ user_id: userId })
+    .orderBy('created_at', 'desc');
 
   if (filters?.status) {
     query = query.where({ status: filters.status });

@@ -47,7 +47,9 @@ export async function getAllVariableLists(filters?: {
   if (filters?.limit) params.set('limit', String(filters.limit));
 
   const url = `${API_BASE}/api/variables${params.toString() ? `?${params}` : ''}`;
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    credentials: 'include', // Send cookies for authentication
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch variable lists: ${response.statusText}`);
@@ -60,7 +62,9 @@ export async function getAllVariableLists(filters?: {
  * Get variable list by ID
  */
 export async function getVariableListById(id: number): Promise<VariableList> {
-  const response = await fetch(`${API_BASE}/api/variables/${id}`);
+  const response = await fetch(`${API_BASE}/api/variables/${id}`, {
+    credentials: 'include', // Send cookies for authentication
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch variable list: ${response.statusText}`);
@@ -76,6 +80,7 @@ export async function createVariableList(input: CreateVariableListInput): Promis
   const response = await fetch(`${API_BASE}/api/variables`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // Send cookies for authentication
     body: JSON.stringify(input),
   });
 
@@ -97,6 +102,7 @@ export async function updateVariableList(
   const response = await fetch(`${API_BASE}/api/variables/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // Send cookies for authentication
     body: JSON.stringify(updates),
   });
 
@@ -114,6 +120,7 @@ export async function updateVariableList(
 export async function deleteVariableList(id: number): Promise<void> {
   const response = await fetch(`${API_BASE}/api/variables/${id}`, {
     method: 'DELETE',
+    credentials: 'include', // Send cookies for authentication
   });
 
   if (!response.ok) {
@@ -130,6 +137,7 @@ export async function bulkImportVariableLists(
   const response = await fetch(`${API_BASE}/api/variables/bulk_import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // Send cookies for authentication
     body: JSON.stringify({ lists }),
   });
 

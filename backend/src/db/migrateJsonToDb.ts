@@ -25,6 +25,7 @@ export async function migrateJsonStrategyToDatabase(): Promise<number | null> {
   console.log(`[MIGRATION] Current holdings:`, jsonStrategy.holdings);
 
   // Create active strategy in database
+  // NOTE: Using a placeholder user_id for old migrated data. You should manually assign this to the correct user.
   const dbStrategy = await createActiveStrategy({
     name: jsonStrategy.name,
     flow_data: jsonStrategy.flowData,
@@ -33,6 +34,7 @@ export async function migrateJsonStrategyToDatabase(): Promise<number | null> {
     current_capital: jsonStrategy.currentValue || 0,
     holdings: jsonStrategy.holdings || [],
     pending_orders: jsonStrategy.pendingOrders || undefined,
+    user_id: 'MIGRATION_PLACEHOLDER', // FIXME: Assign to correct user after migration
   });
 
   console.log(`[MIGRATION] Created active_strategy with ID: ${dbStrategy.id}`);

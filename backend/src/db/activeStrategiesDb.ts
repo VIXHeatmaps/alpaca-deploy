@@ -18,6 +18,7 @@ export interface ActiveStrategyDb {
   position_attribution: any | null; // JSONB - { symbol: { qty, allocation_pct }}
   holdings: any; // JSONB - [{ symbol, qty, entry_price }]
   pending_orders: any | null; // JSONB
+  user_id: string | null;
   started_at: Date;
   stopped_at: Date | null;
   last_rebalance_at: Date | null;
@@ -37,6 +38,7 @@ export interface CreateActiveStrategyInput {
   position_attribution?: any;
   holdings?: any[];
   pending_orders?: any[];
+  user_id: string;
   rebalance_frequency?: string;
   rebalance_time?: string;
 }
@@ -65,6 +67,7 @@ export async function createActiveStrategy(input: CreateActiveStrategyInput): Pr
     position_attribution: input.position_attribution ? JSON.stringify(input.position_attribution) : null,
     holdings: JSON.stringify(input.holdings || []),
     pending_orders: input.pending_orders ? JSON.stringify(input.pending_orders) : null,
+    user_id: input.user_id,
     rebalance_frequency: input.rebalance_frequency || 'daily',
     rebalance_time: input.rebalance_time || '15:50:00',
   };
@@ -90,6 +93,18 @@ export async function getActiveStrategyById(id: number): Promise<ActiveStrategyD
  */
 export async function getAllActiveStrategies(): Promise<ActiveStrategyDb[]> {
   const strategies = await db('active_strategies')
+    .whereIn('status', ['active', 'paused'])
+    .orderBy('started_at', 'desc');
+
+  return strategies.map(parseActiveStrategy);
+}
+
+/**
+ * Get all active strategies for a specific user (not stopped)
+ */
+export async function getActiveStrategiesByUserId(userId: string): Promise<ActiveStrategyDb[]> {
+  const strategies = await db('active_strategies')
+    .where({ user_id: userId })
     .whereIn('status', ['active', 'paused'])
     .orderBy('started_at', 'desc');
 

@@ -699,7 +699,7 @@ import { getActiveStrategy, setActiveStrategy, clearActiveStrategy, hasActiveStr
 import { placeMarketOrder, waitForFill, getCurrentPrice, getAlpacaPositions } from './services/orders';
 import { evaluateFlowWithCurrentPrices, extractSymbols } from './services/flowEval';
 import { genId } from './utils/id';
-import { createActiveStrategy, getAllActiveStrategies, getActiveStrategyById, updateActiveStrategy } from './db/activeStrategiesDb';
+import { createActiveStrategy, getAllActiveStrategies, getActiveStrategiesByUserId, getActiveStrategyById, updateActiveStrategy } from './db/activeStrategiesDb';
 import { upsertSnapshot } from './db/activeStrategySnapshotsDb';
 import { calculateAttributionOnDeploy, removeStrategyFromAttribution } from './services/positionAttribution';
 
@@ -926,8 +926,13 @@ app.post('/api/invest/preview', async (req: Request, res: Response) => {
  * POST /api/invest
  * Deploy a strategy with initial investment (MULTI-STRATEGY SUPPORT)
  */
-app.post('/api/invest', async (req: Request, res: Response) => {
+app.post('/api/invest', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const { name, amount, elements, benchmarkSymbol } = req.body;
 
     if (!name || !amount || !elements) {
@@ -1100,6 +1105,7 @@ app.post('/api/invest', async (req: Request, res: Response) => {
       current_capital: totalInvested,
       holdings,
       pending_orders: pendingOrders.length > 0 ? pendingOrders : undefined,
+      user_id: userId,
     });
 
     console.log(`Strategy saved to database with ID: ${dbStrategy.id}`);
@@ -1161,9 +1167,14 @@ app.post('/api/invest', async (req: Request, res: Response) => {
  * GET /api/active-strategies
  * Get all active strategies from database
  */
-app.get('/api/active-strategies', async (req: Request, res: Response) => {
+app.get('/api/active-strategies', requireAuth, async (req: Request, res: Response) => {
   try {
-    const strategies = await getAllActiveStrategies();
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const strategies = await getActiveStrategiesByUserId(userId);
 
     return res.json({
       strategies: strategies.map(s => ({
@@ -1189,12 +1200,27 @@ app.get('/api/active-strategies', async (req: Request, res: Response) => {
  * GET /api/active-strategies/:id/snapshots
  * Get historical snapshots for a specific strategy
  */
-app.get('/api/active-strategies/:id/snapshots', async (req: Request, res: Response) => {
+app.get('/api/active-strategies/:id/snapshots', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const strategyId = parseInt(req.params.id);
 
     if (!Number.isFinite(strategyId)) {
       return res.status(400).json({ error: 'Invalid strategy ID' });
+    }
+
+    // Verify ownership
+    const strategy = await getActiveStrategyById(strategyId);
+    if (!strategy) {
+      return res.status(404).json({ error: 'Strategy not found' });
+    }
+
+    if (strategy.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this strategy' });
     }
 
     const { getSnapshotsByStrategyId } = await import('./db/activeStrategySnapshotsDb');
@@ -1859,7 +1885,12 @@ async function startBatchStrategyJob(
   });
 }
 
-app.post('/api/batch_backtest_strategy', async (req: Request, res: Response) => {
+app.post('/api/batch_backtest_strategy', requireAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
   const body = (req.body || {}) as BatchStrategyRequestBody;
   const variables = sanitizedVariables(body.variables);
   const totalFromBody = clampNumber(body.total, 0);
@@ -1897,6 +1928,7 @@ app.post('/api/batch_backtest_strategy', async (req: Request, res: Response) => 
     status: total ? 'queued' : 'finished',
     total,
     completed: 0,
+    user_id: userId,
     completed_at: total ? null : new Date(),
     error: null,
     truncated: Boolean(body.truncated),
@@ -1933,9 +1965,19 @@ app.post('/api/batch_backtest_strategy', async (req: Request, res: Response) => 
   });
 });
 
-app.get('/api/batch_backtest_strategy/:id', async (req: Request, res: Response) => {
+app.get('/api/batch_backtest_strategy/:id', requireAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
   const job = await batchJobsDb.getBatchJobById(req.params.id);
   if (!job) return res.status(404).json({ error: 'batch strategy job not found' });
+
+  // Verify ownership
+  if (job.user_id !== userId) {
+    return res.status(403).json({ error: 'Forbidden: You do not own this batch job' });
+  }
   return res.json({
     jobId: job.id,
     name: job.name,
@@ -1953,9 +1995,19 @@ app.get('/api/batch_backtest_strategy/:id', async (req: Request, res: Response) 
   });
 });
 
-app.post('/api/batch_backtest_strategy/:id/cancel', async (req: Request, res: Response) => {
+app.post('/api/batch_backtest_strategy/:id/cancel', requireAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
   const job = await batchJobsDb.getBatchJobById(req.params.id);
   if (!job) return res.status(404).json({ error: 'batch strategy job not found' });
+
+  // Verify ownership
+  if (job.user_id !== userId) {
+    return res.status(403).json({ error: 'Forbidden: You do not own this batch job' });
+  }
 
   if (job.status !== 'running' && job.status !== 'queued') {
     return res.status(400).json({ error: 'Can only cancel running or queued jobs' });
@@ -1970,11 +2022,21 @@ app.post('/api/batch_backtest_strategy/:id/cancel', async (req: Request, res: Re
   return res.json({ success: true, message: 'Job cancelled' });
 });
 
-app.get('/api/batch_backtest_strategy/:id/view', async (req: Request, res: Response) => {
+app.get('/api/batch_backtest_strategy/:id/view', requireAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
   const jobWithRuns = await batchJobsDb.getBatchJobWithRuns(req.params.id);
   if (!jobWithRuns) return res.status(404).json({ error: 'batch strategy job not found' });
 
   const { job, runs } = jobWithRuns;
+
+  // Verify ownership
+  if (job.user_id !== userId) {
+    return res.status(403).json({ error: 'Forbidden: You do not own this batch job' });
+  }
 
   if (job.status !== 'finished') {
     return res.status(202).json({ status: job.status, message: 'Batch still running' });
@@ -1996,11 +2058,21 @@ app.get('/api/batch_backtest_strategy/:id/view', async (req: Request, res: Respo
   });
 });
 
-app.get('/api/batch_backtest_strategy/:id/results.csv', async (req: Request, res: Response) => {
+app.get('/api/batch_backtest_strategy/:id/results.csv', requireAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
   const jobWithRuns = await batchJobsDb.getBatchJobWithRuns(req.params.id);
   if (!jobWithRuns) return res.status(404).json({ error: 'batch strategy job not found' });
 
   const { job, runs } = jobWithRuns;
+
+  // Verify ownership
+  if (job.user_id !== userId) {
+    return res.status(403).json({ error: 'Forbidden: You do not own this batch job' });
+  }
 
   if (job.status !== 'finished') {
     return res.status(202).json({ status: job.status, message: 'Batch still running' });
@@ -3501,13 +3573,18 @@ app.post('/api/validate_strategy', async (req: Request, res: Response) => {
 
 /* ===== BEGIN: BLOCK P — Variable Lists CRUD ===== */
 // Get all variable lists
-app.get('/api/variables', async (req: Request, res: Response) => {
+app.get('/api/variables', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const type = req.query.type as variableListsDb.VarType | undefined;
     const is_shared = req.query.is_shared === 'true' ? true : undefined;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
 
-    const lists = await variableListsDb.getAllVariableLists({ type, is_shared, limit });
+    const lists = await variableListsDb.getVariableListsByUserId(userId, { type, is_shared, limit });
     return res.json(lists);
   } catch (err: any) {
     console.error('GET /api/variables error:', err);
@@ -3516,8 +3593,13 @@ app.get('/api/variables', async (req: Request, res: Response) => {
 });
 
 // Get variable list by ID
-app.get('/api/variables/:id', async (req: Request, res: Response) => {
+app.get('/api/variables/:id', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const id = Number(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid ID' });
@@ -3528,6 +3610,11 @@ app.get('/api/variables/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Variable list not found' });
     }
 
+    // Verify ownership
+    if (varList.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this variable list' });
+    }
+
     return res.json(varList);
   } catch (err: any) {
     console.error('GET /api/variables/:id error:', err);
@@ -3536,8 +3623,13 @@ app.get('/api/variables/:id', async (req: Request, res: Response) => {
 });
 
 // Create new variable list
-app.post('/api/variables', async (req: Request, res: Response) => {
+app.post('/api/variables', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const { name, type, values, description, is_shared } = req.body;
 
     if (!name || typeof name !== 'string') {
@@ -3564,6 +3656,7 @@ app.post('/api/variables', async (req: Request, res: Response) => {
       values,
       description,
       is_shared,
+      user_id: userId,
     });
 
     return res.status(201).json(created);
@@ -3574,11 +3667,26 @@ app.post('/api/variables', async (req: Request, res: Response) => {
 });
 
 // Update variable list
-app.put('/api/variables/:id', async (req: Request, res: Response) => {
+app.put('/api/variables/:id', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const id = Number(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    // Verify ownership
+    const existing = await variableListsDb.getVariableListById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Variable list not found' });
+    }
+
+    if (existing.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this variable list' });
     }
 
     const { name, type, values, description, is_shared } = req.body;
@@ -3621,11 +3729,26 @@ app.put('/api/variables/:id', async (req: Request, res: Response) => {
 });
 
 // Delete variable list
-app.delete('/api/variables/:id', async (req: Request, res: Response) => {
+app.delete('/api/variables/:id', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const id = Number(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    // Verify ownership
+    const varList = await variableListsDb.getVariableListById(id);
+    if (!varList) {
+      return res.status(404).json({ error: 'Variable list not found' });
+    }
+
+    if (varList.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this variable list' });
     }
 
     const deleted = await variableListsDb.deleteVariableList(id);
@@ -3641,15 +3764,20 @@ app.delete('/api/variables/:id', async (req: Request, res: Response) => {
 });
 
 // Bulk import variable lists (for migration from localStorage)
-app.post('/api/variables/bulk_import', async (req: Request, res: Response) => {
+app.post('/api/variables/bulk_import', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const { lists } = req.body;
 
     if (!Array.isArray(lists)) {
       return res.status(400).json({ error: 'Lists must be an array' });
     }
 
-    // Validate each list
+    // Validate each list and add user_id
     for (const list of lists) {
       if (!list.name || typeof list.name !== 'string') {
         return res.status(400).json({ error: 'Each list must have a name' });
@@ -3660,6 +3788,7 @@ app.post('/api/variables/bulk_import', async (req: Request, res: Response) => {
       if (!Array.isArray(list.values)) {
         return res.status(400).json({ error: 'Each list must have values as an array' });
       }
+      list.user_id = userId;
     }
 
     const imported = await variableListsDb.bulkImportVariableLists(lists);
@@ -3674,9 +3803,14 @@ app.post('/api/variables/bulk_import', async (req: Request, res: Response) => {
 
 /* ===== BEGIN: BLOCK Q — Strategies CRUD ===== */
 // Get all strategies
-app.get('/api/strategies', async (req: Request, res: Response) => {
+app.get('/api/strategies', requireAuth, async (req: Request, res: Response) => {
   try {
-    const strategies = await strategiesDb.getAllStrategies();
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const strategies = await strategiesDb.getStrategiesByUserId(userId);
     return res.json(strategies);
   } catch (err: any) {
     console.error('GET /api/strategies error:', err);
@@ -3705,8 +3839,13 @@ app.get('/api/strategies/:id', async (req: Request, res: Response) => {
 });
 
 // Save strategy (create or update based on name+version)
-app.post('/api/strategies', async (req: Request, res: Response) => {
+app.post('/api/strategies', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const { name, versioningEnabled, version, elements, createdAt } = req.body;
 
     // Validation
@@ -3736,6 +3875,7 @@ app.post('/api/strategies', async (req: Request, res: Response) => {
       version_fork: fork || '',
       elements,
       created_at: createdAt,
+      user_id: userId,
     });
 
     return res.status(200).json(saved);
@@ -3746,11 +3886,26 @@ app.post('/api/strategies', async (req: Request, res: Response) => {
 });
 
 // Delete strategy by ID
-app.delete('/api/strategies/:id', async (req: Request, res: Response) => {
+app.delete('/api/strategies/:id', requireAuth, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const id = Number(req.params.id);
     if (isNaN(id)) {
       return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    // Verify ownership
+    const strategy = await strategiesDb.getStrategyById(id);
+    if (!strategy) {
+      return res.status(404).json({ error: 'Strategy not found' });
+    }
+
+    if (strategy.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this strategy' });
     }
 
     const deleted = await strategiesDb.deleteStrategy(id);

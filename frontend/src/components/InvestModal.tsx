@@ -41,6 +41,7 @@ export function InvestModal({
           'APCA-API-KEY-ID': apiKey,
           'APCA-API-SECRET-KEY': apiSecret,
         },
+        credentials: 'include', // Send cookies for authentication
         body: JSON.stringify({
           name: strategyName,
           amount: investAmount,
