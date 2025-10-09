@@ -2334,6 +2334,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   // Tab management
   const [activeTab, setActiveTab] = useState<"strategy" | "variables" | "batchtests">("strategy");
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [backtestResultsOpen, setBacktestResultsOpen] = useState(true);
 
   // Batch jobs state
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
@@ -2823,6 +2824,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
       console.log('Backtest complete:', data);
       setBacktestResults(data);
+      setBacktestResultsOpen(true); // Auto-expand results when backtest completes
     } catch (err: any) {
       console.error('Backtest error:', err);
       alert(`Failed to backtest strategy: ${err.message}`);
@@ -3376,39 +3378,6 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
           <div style={{ marginLeft: 'auto' }} />
           <button
-            onClick={backtestStrategy}
-            disabled={elements.length === 0 || isBacktesting || validationErrors.length > 0}
-            style={{
-              padding: '6px 12px',
-              fontSize: '13px',
-              color: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? '#9ca3af' : (hasVariables ? '#7f3dff' : '#059669'),
-              background: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? '#f9fafb' : '#fff',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              cursor: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? 'not-allowed' : 'pointer',
-              fontWeight: '600',
-            }}
-            onMouseEnter={(e) => {
-              if (elements.length > 0 && !isBacktesting && validationErrors.length === 0) {
-                e.currentTarget.style.background = hasVariables ? '#f3e8ff' : '#d1fae5';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (elements.length > 0 && !isBacktesting && validationErrors.length === 0) {
-                e.currentTarget.style.background = '#fff';
-              }
-            }}
-            title={
-              validationErrors.length > 0
-                ? `Fix ${validationErrors.length} validation error(s) first`
-                : hasVariables
-                  ? "Run batch backtests with all variable combinations"
-                  : "Run full historical backtest"
-            }
-          >
-            {isBacktesting ? '⏳ Running...' : (hasVariables ? '▶️ Batch Backtest' : '▶️ Backtest')}
-          </button>
-          <button
             onClick={uploadStrategy}
             style={{
               padding: '6px 12px',
@@ -3491,18 +3460,19 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       )}
 
 
-      {/* 2. Backtest Results (Collapsible) */}
-      {activeTab === "strategy" && backtestResults && (
-        <Collapsible.Root defaultOpen={true}>
-          <div style={{
-            margin: '16px 32px',
-            background: '#fff',
-            border: '1px solid #d1d5db',
-            borderRadius: '8px',
-            overflow: 'hidden',
-          }}>
-            <Collapsible.Trigger asChild>
-              <button style={{
+      {/* 2. Backtest Bar (Always Visible) */}
+      {activeTab === "strategy" && (
+        <div style={{
+          margin: '16px 32px',
+          background: '#fff',
+          border: '1px solid #d1d5db',
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          {backtestResults ? (
+            <Collapsible.Root open={backtestResultsOpen} onOpenChange={setBacktestResultsOpen}>
+              <Collapsible.Trigger asChild>
+              <div style={{
                 width: '100%',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -3510,13 +3480,110 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 padding: '16px 24px',
                 background: '#fff',
                 border: 'none',
+                gap: '12px',
                 cursor: 'pointer',
-                fontSize: '18px',
-                fontWeight: '700',
               }}>
-                <span>Backtest Results</span>
-                <span style={{ fontSize: '14px' }}>▼</span>
-              </button>
+                <button
+                  onClick={backtestStrategy}
+                  disabled={elements.length === 0 || isBacktesting || validationErrors.length > 0}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    color: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? '#9ca3af' : (hasVariables ? '#7f3dff' : '#059669'),
+                    background: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? '#f9fafb' : '#fff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    cursor: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? 'not-allowed' : 'pointer',
+                    fontWeight: '600',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (elements.length > 0 && !isBacktesting && validationErrors.length === 0) {
+                      e.currentTarget.style.background = hasVariables ? '#f3e8ff' : '#d1fae5';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (elements.length > 0 && !isBacktesting && validationErrors.length === 0) {
+                      e.currentTarget.style.background = '#fff';
+                    }
+                  }}
+                  title={
+                    validationErrors.length > 0
+                      ? `Fix ${validationErrors.length} validation error(s) first`
+                      : hasVariables
+                        ? "Run batch backtests with all variable combinations"
+                        : "Run full historical backtest"
+                  }
+                >
+                  {isBacktesting ? '⏳ Running...' : (hasVariables ? '▶️ Batch Backtest' : '▶️ Backtest')}
+                </button>
+
+                {/* Benchmark field */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                    Benchmark:
+                  </label>
+                  <input
+                    value={benchmarkSymbol}
+                    onChange={(e) => setBenchmarkSymbol(e.target.value.toUpperCase())}
+                    placeholder="SPY"
+                    style={{
+                      width: '60px',
+                      padding: '4px 6px',
+                      fontSize: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+
+                {/* Start Date field */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                    Start:
+                  </label>
+                  <input
+                    type="date"
+                    defaultValue={startDate === "max" ? "" : startDate}
+                    onBlur={(e) => setStartDate(e.target.value || "max")}
+                    placeholder="Max"
+                    style={{
+                      width: '140px',
+                      padding: '4px 6px',
+                      fontSize: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+
+                {/* End Date field */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                    End:
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    style={{
+                      width: '140px',
+                      padding: '4px 6px',
+                      fontSize: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
+
+                <span style={{
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  marginLeft: 'auto',
+                  transform: backtestResultsOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                  transition: 'transform 0.2s',
+                  display: 'inline-block',
+                }}>▼</span>
+              </div>
             </Collapsible.Trigger>
             <Collapsible.Content>
               <div style={{ padding: '24px' }}>
@@ -3624,77 +3691,6 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                   </div>
                 )}
 
-                {/* Backtest Configuration */}
-                <div style={{
-                  padding: '24px',
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  marginBottom: '16px',
-                }}>
-                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px' }}>
-                    Backtest Configuration
-                  </div>
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    gap: '16px',
-                  }}>
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '4px' }}>
-                        Benchmark
-                      </label>
-                      <input
-                        value={benchmarkSymbol}
-                        onChange={(e) => setBenchmarkSymbol(e.target.value.toUpperCase())}
-                        placeholder="SPY"
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          fontSize: '13px',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '4px',
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '4px' }}>
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        defaultValue={startDate === "max" ? "" : startDate}
-                        onBlur={(e) => setStartDate(e.target.value || "max")}
-                        placeholder="Max (earliest available)"
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          fontSize: '13px',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '4px',
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: '500', color: '#374151', display: 'block', marginBottom: '4px' }}>
-                        End Date
-                      </label>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          fontSize: '13px',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '4px',
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
                 {/* Debug Info */}
                 {backtestResults.debugDays && (
                   <Collapsible.Root defaultOpen>
@@ -3797,8 +3793,112 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 )}
               </div>
             </Collapsible.Content>
-          </div>
-        </Collapsible.Root>
+            </Collapsible.Root>
+          ) : (
+            <div style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px 24px',
+              background: '#fff',
+              border: 'none',
+              gap: '12px',
+            }}>
+              <button
+                onClick={backtestStrategy}
+                disabled={elements.length === 0 || isBacktesting || validationErrors.length > 0}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '14px',
+                  color: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? '#9ca3af' : (hasVariables ? '#7f3dff' : '#059669'),
+                  background: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? '#f9fafb' : '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '4px',
+                  cursor: elements.length === 0 || isBacktesting || validationErrors.length > 0 ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                }}
+                onMouseEnter={(e) => {
+                  if (elements.length > 0 && !isBacktesting && validationErrors.length === 0) {
+                    e.currentTarget.style.background = hasVariables ? '#f3e8ff' : '#d1fae5';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (elements.length > 0 && !isBacktesting && validationErrors.length === 0) {
+                    e.currentTarget.style.background = '#fff';
+                  }
+                }}
+                title={
+                  validationErrors.length > 0
+                    ? `Fix ${validationErrors.length} validation error(s) first`
+                    : hasVariables
+                      ? "Run batch backtests with all variable combinations"
+                      : "Run full historical backtest"
+                }
+              >
+                {isBacktesting ? '⏳ Running...' : (hasVariables ? '▶️ Batch Backtest' : '▶️ Backtest')}
+              </button>
+
+              {/* Benchmark field */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                  Benchmark:
+                </label>
+                <input
+                  value={benchmarkSymbol}
+                  onChange={(e) => setBenchmarkSymbol(e.target.value.toUpperCase())}
+                  placeholder="SPY"
+                  style={{
+                    width: '60px',
+                    padding: '4px 6px',
+                    fontSize: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                  }}
+                />
+              </div>
+
+              {/* Start Date field */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                  Start:
+                </label>
+                <input
+                  type="date"
+                  defaultValue={startDate === "max" ? "" : startDate}
+                  onBlur={(e) => setStartDate(e.target.value || "max")}
+                  placeholder="Max"
+                  style={{
+                    width: '140px',
+                    padding: '4px 6px',
+                    fontSize: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                  }}
+                />
+              </div>
+
+              {/* End Date field */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                  End:
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{
+                    width: '140px',
+                    padding: '4px 6px',
+                    fontSize: '12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* 3. Strategy Builder */}
