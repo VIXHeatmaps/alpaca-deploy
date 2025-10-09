@@ -41,7 +41,7 @@ function calculateWarmupDays(indicators: Array<{ ticker: string; indicator: stri
     } else if (indicator === 'SMA' || indicator === 'EMA') {
       warmup = ind.period || 14;
     } else if (indicator.startsWith('AROON')) {
-      warmup = ind.period || 14;
+      warmup = (ind.period || 14) * 2; // AROON needs 2x period for stability
     } else {
       // Default: use period or 0
       warmup = ind.period || 0;

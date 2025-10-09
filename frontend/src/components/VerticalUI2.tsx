@@ -3,7 +3,7 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { motion, AnimatePresence } from "framer-motion";
 import { Copy } from "lucide-react";
 import type { IndicatorName } from "../types/indicators";
-import { indicatorOptions, keysForIndicator, PARAM_LABELS, getEffectiveParams } from "../types/indicators";
+import { indicatorOptions, keysForIndicator, PARAM_LABELS, getEffectiveParams, defaultParams, paramsToPeriodString } from "../types/indicators";
 import {
   LineChart,
   Line,
@@ -18,6 +18,7 @@ import { validateStrategy, type ValidationError } from "../utils/validation";
 import { VariablesTab } from "./VariablesTab";
 import { BatchTestsTab } from "./BatchTestsTab";
 import type { BatchJob } from "../types/batchJobs";
+import { putJob, getAllJobs } from "../storage/batchJobsStore";
 import { loadVarLists } from "../types/variables";
 import {
   extractStringsFromElements,
@@ -856,31 +857,67 @@ function IndicatorParams({
       {paramKeys.map((key, idx) => {
         const value = params[key] || '';
         const hasUndefinedVar = hasUndefinedVariableInField(value, definedVariables);
+        const hasError = hasFieldError(elementId, `conditions.${conditionIndex}.period`, validationErrors);
         const defaultValue = getEffectiveParams(indicator)[key];
+
+        // Check if this param should be a dropdown (MA type)
+        const isMatypeParam = key === 'matype' || key === 'slowk_matype' || key === 'slowd_matype';
 
         return (
           <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {idx > 0 && <span style={{ fontSize: '13px', color: '#9ca3af' }}>,</span>}
-            <input
-              type="text"
-              value={value}
-              onChange={(e) => handleParamChange(key, e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              placeholder={String(defaultValue)}
-              style={{
-                border: hasUndefinedVar ? '2px solid #ef4444' : '1px solid #d1d5db',
-                outline: 'none',
-                padding: '3px 6px',
-                background: hasUndefinedVar ? '#fee2e2' : (value ? '#fff' : '#f9fafb'),
-                fontSize: '13px',
-                color: value ? '#111827' : '#9ca3af',
-                width: '45px',
-                borderRadius: '3px',
-                textAlign: 'center',
-              }}
-              className="focus:ring-2 focus:ring-blue-500"
-              title={hasUndefinedVar ? `Variable ${value} is not defined` : PARAM_LABELS[key]}
-            />
+
+            {isMatypeParam ? (
+              // Dropdown for MA type
+              <select
+                value={value || String(defaultValue)}
+                onChange={(e) => handleParamChange(key, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  border: (hasError || hasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
+                  outline: 'none',
+                  padding: '3px 6px',
+                  background: (hasError || hasUndefinedVar) ? '#fee2e2' : '#fff',
+                  fontSize: '13px',
+                  color: '#111827',
+                  borderRadius: '3px',
+                }}
+                className="focus:ring-2 focus:ring-blue-500"
+                title={PARAM_LABELS[key]}
+              >
+                <option value="0">SMA</option>
+                <option value="1">EMA</option>
+                <option value="2">WMA</option>
+                <option value="3">DEMA</option>
+                <option value="4">TEMA</option>
+                <option value="5">TRIMA</option>
+                <option value="6">KAMA</option>
+                <option value="7">MAMA</option>
+                <option value="8">T3</option>
+              </select>
+            ) : (
+              // Text input for numeric params
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => handleParamChange(key, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder={String(defaultValue)}
+                style={{
+                  border: (hasError || hasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
+                  outline: 'none',
+                  padding: '3px 6px',
+                  background: (hasError || hasUndefinedVar) ? '#fee2e2' : (value ? '#fff' : '#f9fafb'),
+                  fontSize: '13px',
+                  color: value ? '#111827' : '#9ca3af',
+                  width: '45px',
+                  borderRadius: '3px',
+                  textAlign: 'center',
+                }}
+                className="focus:ring-2 focus:ring-blue-500"
+                title={hasUndefinedVar ? `Variable ${value} is not defined` : PARAM_LABELS[key]}
+              />
+            )}
           </div>
         );
       })}
@@ -935,7 +972,15 @@ function ConditionRow({
       {/* Left side: INDICATOR(params) of TICKER */}
       <select
         value={condition.indicator}
-        onChange={(e) => onUpdate({ indicator: e.target.value as IndicatorName })}
+        onChange={(e) => {
+          const newIndicator = e.target.value as IndicatorName;
+          const newParams = defaultParams(newIndicator);
+          onUpdate({
+            indicator: newIndicator,
+            params: newParams,
+            period: paramsToPeriodString(newIndicator, newParams),
+          });
+        }}
         onClick={(e) => e.stopPropagation()}
         style={{
           border: '1px solid #d1d5db',
@@ -961,9 +1006,8 @@ function ConditionRow({
         indicator={condition.indicator}
         params={condition.params || {}}
         onUpdate={(params) => {
-          // Also update the legacy 'period' field for backward compatibility with executor
-          // The executor looks for condition.period, so we need to populate it from params
-          const period = params.period || '';
+          // Update period field to match params for executor lookup
+          const period = paramsToPeriodString(condition.indicator, params);
           onUpdate({ params, period });
         }}
         conditionIndex={conditionIndex}
@@ -1073,7 +1117,15 @@ function ConditionRow({
         <>
           <select
             value={condition.rightIndicator || "RSI"}
-            onChange={(e) => onUpdate({ rightIndicator: e.target.value as IndicatorName })}
+            onChange={(e) => {
+              const newIndicator = e.target.value as IndicatorName;
+              const newParams = defaultParams(newIndicator);
+              onUpdate({
+                rightIndicator: newIndicator,
+                rightParams: newParams,
+                rightPeriod: paramsToPeriodString(newIndicator, newParams),
+              });
+            }}
             onClick={(e) => e.stopPropagation()}
             style={{
               border: '1px solid #d1d5db',
@@ -1099,8 +1151,8 @@ function ConditionRow({
             indicator={condition.rightIndicator || "RSI"}
             params={condition.rightParams || {}}
             onUpdate={(rightParams) => {
-              // Also update the legacy 'rightPeriod' field for backward compatibility with executor
-              const rightPeriod = rightParams.period || '';
+              // Update rightPeriod field to match rightParams for executor lookup
+              const rightPeriod = paramsToPeriodString(condition.rightIndicator || "RSI", rightParams);
               onUpdate({ rightParams, rightPeriod });
             }}
             conditionIndex={conditionIndex}
@@ -1187,23 +1239,27 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
 
   // Handle backward compatibility: migrate old single condition to new format
   const conditionMode = element.conditionMode || "if";
+  const defaultIndicator: IndicatorName = "RSI";
   const conditions = element.conditions || (element.condition ? [element.condition] : [{
     ticker: "",
-    indicator: "RSI",
-    period: "",
-    params: {},
+    indicator: defaultIndicator,
+    period: defaultParams(defaultIndicator).period || "",
+    params: defaultParams(defaultIndicator),
     operator: "gt",
     compareTo: "indicator",
     threshold: "",
     rightTicker: "",
-    rightIndicator: "RSI",
-    rightPeriod: "",
-    rightParams: {},
+    rightIndicator: defaultIndicator,
+    rightPeriod: defaultParams(defaultIndicator).period || "",
+    rightParams: defaultParams(defaultIndicator),
   }]);
+
+  // Use conditions directly - no migration during render to prevent infinite loops
+  const migratedConditions = conditions;
 
   // Helper functions for managing conditions
   const updateCondition = (index: number, updates: Partial<GateCondition>) => {
-    const newConditions = conditions.map((cond, i) =>
+    const newConditions = migratedConditions.map((cond, i) =>
       i === index ? { ...cond, ...updates } : cond
     );
     const { condition, ...rest } = element; // Remove old condition field
@@ -1211,33 +1267,34 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
   };
 
   const addCondition = () => {
+    const defaultIndicator: IndicatorName = "RSI";
     const newCondition: GateCondition = {
       ticker: "",
-      indicator: "RSI",
-      period: "",
-      params: {},
+      indicator: defaultIndicator,
+      period: defaultParams(defaultIndicator).period || "",
+      params: defaultParams(defaultIndicator),
       operator: "gt",
       compareTo: "indicator",
       threshold: "",
       rightTicker: "",
-      rightIndicator: "RSI",
-      rightPeriod: "",
-      rightParams: {},
+      rightIndicator: defaultIndicator,
+      rightPeriod: defaultParams(defaultIndicator).period || "",
+      rightParams: defaultParams(defaultIndicator),
     };
     const { condition, ...rest} = element; // Remove old condition field
-    onUpdate({ ...rest, conditions: [...conditions, newCondition] });
+    onUpdate({ ...rest, conditions: [...migratedConditions, newCondition] });
   };
 
   const removeCondition = (index: number) => {
-    if (conditions.length <= 1) return; // Keep at least one condition
-    const newConditions = conditions.filter((_, i) => i !== index);
+    if (migratedConditions.length <= 1) return; // Keep at least one condition
+    const newConditions = migratedConditions.filter((_, i) => i !== index);
     const { condition, ...rest } = element; // Remove old condition field
     onUpdate({ ...rest, conditions: newConditions });
   };
 
   const updateConditionMode = (mode: "if" | "if_all" | "if_any" | "if_none") => {
     // When switching to IF ALL, IF ANY, or IF NONE, auto-add a second condition if only one exists
-    if ((mode === "if_all" || mode === "if_any" || mode === "if_none") && conditions.length === 1) {
+    if ((mode === "if_all" || mode === "if_any" || mode === "if_none") && migratedConditions.length === 1) {
       addCondition();
     }
     const { condition, ...rest } = element; // Remove old condition field
@@ -1252,6 +1309,8 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
       const gateCount = allElements ? countGatesInTree(allElements) : 0;
       const gateName = `Gate${gateCount + 1}`;
 
+      const defaultIndicator: IndicatorName = "RSI";
+      const defaultP = defaultParams(defaultIndicator);
       const newGate: GateElement = {
         id: `gate-${Date.now()}`,
         type: "gate",
@@ -1260,14 +1319,16 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
         conditionMode: "if",
         conditions: [{
           ticker: "",
-          indicator: "RSI",
-          period: "",
+          indicator: defaultIndicator,
+          period: paramsToPeriodString(defaultIndicator, defaultP),
+          params: defaultP,
           operator: "gt",
           compareTo: "indicator",
           threshold: "",
           rightTicker: "",
-          rightIndicator: "RSI",
-          rightPeriod: "",
+          rightIndicator: defaultIndicator,
+          rightPeriod: paramsToPeriodString(defaultIndicator, defaultP),
+          rightParams: defaultP,
         }],
         thenChildren: [],
         elseChildren: [],
@@ -1308,6 +1369,8 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
       const gateCount = allElements ? countGatesInTree(allElements) : 0;
       const gateName = `Gate${gateCount + 1}`;
 
+      const defaultIndicator: IndicatorName = "RSI";
+      const defaultP = defaultParams(defaultIndicator);
       const newGate: GateElement = {
         id: `gate-${Date.now()}`,
         type: "gate",
@@ -1316,14 +1379,16 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
         conditionMode: "if",
         conditions: [{
           ticker: "",
-          indicator: "RSI",
-          period: "",
+          indicator: defaultIndicator,
+          period: paramsToPeriodString(defaultIndicator, defaultP),
+          params: defaultP,
           operator: "gt",
           compareTo: "indicator",
           threshold: "",
           rightTicker: "",
-          rightIndicator: "RSI",
-          rightPeriod: "",
+          rightIndicator: defaultIndicator,
+          rightPeriod: paramsToPeriodString(defaultIndicator, defaultP),
+          rightParams: defaultP,
         }],
         thenChildren: [],
         elseChildren: [],
@@ -1541,7 +1606,7 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
 
           {/* First condition always inline */}
           <ConditionRow
-            condition={conditions[0]}
+            condition={migratedConditions[0]}
             conditionIndex={0}
             onUpdate={(updates) => updateCondition(0, updates)}
             showRemove={false}
@@ -1599,9 +1664,9 @@ function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, s
         </div>
 
         {/* Additional conditions container - vertically stacked for multi-condition modes (2nd, 3rd, etc.) */}
-        {(conditionMode === "if_all" || conditionMode === "if_any" || conditionMode === "if_none") && conditions.length > 1 && (
+        {(conditionMode === "if_all" || conditionMode === "if_any" || conditionMode === "if_none") && migratedConditions.length > 1 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', padding: '0 8px', marginTop: '8px' }}>
-          {conditions.slice(1).map((condition, condIndex) => (
+          {migratedConditions.slice(1).map((condition, condIndex) => (
             <div key={condIndex + 1} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {/* Invisible spacers to match first row layout */}
               <div style={{ fontSize: '12px', flexShrink: 0, visibility: 'hidden' }}>▶</div>
@@ -2236,7 +2301,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   // Helper function to update current tab
   const updateCurrentTab = (updates: Partial<StrategyTab>) => {
     setStrategyTabs(tabs => tabs.map(tab =>
-      tab.id === activeStrategyTabId ? { ...tab, ...updates, updatedAt: new Date().toISOString() } : tab
+      tab.id === activeStrategyTabId ? { ...tab, ...updates } : tab
     ));
   };
 
@@ -2270,20 +2335,17 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   const [activeTab, setActiveTab] = useState<"strategy" | "variables" | "batchtests">("strategy");
 
   // Batch jobs state
-  const [batchJobs, setBatchJobs] = useState<BatchJob[]>(() => {
-    // Load from localStorage on mount
-    try {
-      const saved = localStorage.getItem('verticalUI2_batch_jobs');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return Array.isArray(parsed) ? parsed : [];
-      }
-    } catch (err) {
-      console.error('Failed to load batch jobs:', err);
-    }
-    return [];
-  });
+  const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
+
+  // Load batch jobs from IndexedDB on mount
+  useEffect(() => {
+    getAllJobs().then((jobs) => {
+      setBatchJobs(jobs);
+    }).catch((err) => {
+      console.error('Failed to load batch jobs:', err);
+    });
+  }, []);
 
   // Batch backtest state
   const MAX_ASSIGNMENTS = 10000;
@@ -2343,6 +2405,18 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     return strategyVariables.filter(varName => !definedVariables.has(varName));
   }, [strategyVariables, definedVariables]);
 
+  // Memoize chart data to prevent constant re-renders
+  const chartData = useMemo(() => {
+    if (!backtestResults?.dates || !backtestResults?.equityCurve) {
+      return [];
+    }
+    return backtestResults.dates.map((date: string, i: number) => ({
+      date,
+      strategy: backtestResults.equityCurve[i],
+      benchmark: backtestResults.benchmark?.equityCurve?.[i],
+    }));
+  }, [backtestResults?.dates, backtestResults?.equityCurve, backtestResults?.benchmark?.equityCurve]);
+
   // Tab management functions
   const addTab = () => {
     const newTab: StrategyTab = {
@@ -2377,7 +2451,6 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   useEffect(() => {
     try {
       localStorage.setItem('verticalUI2_strategy_tabs', JSON.stringify(strategyTabs));
-      console.log('Strategy tabs auto-saved to localStorage');
     } catch (err) {
       console.error('Failed to save strategy tabs:', err);
     }
@@ -2432,6 +2505,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       const gateCount = countGatesInTree(elements);
       const gateName = `Gate${gateCount + 1}`;
 
+      const defaultIndicator: IndicatorName = "RSI";
+      const defaultP = defaultParams(defaultIndicator);
       const newGate: GateElement = {
         id: `gate-${Date.now()}`,
         type: "gate",
@@ -2440,14 +2515,16 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         conditionMode: "if",
         conditions: [{
           ticker: "",
-          indicator: "RSI",
-          period: "",
+          indicator: defaultIndicator,
+          period: paramsToPeriodString(defaultIndicator, defaultP),
+          params: defaultP,
           operator: "gt",
           compareTo: "indicator",
           threshold: "",
           rightTicker: "",
-          rightIndicator: "RSI",
-          rightPeriod: "",
+          rightIndicator: defaultIndicator,
+          rightPeriod: paramsToPeriodString(defaultIndicator, defaultP),
+          rightParams: defaultP,
         }],
         thenChildren: [],
         elseChildren: [],
@@ -2644,7 +2721,15 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   };
 
   const backtestStrategy = async () => {
+    console.log('🚀 backtestStrategy called at', new Date().toISOString());
+
     try {
+      // Prevent double-execution
+      if (isBacktesting) {
+        console.warn('⚠️ Backtest already running, ignoring duplicate call');
+        return;
+      }
+
       // Validation is done real-time via useMemo
       // If there are validation errors, button is disabled
       if (validationErrors.length > 0) {
@@ -2781,16 +2866,28 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       error: null,
       viewUrl: null,
       csvUrl: null,
+      completedAt: null,
+      truncated: false,
     };
 
-    // Add job to list
+    // Add job to list and persist to IndexedDB
     setBatchJobs(prev => [newJob, ...prev]);
+    await putJob(newJob);
 
     try {
       // Update job status to running
+      const runningJob = { ...newJob, status: "running" as const };
       setBatchJobs(prev => prev.map(j =>
-        j.id === jobId ? { ...j, status: "running" as const } : j
+        j.id === jobId ? runningJob : j
       ));
+      await putJob(runningJob);
+
+      // Debug: Log credentials being sent
+      console.log('[BATCH] Sending credentials:', {
+        apiKey: apiKey ? `${apiKey.slice(0, 8)}...` : 'MISSING',
+        apiSecret: apiSecret ? `${apiSecret.slice(0, 8)}...` : 'MISSING',
+        url: `${API_BASE}/api/batch_backtest_strategy`
+      });
 
       // Send batch request to backend
       const response = await fetch(`${API_BASE}/api/batch_backtest_strategy`, {
@@ -2836,17 +2933,20 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           }
 
           // Update job with current status
+          const updatedJob = {
+            ...(batchJobs.find(j => j.id === jobId) || newJob),
+            status: statusData.status,
+            completed: statusData.completed || 0,
+            viewUrl: statusData.viewUrl || null,
+            csvUrl: statusData.csvUrl || null,
+            error: statusData.error || null,
+            updatedAt: new Date().toISOString(),
+            completedAt: statusData.status === 'finished' ? new Date().toISOString() : null,
+          };
           setBatchJobs(prev => prev.map(j =>
-            j.id === jobId ? {
-              ...j,
-              status: statusData.status,
-              completed: statusData.completed || 0,
-              viewUrl: statusData.viewUrl || null,
-              csvUrl: statusData.csvUrl || null,
-              error: statusData.error || null,
-              updatedAt: new Date().toISOString(),
-            } : j
+            j.id === jobId ? updatedJob : j
           ));
+          await putJob(updatedJob);
 
           // If still running, poll again
           if (statusData.status === 'running' || statusData.status === 'queued') {
@@ -2870,14 +2970,17 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       console.error('Batch backtest error:', err);
 
       // Update job with error
+      const failedJob = {
+        ...(batchJobs.find(j => j.id === jobId) || newJob),
+        status: "failed" as const,
+        error: err.message || "Batch backtest failed",
+        updatedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      };
       setBatchJobs(prev => prev.map(j =>
-        j.id === jobId ? {
-          ...j,
-          status: "failed" as const,
-          error: err.message || "Batch backtest failed",
-          updatedAt: new Date().toISOString(),
-        } : j
+        j.id === jobId ? failedJob : j
       ));
+      await putJob(failedJob);
 
       alert(`Batch backtest failed: ${err.message}`);
     }
@@ -3185,13 +3288,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                       {backtestResults.dates.length} days |
                       Final Value: ${backtestResults.equityCurve[backtestResults.equityCurve.length - 1]?.toFixed(2) || '1.00'}
                     </div>
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={280} debounce={300}>
                       <LineChart
-                        data={backtestResults.dates.map((date: string, i: number) => ({
-                          date,
-                          strategy: backtestResults.equityCurve[i],
-                          benchmark: backtestResults.benchmark?.equityCurve?.[i],
-                        }))}
+                        data={chartData}
                         margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -3229,6 +3328,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                           strokeWidth={2}
                           dot={false}
                           name="Strategy"
+                          isAnimationActive={false}
                         />
                         {backtestResults.benchmark && (
                           <Line
@@ -3239,6 +3339,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                             strokeDasharray="5 5"
                             dot={false}
                             name={benchmarkSymbol}
+                            isAnimationActive={false}
                           />
                         )}
                       </LineChart>
@@ -3914,6 +4015,42 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 document.body.removeChild(link);
               } else {
                 alert('CSV URL not available for this job');
+              }
+            }}
+            onCancelJob={async (job) => {
+              if (job.status !== 'running' && job.status !== 'queued') {
+                alert('Can only cancel running or queued jobs');
+                return;
+              }
+
+              if (!confirm(`Cancel batch job "${job.name}"?`)) {
+                return;
+              }
+
+              try {
+                const response = await fetch(`${API_BASE}/api/batch_backtest_strategy/${job.id}/cancel`, {
+                  method: 'POST',
+                  credentials: 'include',
+                });
+
+                if (!response.ok) {
+                  const data = await response.json();
+                  throw new Error(data.error || 'Failed to cancel job');
+                }
+
+                // Update job status locally
+                const cancelledJob = {
+                  ...job,
+                  status: 'failed' as const,
+                  error: 'Cancelled by user',
+                  updatedAt: new Date().toISOString(),
+                  completedAt: new Date().toISOString(),
+                };
+                setBatchJobs(prev => prev.map(j => j.id === job.id ? cancelledJob : j));
+                await putJob(cancelledJob);
+              } catch (err: any) {
+                console.error('Error cancelling job:', err);
+                alert(`Failed to cancel job: ${err.message}`);
               }
             }}
           />

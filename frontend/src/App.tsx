@@ -20,8 +20,17 @@ interface User {
 
 function App() {
   const [uiTab, setUiTab] = useState<"dashboard" | "library" | "builder">("dashboard");
-  const [apiKey, setApiKey] = useState("");
-  const [apiSecret, setApiSecret] = useState("");
+  const [saveCredentials, setSaveCredentials] = useState(() => {
+    return localStorage.getItem('saveCredentials') === 'true';
+  });
+  const [apiKey, setApiKey] = useState(() => {
+    const saved = localStorage.getItem('saveCredentials') === 'true';
+    return saved ? (localStorage.getItem('alpacaApiKey') || '') : '';
+  });
+  const [apiSecret, setApiSecret] = useState(() => {
+    const saved = localStorage.getItem('saveCredentials') === 'true';
+    return saved ? (localStorage.getItem('alpacaApiSecret') || '') : '';
+  });
   const [mask, setMask] = useState(true);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -72,6 +81,22 @@ function App() {
       console.warn('Failed to parse auth error parameters', err);
     }
   }, []);
+
+  // Save credentials to localStorage when they change (if enabled)
+  useEffect(() => {
+    if (saveCredentials) {
+      localStorage.setItem('alpacaApiKey', apiKey);
+      localStorage.setItem('alpacaApiSecret', apiSecret);
+    } else {
+      localStorage.removeItem('alpacaApiKey');
+      localStorage.removeItem('alpacaApiSecret');
+    }
+  }, [apiKey, apiSecret, saveCredentials]);
+
+  // Save the saveCredentials preference
+  useEffect(() => {
+    localStorage.setItem('saveCredentials', String(saveCredentials));
+  }, [saveCredentials]);
 
   // Check Alpaca connection when API keys change
   useEffect(() => {
@@ -288,20 +313,31 @@ function App() {
                       }}
                     />
                   </div>
-                  <button
-                    onClick={() => setMask(!mask)}
-                    style={{
-                      padding: '6px 12px',
-                      fontSize: 13,
-                      background: '#666',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {mask ? "Show" : "Hide"}
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      onClick={() => setMask(!mask)}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: 13,
+                        background: '#666',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {mask ? "Show" : "Hide"}
+                    </button>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={saveCredentials}
+                        onChange={(e) => setSaveCredentials(e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      Save locally
+                    </label>
+                  </div>
                 </div>
               </details>
             </div>

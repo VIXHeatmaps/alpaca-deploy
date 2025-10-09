@@ -235,13 +235,14 @@ function validateGate(
       });
     }
 
-    const indicatorsRequiringPeriod = ["RSI", "SMA", "EMA", "ATR", "ADX", "MFI", "STOCH_K", "AROONOSC"];
-    if (indicatorsRequiringPeriod.includes(cond.indicator?.toUpperCase() || "")) {
-      // Check params object first (new approach), then fall back to period field
-      const hasPeriodParam = cond.params?.period && cond.params.period.trim() !== "";
-      const hasPeriodField = cond.period && cond.period.trim() !== "";
+    const indicatorsRequiringPeriod = ["RSI", "SMA", "EMA", "ATR", "ADX", "MFI", "AROONOSC"];
+    const multiParamIndicators = ["STOCH_K", "MACD", "MACD_HIST", "MACD_SIGNAL"];
 
-      if (!hasPeriodParam && !hasPeriodField) {
+    if (indicatorsRequiringPeriod.includes(cond.indicator?.toUpperCase() || "")) {
+      // Check params object ONLY (period field is ignored by backend)
+      const hasPeriodParam = cond.params?.period && cond.params.period.trim() !== "";
+
+      if (!hasPeriodParam) {
         errors.push({
           elementId: gate.id,
           elementType: "gate",
@@ -250,8 +251,8 @@ function validateGate(
           severity: "error",
         });
       } else {
-        // Validate the period value (prefer params.period)
-        const periodValue = hasPeriodParam ? cond.params.period : cond.period;
+        // Validate the period value
+        const periodValue = cond.params.period;
         if (periodValue && !isVariableToken(periodValue)) {
           // Only validate as number if it's not a variable token
           const periodNum = parseInt(periodValue, 10);
@@ -265,6 +266,19 @@ function validateGate(
             });
           }
         }
+      }
+    } else if (multiParamIndicators.includes(cond.indicator?.toUpperCase() || "")) {
+      // Multi-param indicators: check if params object has any keys (not empty)
+      const hasParams = cond.params && Object.keys(cond.params).length > 0;
+
+      if (!hasParams) {
+        errors.push({
+          elementId: gate.id,
+          elementType: "gate",
+          field: `${fieldPrefix}.period`,
+          message: `Indicator "${cond.indicator}" requires parameters`,
+          severity: "error",
+        });
       }
     }
 
@@ -331,13 +345,14 @@ function validateGate(
         });
       }
 
-      const indicatorsRequiringPeriod = ["RSI", "SMA", "EMA", "ATR", "ADX", "MFI", "STOCH_K", "AROONOSC"];
-      if (indicatorsRequiringPeriod.includes(cond.rightIndicator?.toUpperCase() || "")) {
-        // Check rightParams object first (new approach), then fall back to rightPeriod field
-        const hasPeriodParam = cond.rightParams?.period && cond.rightParams.period.trim() !== "";
-        const hasPeriodField = cond.rightPeriod && cond.rightPeriod.trim() !== "";
+      const indicatorsRequiringPeriod = ["RSI", "SMA", "EMA", "ATR", "ADX", "MFI", "AROONOSC"];
+      const multiParamIndicators = ["STOCH_K", "MACD", "MACD_HIST", "MACD_SIGNAL"];
 
-        if (!hasPeriodParam && !hasPeriodField) {
+      if (indicatorsRequiringPeriod.includes(cond.rightIndicator?.toUpperCase() || "")) {
+        // Check rightParams object ONLY (rightPeriod field is ignored by backend)
+        const hasPeriodParam = cond.rightParams?.period && cond.rightParams.period.trim() !== "";
+
+        if (!hasPeriodParam) {
           errors.push({
             elementId: gate.id,
             elementType: "gate",
@@ -346,8 +361,8 @@ function validateGate(
             severity: "error",
           });
         } else {
-          // Validate the period value (prefer rightParams.period)
-          const periodValue = hasPeriodParam ? cond.rightParams.period : cond.rightPeriod;
+          // Validate the period value
+          const periodValue = cond.rightParams.period;
           if (periodValue && !isVariableToken(periodValue)) {
             // Only validate as number if it's not a variable token
             const periodNum = parseInt(periodValue, 10);
@@ -361,6 +376,19 @@ function validateGate(
               });
             }
           }
+        }
+      } else if (multiParamIndicators.includes(cond.rightIndicator?.toUpperCase() || "")) {
+        // Multi-param indicators: check if rightParams object has any keys (not empty)
+        const hasParams = cond.rightParams && Object.keys(cond.rightParams).length > 0;
+
+        if (!hasParams) {
+          errors.push({
+            elementId: gate.id,
+            elementType: "gate",
+            field: `${fieldPrefix}.rightPeriod`,
+            message: `Right side indicator "${cond.rightIndicator}" requires parameters`,
+            severity: "error",
+          });
         }
       }
     }

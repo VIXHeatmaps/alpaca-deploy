@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { Strategy as DiscordStrategy, Profile } from 'passport-discord';
 import passport from 'passport';
+import * as batchJobsDb from './db/batchJobsDb';
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -1022,106 +1023,107 @@ type BatchStrategyRequestBody = {
   };
 };
 
-type BatchStrategyJobRecord = {
-  id: string;
-  name: string;
-  status: BatchJobStatus;
-  total: number;
-  completed: number;
-  createdAt: string;
-  updatedAt: string;
-  variables: Array<{ name: string; values: string[] }>;
-  truncated: boolean;
-  error: string | null;
-  assignmentsPreview: Array<Record<string, string>>;
-  result: BatchJobResult | null;
-  viewUrl: string | null;
-  csvUrl: string | null;
-  completedAt: string | null;
-  strategy?: {
-    elements: any[];
-    benchmarkSymbol: string;
-    startDate: string;
-    endDate: string;
-    debug: boolean;
-    apiKey: string;
-    apiSecret: string;
-  };
-};
+// Batch jobs now stored in PostgreSQL database (see db/batchJobsDb.ts)
+// All job data and types defined in backend/src/db/batchJobsDb.ts
 
-const batchStrategyJobs = new Map<string, BatchStrategyJobRecord>();
-
-async function startBatchStrategyJob(job: BatchStrategyJobRecord, assignments: Array<Record<string, string>>) {
-  let combos = assignments.length ? assignments : generateAllAssignments(job.variables);
-  if (assignments.length && job.total && job.total !== combos.length) {
-    job.truncated = true;
-  }
-  job.total = combos.length;
-
-  job.status = 'running';
-  job.completed = 0;
-  job.updatedAt = new Date().toISOString();
-  job.error = null;
-  job.result = null;
-
-  if (!job.strategy) {
-    job.status = 'failed';
-    job.error = 'Missing strategy payload';
-    job.updatedAt = new Date().toISOString();
+async function startBatchStrategyJob(
+  jobId: string,
+  assignments: Array<Record<string, string>>,
+  apiKey: string,
+  apiSecret: string
+) {
+  // Load job from database
+  const job = await batchJobsDb.getBatchJobById(jobId);
+  if (!job) {
+    console.error(`[BATCH] Job ${jobId} not found in database`);
     return;
   }
 
-  const runs: BatchJobResult['runs'] = [];
+  let combos = assignments.length ? assignments : generateAllAssignments(JSON.parse(JSON.stringify(job.variables)));
+  const total = combos.length;
+
+  // Update job to running status
+  await batchJobsDb.updateBatchJob(jobId, {
+    status: 'running',
+    total,
+    completed: 0,
+    error: null,
+  });
+
+  if (!job.strategy_elements) {
+    await batchJobsDb.updateBatchJob(jobId, {
+      status: 'failed',
+      error: 'Missing strategy payload',
+    });
+    return;
+  }
+
+  const runs: Array<{variables: Record<string, string>; metrics: any}> = [];
 
   for (let idx = 0; idx < combos.length; idx++) {
     const assignment = combos[idx];
     try {
-      const mutatedElements = applyVariablesToElements(job.strategy.elements, assignment);
+      const mutatedElements = applyVariablesToElements(JSON.parse(JSON.stringify(job.strategy_elements)), assignment);
       const payload = {
         elements: mutatedElements,
-        benchmarkSymbol: job.strategy.benchmarkSymbol,
-        startDate: job.strategy.startDate,
-        endDate: job.strategy.endDate,
-        debug: job.strategy.debug,
+        benchmarkSymbol: job.benchmark_symbol || 'SPY',
+        startDate: job.start_date || 'max',
+        endDate: job.end_date || new Date().toISOString().split('T')[0],
+        debug: false,
       };
+
+      // Use API keys passed from the original request
+      console.log(`[BATCH WORKER] Using credentials for run ${idx + 1}/${total}: ${apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING'}`);
+
       const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
         headers: {
-          'APCA-API-KEY-ID': job.strategy.apiKey,
-          'APCA-API-SECRET-KEY': job.strategy.apiSecret,
+          'APCA-API-KEY-ID': apiKey,
+          'APCA-API-SECRET-KEY': apiSecret,
         },
         timeout: 300000, // 5 minutes per backtest
       });
 
       const resp = response?.data || {};
       const metricsRaw = resp.metrics || {};
+      const metrics = normalizeMetrics(metricsRaw);
+
       runs.push({
         variables: assignment,
-        metrics: normalizeMetrics(metricsRaw),
+        metrics,
       });
 
-      job.completed = idx + 1;
-      job.updatedAt = new Date().toISOString();
+      // Save this run to database immediately
+      await batchJobsDb.createBatchJobRun({
+        batch_job_id: jobId,
+        run_index: idx,
+        variables: assignment,
+        metrics,
+      });
+
+      // Update progress in database
+      await batchJobsDb.updateBatchJobProgress(jobId, idx + 1);
+
     } catch (err: any) {
-      job.status = 'failed';
-      job.error = err?.response?.data?.error || err?.message || 'Batch strategy backtest failed';
-      job.updatedAt = new Date().toISOString();
+      await batchJobsDb.updateBatchJob(jobId, {
+        status: 'failed',
+        error: err?.response?.data?.error || err?.message || 'Batch strategy backtest failed',
+      });
       return;
     }
   }
 
-  job.status = 'finished';
-  job.completed = runs.length;
-  job.updatedAt = new Date().toISOString();
-  job.completedAt = new Date().toISOString();
-  job.viewUrl = `/api/batch_backtest_strategy/${job.id}/view`;
-  job.csvUrl = `/api/batch_backtest_strategy/${job.id}/results.csv`;
-  job.result = {
-    summary: buildSummary(runs, runs.length),
-    runs,
-  };
+  // Calculate summary
+  const summary = buildSummary(runs, runs.length);
+
+  // Mark job as finished with summary
+  await batchJobsDb.updateBatchJob(jobId, {
+    status: 'finished',
+    completed: runs.length,
+    summary,
+  });
 }
 
-app.post('/api/batch_backtest_strategy', (req: Request, res: Response) => {
+app.post('/api/batch_backtest_strategy', async (req: Request, res: Response) => {
   const body = (req.body || {}) as BatchStrategyRequestBody;
   const variables = sanitizedVariables(body.variables);
   const totalFromBody = clampNumber(body.total, 0);
@@ -1140,68 +1142,63 @@ app.post('/api/batch_backtest_strategy', (req: Request, res: Response) => {
 
   const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').toString();
   const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').toString();
+  console.log(`[BATCH STRATEGY] API Key: ${apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING'}, Secret: ${apiSecret ? apiSecret.slice(0, 8) + '...' : 'MISSING'}`);
   if (!apiKey || !apiSecret) return res.status(400).json({ error: 'Missing Alpaca API credentials' });
 
   const total = totalFromBody > 0 ? totalFromBody : computedTotal;
 
   const id = body.jobId || randomUUID();
-  const createdAt = new Date().toISOString();
 
-  const job: BatchStrategyJobRecord = {
+  // Parse dates - convert "max" to null for database
+  const startDate = body.baseStrategy?.startDate || body.startDate;
+  const endDate = body.baseStrategy?.endDate || body.endDate;
+
+  // Create job in database
+  const dbJob = await batchJobsDb.createBatchJob({
     id,
     name: body.jobName || `Batch Strategy ${id.slice(0, 8)}`,
+    kind: 'server',
     status: total ? 'queued' : 'finished',
     total,
     completed: 0,
-    createdAt,
-    updatedAt: createdAt,
-    variables,
-    truncated: Boolean(body.truncated),
+    completed_at: total ? null : new Date(),
     error: null,
-    assignmentsPreview: assignmentsRaw.slice(0, 25),
-    result: null,
-    viewUrl: null,
-    csvUrl: null,
-    completedAt: total ? null : createdAt,
-    strategy: {
-      elements,
-      benchmarkSymbol: body.baseStrategy?.benchmarkSymbol || body.benchmarkSymbol || 'SPY',
-      startDate: body.baseStrategy?.startDate || body.startDate || 'max',
-      endDate: body.baseStrategy?.endDate || body.endDate || '2024-12-31',
-      debug: body.baseStrategy?.debug ?? body.debug ?? false,
-      apiKey,
-      apiSecret,
-    },
-  };
-
-  batchStrategyJobs.set(id, job);
+    truncated: Boolean(body.truncated),
+    variables: variables as any,
+    strategy_elements: elements as any,
+    start_date: startDate && startDate !== 'max' ? startDate : null,
+    end_date: endDate && endDate !== 'max' ? endDate : null,
+    benchmark_symbol: body.baseStrategy?.benchmarkSymbol || body.benchmarkSymbol || 'SPY',
+    assignments_preview: assignmentsRaw.slice(0, 25) as any,
+    summary: null,
+  });
 
   if (total) {
-    startBatchStrategyJob(job, assignmentsRaw).catch((err: any) => {
-      job.status = 'failed';
-      job.error = err?.message || 'Batch strategy backtest failed';
-      job.updatedAt = new Date().toISOString();
+    // Start background job processing
+    startBatchStrategyJob(id, assignmentsRaw, apiKey, apiSecret).catch(async (err: any) => {
+      await batchJobsDb.updateBatchJob(id, {
+        status: 'failed',
+        error: err?.message || 'Batch strategy backtest failed',
+      });
     });
   } else {
-    job.result = {
-      summary: buildSummary([], 0),
-      runs: [],
-    };
-    job.viewUrl = `/api/batch_backtest_strategy/${id}/view`;
-    job.csvUrl = `/api/batch_backtest_strategy/${id}/results.csv`;
+    // Empty batch - already marked as finished, add summary
+    await batchJobsDb.updateBatchJob(id, {
+      summary: buildSummary([], 0) as any,
+    });
   }
 
   return res.status(202).json({
     jobId: id,
-    status: job.status,
-    total: job.total,
-    completed: job.completed,
-    truncated: job.truncated,
+    status: dbJob.status,
+    total: dbJob.total,
+    completed: dbJob.completed,
+    truncated: dbJob.truncated,
   });
 });
 
-app.get('/api/batch_backtest_strategy/:id', (req: Request, res: Response) => {
-  const job = batchStrategyJobs.get(req.params.id);
+app.get('/api/batch_backtest_strategy/:id', async (req: Request, res: Response) => {
+  const job = await batchJobsDb.getBatchJobById(req.params.id);
   if (!job) return res.status(404).json({ error: 'batch strategy job not found' });
   return res.json({
     jobId: job.id,
@@ -1209,60 +1206,75 @@ app.get('/api/batch_backtest_strategy/:id', (req: Request, res: Response) => {
     status: job.status,
     total: job.total,
     completed: job.completed,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    completedAt: job.completedAt,
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+    completedAt: job.completed_at,
     truncated: job.truncated || false,
     error: job.error || null,
-    detail: job.variables.map((v) => ({ name: v.name, count: v.values.length })),
-    viewUrl: job.viewUrl || null,
-    csvUrl: job.csvUrl || null,
+    detail: (job.variables as any[]).map((v) => ({ name: v.name, count: v.values?.length || 0 })),
+    viewUrl: job.status === 'finished' ? `/api/batch_backtest_strategy/${job.id}/view` : null,
+    csvUrl: job.status === 'finished' ? `/api/batch_backtest_strategy/${job.id}/results.csv` : null,
   });
 });
 
-app.post('/api/batch_backtest_strategy/:id/cancel', (req: Request, res: Response) => {
-  const job = batchStrategyJobs.get(req.params.id);
+app.post('/api/batch_backtest_strategy/:id/cancel', async (req: Request, res: Response) => {
+  const job = await batchJobsDb.getBatchJobById(req.params.id);
   if (!job) return res.status(404).json({ error: 'batch strategy job not found' });
 
   if (job.status !== 'running' && job.status !== 'queued') {
     return res.status(400).json({ error: 'Can only cancel running or queued jobs' });
   }
 
-  job.status = 'failed';
-  job.error = 'Cancelled by user';
-  job.updatedAt = new Date().toISOString();
-  job.completedAt = new Date().toISOString();
+  await batchJobsDb.updateBatchJob(req.params.id, {
+    status: 'failed',
+    error: 'Cancelled by user',
+    completed_at: new Date(),
+  });
 
   return res.json({ success: true, message: 'Job cancelled' });
 });
 
-app.get('/api/batch_backtest_strategy/:id/view', (req: Request, res: Response) => {
-  const job = batchStrategyJobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: 'batch strategy job not found' });
-  if (!job.result) return res.status(202).json({ status: job.status, message: 'Batch still running' });
+app.get('/api/batch_backtest_strategy/:id/view', async (req: Request, res: Response) => {
+  const jobWithRuns = await batchJobsDb.getBatchJobWithRuns(req.params.id);
+  if (!jobWithRuns) return res.status(404).json({ error: 'batch strategy job not found' });
+
+  const { job, runs } = jobWithRuns;
+
+  if (job.status !== 'finished') {
+    return res.status(202).json({ status: job.status, message: 'Batch still running' });
+  }
+
   return res.json({
     jobId: job.id,
     name: job.name,
     status: job.status,
-    summary: job.result.summary,
+    summary: job.summary,
     truncated: job.truncated || false,
     total: job.total,
     completed: job.completed,
     detail: job.variables,
-    runs: job.result.runs,
+    runs: runs.map(r => ({
+      variables: r.variables,
+      metrics: r.metrics,
+    })),
   });
 });
 
-app.get('/api/batch_backtest_strategy/:id/results.csv', (req: Request, res: Response) => {
-  const job = batchStrategyJobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: 'batch strategy job not found' });
-  if (!job.result) return res.status(202).json({ status: job.status, message: 'Batch still running' });
+app.get('/api/batch_backtest_strategy/:id/results.csv', async (req: Request, res: Response) => {
+  const jobWithRuns = await batchJobsDb.getBatchJobWithRuns(req.params.id);
+  if (!jobWithRuns) return res.status(404).json({ error: 'batch strategy job not found' });
 
-  const headers = job.variables.map((v) => v.name);
+  const { job, runs } = jobWithRuns;
+
+  if (job.status !== 'finished') {
+    return res.status(202).json({ status: job.status, message: 'Batch still running' });
+  }
+
+  const headers = (job.variables as any[]).map((v) => v.name);
 
   const metricKeys = new Set<string>();
-  for (const run of job.result.runs) {
-    for (const key of Object.keys(run.metrics || {})) {
+  for (const run of runs) {
+    for (const key of Object.keys((run.metrics as any) || {})) {
       metricKeys.add(key);
     }
   }
@@ -1271,10 +1283,12 @@ app.get('/api/batch_backtest_strategy/:id/results.csv', (req: Request, res: Resp
   const csvRows: string[] = [];
   csvRows.push([...headers, ...metricHeaders].join(','));
 
-  for (const run of job.result.runs) {
-    const rowValues = headers.map((h) => JSON.stringify(run.variables[h] ?? ''));
+  for (const run of runs) {
+    const vars = run.variables as Record<string, any>;
+    const metrics = run.metrics as Record<string, any>;
+    const rowValues = headers.map((h) => JSON.stringify(vars[h] ?? ''));
     for (const metricKey of metricHeaders) {
-      const val = run.metrics[metricKey];
+      const val = metrics[metricKey];
       rowValues.push(val !== undefined && val !== null ? val.toString() : '');
     }
     csvRows.push(rowValues.join(','));
