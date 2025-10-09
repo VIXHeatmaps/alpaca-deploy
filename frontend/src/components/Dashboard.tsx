@@ -843,7 +843,7 @@ export function Dashboard({
               <div style={styles.emptyState}>Loading strategies...</div>
             ) : activeStrategies.length === 0 ? (
               <div style={styles.emptyState}>
-                No active strategies. Deploy a Flow to start live trading.
+                No active strategies. Deploy a Strategy to start live trading.
               </div>
             ) : (
               <div>
