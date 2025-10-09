@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { Dashboard } from "./components/Dashboard";
 import { BuilderWrapper } from "./components/BuilderWrapper";
+import type { Strategy } from "./api/strategies";
 import "./App.css";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
@@ -137,6 +138,24 @@ function App() {
     } catch (err) {
       console.error('Logout failed:', err);
     }
+  };
+
+  const handleLoadStrategy = (strategy: Strategy) => {
+    // Store the strategy to load in localStorage as a signal
+    localStorage.setItem('strategyToLoad', JSON.stringify({
+      name: strategy.name,
+      versioningEnabled: strategy.versioning_enabled,
+      version: {
+        major: strategy.version_major,
+        minor: strategy.version_minor,
+        patch: strategy.version_patch,
+        fork: strategy.version_fork,
+      },
+      createdAt: strategy.created_at,
+      updatedAt: strategy.updated_at,
+      elements: strategy.elements,
+    }));
+    setUiTab("builder");
   };
 
   if (loading) {
@@ -435,6 +454,7 @@ function App() {
             apiKey={apiKey}
             apiSecret={apiSecret}
             view={uiTab}
+            onLoadStrategy={handleLoadStrategy}
           />
         )}
       </div>

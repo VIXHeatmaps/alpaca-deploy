@@ -20,6 +20,7 @@ import { BatchTestsTab } from "./BatchTestsTab";
 import type { BatchJob } from "../types/batchJobs";
 import { putJob, getAllJobs } from "../storage/batchJobsStore";
 import * as variablesApi from "../api/variables";
+import * as strategiesApi from "../api/strategies";
 import {
   extractStringsFromElements,
   extractVariablesFromStrings,
@@ -2414,6 +2415,39 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     return validation.errors;
   }, [elements]);
 
+  // Check for strategy to load from Library (one-time on mount)
+  useEffect(() => {
+    const strategyToLoadStr = localStorage.getItem('strategyToLoad');
+    if (strategyToLoadStr) {
+      try {
+        const strategyData = JSON.parse(strategyToLoadStr);
+        // Create a new tab with the loaded strategy
+        const newTab: StrategyTab = {
+          id: `tab-${Date.now()}`,
+          elements: strategyData.elements || [],
+          history: [strategyData.elements || []],
+          historyIndex: 0,
+          benchmarkSymbol: "SPY",
+          startDate: "max",
+          endDate: new Date().toISOString().slice(0, 10),
+          backtestResults: null,
+          strategyName: strategyData.name || "",
+          versioningEnabled: strategyData.versioningEnabled || false,
+          version: strategyData.version || { major: 0, minor: 0, patch: 1, fork: "" },
+          createdAt: strategyData.createdAt || new Date().toISOString(),
+          updatedAt: strategyData.updatedAt || new Date().toISOString(),
+        };
+        setStrategyTabs(prev => [...prev, newTab]);
+        setActiveStrategyTabId(newTab.id);
+        // Clear the flag
+        localStorage.removeItem('strategyToLoad');
+      } catch (err) {
+        console.error('Failed to load strategy from Library:', err);
+        localStorage.removeItem('strategyToLoad');
+      }
+    }
+  }, []); // Run only once on mount
+
   // Variable detection and validation
   const strategyStrings = useMemo(() => extractStringsFromElements(elements), [elements]);
   const strategyVariables = useMemo(() => extractVariablesFromStrings(strategyStrings), [strategyStrings]);
@@ -2605,8 +2639,42 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     return `v${major}${forkLower}`;
   };
 
+  // Helper function to save strategy to both localStorage and database
+  const saveStrategyToDb = async (strategyData: {
+    name: string;
+    versioningEnabled: boolean;
+    version: { major: number; minor: number; patch: number; fork: string };
+    createdAt: string;
+    updatedAt: string;
+    elements: Element[];
+  }) => {
+    // Validate strategy name
+    if (!strategyData.name || strategyData.name.trim() === '') {
+      alert('Please enter a strategy name before saving');
+      return;
+    }
+
+    // Save to localStorage (for draft cache)
+    localStorage.setItem('verticalUI2_strategy_v2', JSON.stringify(strategyData));
+
+    // Save to database
+    try {
+      await strategiesApi.saveStrategy({
+        name: strategyData.name,
+        versioningEnabled: strategyData.versioningEnabled,
+        version: strategyData.version,
+        elements: strategyData.elements,
+        createdAt: strategyData.createdAt,
+      });
+      alert(`Strategy "${strategyData.name}" saved successfully!`);
+    } catch (error: any) {
+      console.error('Failed to save strategy to database:', error);
+      alert(`Failed to save strategy to database: ${error.message}`);
+    }
+  };
+
   // Version increment handlers
-  const handleSaveSimple = () => {
+  const handleSaveSimple = async () => {
     const now = new Date().toISOString();
     setUpdatedAt(now);
     const strategyData = {
@@ -2617,10 +2685,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       updatedAt: now,
       elements,
     };
-    localStorage.setItem('verticalUI2_strategy_v2', JSON.stringify(strategyData));
+    await saveStrategyToDb(strategyData);
   };
 
-  const handleSavePatch = () => {
+  const handleSavePatch = async () => {
     const now = new Date().toISOString();
     const newVersion = { ...version, patch: version.patch + 1, fork: "" };
     setVersion(newVersion);
@@ -2633,10 +2701,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       updatedAt: now,
       elements,
     };
-    localStorage.setItem('verticalUI2_strategy_v2', JSON.stringify(strategyData));
+    await saveStrategyToDb(strategyData);
   };
 
-  const handleSaveMinor = () => {
+  const handleSaveMinor = async () => {
     const now = new Date().toISOString();
     const newVersion = { ...version, minor: version.minor + 1, patch: 0, fork: "" };
     setVersion(newVersion);
@@ -2649,10 +2717,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       updatedAt: now,
       elements,
     };
-    localStorage.setItem('verticalUI2_strategy_v2', JSON.stringify(strategyData));
+    await saveStrategyToDb(strategyData);
   };
 
-  const handleSaveMajor = () => {
+  const handleSaveMajor = async () => {
     const now = new Date().toISOString();
     const newVersion = { major: version.major + 1, minor: 0, patch: 0, fork: "" };
     setVersion(newVersion);
@@ -2665,10 +2733,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       updatedAt: now,
       elements,
     };
-    localStorage.setItem('verticalUI2_strategy_v2', JSON.stringify(strategyData));
+    await saveStrategyToDb(strategyData);
   };
 
-  const handleSaveFork = () => {
+  const handleSaveFork = async () => {
     const now = new Date().toISOString();
     let nextFork = "b";
     if (version.fork) {
@@ -2686,10 +2754,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       updatedAt: now,
       elements,
     };
-    localStorage.setItem('verticalUI2_strategy_v2', JSON.stringify(strategyData));
+    await saveStrategyToDb(strategyData);
   };
 
-  const handleResetVersions = () => {
+  const handleResetVersions = async () => {
     if (!window.confirm('Reset version to v0.0.1? This cannot be undone.')) return;
     const now = new Date().toISOString();
     const newVersion = { major: 0, minor: 0, patch: 1, fork: "" };
@@ -2703,7 +2771,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       updatedAt: now,
       elements,
     };
-    localStorage.setItem('verticalUI2_strategy_v2', JSON.stringify(strategyData));
+    await saveStrategyToDb(strategyData);
   };
 
   const exportStrategy = () => {

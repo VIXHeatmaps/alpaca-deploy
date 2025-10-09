@@ -3,6 +3,7 @@ import VerticalUI2 from "./VerticalUI2";
 import { LibraryView } from "./LibraryView";
 import type { BatchJob } from "../types/batchJobs";
 import { getAllJobs, putJob } from "../storage/batchJobsStore";
+import type { Strategy } from "../api/strategies";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
 
@@ -10,9 +11,10 @@ export type BuilderWrapperProps = {
   apiKey: string;
   apiSecret: string;
   view: "library" | "builder";
+  onLoadStrategy?: (strategy: Strategy) => void;
 };
 
-export function BuilderWrapper({ apiKey, apiSecret, view }: BuilderWrapperProps) {
+export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: BuilderWrapperProps) {
   // Batch jobs state - load from IndexedDB (shared between Builder and Library)
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
 
@@ -168,6 +170,12 @@ export function BuilderWrapper({ apiKey, apiSecret, view }: BuilderWrapperProps)
     }
   };
 
+  const handleOpenStrategy = (strategy: Strategy) => {
+    if (onLoadStrategy) {
+      onLoadStrategy(strategy);
+    }
+  };
+
   if (view === "library") {
     return (
       <>
@@ -177,6 +185,7 @@ export function BuilderWrapper({ apiKey, apiSecret, view }: BuilderWrapperProps)
           onViewBatchJob={handleViewBatchJob}
           onDownloadBatchCsv={handleDownloadBatchCsv}
           onCancelJob={handleCancelJob}
+          onOpenStrategy={handleOpenStrategy}
         />
 
         {/* Batch Results Viewer Modal */}

@@ -11,6 +11,7 @@ import { Strategy as DiscordStrategy, Profile } from 'passport-discord';
 import passport from 'passport';
 import * as batchJobsDb from './db/batchJobsDb';
 import * as variableListsDb from './db/variableListsDb';
+import * as strategiesDb from './db/strategiesDb';
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -2924,6 +2925,101 @@ app.post('/api/variables/bulk_import', async (req: Request, res: Response) => {
   }
 });
 /* ===== END: BLOCK P ===== */
+
+
+/* ===== BEGIN: BLOCK Q — Strategies CRUD ===== */
+// Get all strategies
+app.get('/api/strategies', async (req: Request, res: Response) => {
+  try {
+    const strategies = await strategiesDb.getAllStrategies();
+    return res.json(strategies);
+  } catch (err: any) {
+    console.error('GET /api/strategies error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch strategies' });
+  }
+});
+
+// Get strategy by ID
+app.get('/api/strategies/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    const strategy = await strategiesDb.getStrategyById(id);
+    if (!strategy) {
+      return res.status(404).json({ error: 'Strategy not found' });
+    }
+
+    return res.json(strategy);
+  } catch (err: any) {
+    console.error('GET /api/strategies/:id error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch strategy' });
+  }
+});
+
+// Save strategy (create or update based on name+version)
+app.post('/api/strategies', async (req: Request, res: Response) => {
+  try {
+    const { name, versioningEnabled, version, elements, createdAt } = req.body;
+
+    // Validation
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Name is required and must be a string' });
+    }
+
+    if (!elements || !Array.isArray(elements)) {
+      return res.status(400).json({ error: 'Elements is required and must be an array' });
+    }
+
+    if (!version || typeof version !== 'object') {
+      return res.status(400).json({ error: 'Version is required and must be an object' });
+    }
+
+    const { major, minor, patch, fork } = version;
+    if (typeof major !== 'number' || typeof minor !== 'number' || typeof patch !== 'number') {
+      return res.status(400).json({ error: 'Version must have major, minor, and patch as numbers' });
+    }
+
+    const saved = await strategiesDb.saveStrategy({
+      name,
+      versioning_enabled: versioningEnabled || false,
+      version_major: major,
+      version_minor: minor,
+      version_patch: patch,
+      version_fork: fork || '',
+      elements,
+      created_at: createdAt,
+    });
+
+    return res.status(200).json(saved);
+  } catch (err: any) {
+    console.error('POST /api/strategies error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to save strategy' });
+  }
+});
+
+// Delete strategy by ID
+app.delete('/api/strategies/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    const deleted = await strategiesDb.deleteStrategy(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Strategy not found' });
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('DELETE /api/strategies/:id error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to delete strategy' });
+  }
+});
+/* ===== END: BLOCK Q ===== */
 
 
 /* ===== BEGIN: BLOCK L — Boot ===== */
