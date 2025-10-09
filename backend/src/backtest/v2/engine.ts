@@ -207,6 +207,7 @@ export async function runV2Backtest(req: Request, res: Response) {
     return res.json({
       dates: simulationResult.dates,
       equityCurve: simulationResult.equityCurve,
+      dailyPositions: simulationResult.dailyPositions,
       metrics: simulationResult.metrics,
       benchmark: {
         dates: simulationResult.dates,

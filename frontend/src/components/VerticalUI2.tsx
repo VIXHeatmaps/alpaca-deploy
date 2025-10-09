@@ -3808,6 +3808,124 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                   </div>
                 )}
 
+                {/* Daily Positions Table */}
+                {backtestResults.dailyPositions && backtestResults.dailyPositions.length > 0 && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <Collapsible.Root defaultOpen={false}>
+                      <Collapsible.Trigger asChild>
+                        <button style={{
+                          width: '100%',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '12px 16px',
+                          background: '#f9fafb',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: '600',
+                        }}>
+                          <span>Daily Positions ({backtestResults.dailyPositions.length} days)</span>
+                          <span style={{ fontSize: '12px' }}>▼</span>
+                        </button>
+                      </Collapsible.Trigger>
+                      <Collapsible.Content>
+                        <div style={{
+                          marginTop: '8px',
+                          maxHeight: '500px',
+                          overflow: 'auto',
+                          background: '#fff',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '4px',
+                        }}>
+                          {(() => {
+                            // Extract all unique tickers from daily positions
+                            const allTickers = new Set<string>();
+                            backtestResults.dailyPositions.forEach((day: any) => {
+                              Object.keys(day).forEach((key) => {
+                                if (key !== 'date') allTickers.add(key);
+                              });
+                            });
+                            const tickers = Array.from(allTickers).sort();
+
+                            return (
+                              <table style={{
+                                fontSize: '11px',
+                                borderCollapse: 'collapse',
+                                width: 'auto',
+                              }}>
+                                <thead>
+                                  <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                                    <th style={{
+                                      padding: '6px 12px',
+                                      textAlign: 'left',
+                                      fontWeight: '600',
+                                      position: 'sticky',
+                                      left: 0,
+                                      background: '#f9fafb',
+                                      zIndex: 1,
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      Date
+                                    </th>
+                                    {tickers.map((ticker) => (
+                                      <th key={ticker} style={{
+                                        padding: '6px 12px',
+                                        textAlign: 'left',
+                                        fontWeight: '600',
+                                        whiteSpace: 'nowrap',
+                                      }}>
+                                        {ticker}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {[...backtestResults.dailyPositions].reverse().map((day: any, idx: number) => (
+                                    <tr key={idx} style={{
+                                      borderBottom: idx < backtestResults.dailyPositions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                    }}>
+                                      <td style={{
+                                        padding: '4px 12px',
+                                        fontFamily: 'monospace',
+                                        fontSize: '10px',
+                                        position: 'sticky',
+                                        left: 0,
+                                        background: '#fff',
+                                        zIndex: 1,
+                                        whiteSpace: 'nowrap',
+                                      }}>
+                                        {day.date}
+                                      </td>
+                                      {tickers.map((ticker) => {
+                                        const value = day[ticker];
+                                        return (
+                                          <td key={ticker} style={{
+                                            padding: '4px 12px',
+                                            textAlign: 'left',
+                                            color: value > 0 ? '#059669' : '#6b7280',
+                                            fontWeight: value > 0 ? '600' : '400',
+                                            whiteSpace: 'nowrap',
+                                          }}>
+                                            {value !== undefined && value > 0
+                                              ? `${(value * 100).toFixed(1)}%`
+                                              : '-'}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            );
+                          })()}
+                        </div>
+                      </Collapsible.Content>
+                    </Collapsible.Root>
+                  </div>
+                )}
+
                 {/* Debug Info */}
                 {backtestResults.debugDays && (
                   <Collapsible.Root defaultOpen>

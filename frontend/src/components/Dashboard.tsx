@@ -420,10 +420,10 @@ export function Dashboard({
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeStrategy, setActiveStrategy] = useState<ActiveStrategy | null>(null);
+  const [activeStrategies, setActiveStrategies] = useState<ActiveStrategy[]>([]);
   const [strategyLoading, setStrategyLoading] = useState(false);
   const [liquidating, setLiquidating] = useState(false);
-  const [snapshots, setSnapshots] = useState<StrategySnapshot[]>([]);
+  const [snapshotsByStrategy, setSnapshotsByStrategy] = useState<Record<string, StrategySnapshot[]>>({});
   const [positions, setPositions] = useState<AccountPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -475,10 +475,10 @@ export function Dashboard({
     };
   }, [apiKey, apiSecret]);
 
-  // Fetch active strategy
+  // Fetch active strategies from database
   useEffect(() => {
     if (!apiKey || !apiSecret) {
-      setActiveStrategy(null);
+      setActiveStrategies([]);
       return;
     }
 
@@ -487,7 +487,7 @@ export function Dashboard({
 
     const fetchStrategy = async () => {
       try {
-        const response = await axios.get(`${API_BASE}/api/strategy`, {
+        const response = await axios.get(`${API_BASE}/api/active-strategies`, {
           headers: {
             "APCA-API-KEY-ID": apiKey,
             "APCA-API-SECRET-KEY": apiSecret,
@@ -496,13 +496,28 @@ export function Dashboard({
           timeout: 10000,
         });
 
-        if (!cancelled) {
-          setActiveStrategy(response.data.strategy);
+        if (!cancelled && response.data.strategies && response.data.strategies.length > 0) {
+          // Map all strategies to ActiveStrategy format
+          const mappedStrategies = response.data.strategies.map((dbStrategy: any) => ({
+            id: String(dbStrategy.id),
+            name: dbStrategy.name,
+            investAmount: dbStrategy.initial_capital,
+            currentValue: dbStrategy.current_capital || 0,
+            totalReturn: 0,
+            totalReturnPct: 0,
+            createdAt: dbStrategy.started_at,
+            lastRebalance: dbStrategy.last_rebalance_at,
+            holdings: dbStrategy.holdings || [],
+            flowData: undefined,
+          }));
+          setActiveStrategies(mappedStrategies);
+        } else if (!cancelled) {
+          setActiveStrategies([]);
         }
       } catch (err: any) {
         if (!cancelled) {
           console.error("Failed to fetch strategy:", err);
-          setActiveStrategy(null);
+          setActiveStrategies([]);
         }
       } finally {
         if (!cancelled) {
@@ -522,47 +537,62 @@ export function Dashboard({
     };
   }, [apiKey, apiSecret]);
 
-  // Fetch snapshots for active strategy
+  // Fetch snapshots for all strategies
   useEffect(() => {
-    if (!apiKey || !apiSecret || !activeStrategy) {
-      setSnapshots([]);
+    if (!apiKey || !apiSecret || activeStrategies.length === 0) {
+      setSnapshotsByStrategy({});
       return;
     }
 
     let cancelled = false;
 
-    const fetchSnapshots = async () => {
-      try {
-        const response = await axios.get(`${API_BASE}/api/strategy/snapshots`, {
-          headers: {
-            "APCA-API-KEY-ID": apiKey,
-            "APCA-API-SECRET-KEY": apiSecret,
-          },
-          withCredentials: true,
-          timeout: 10000,
-        });
+    const fetchAllSnapshots = async () => {
+      const snapshotsMap: Record<string, StrategySnapshot[]> = {};
 
-        if (!cancelled && response.data.snapshots) {
-          setSnapshots(response.data.snapshots);
+      for (const strategy of activeStrategies) {
+        try {
+          const response = await axios.get(`${API_BASE}/api/active-strategies/${strategy.id}/snapshots`, {
+            headers: {
+              "APCA-API-KEY-ID": apiKey,
+              "APCA-API-SECRET-KEY": apiSecret,
+            },
+            withCredentials: true,
+            timeout: 10000,
+          });
+
+          if (!cancelled && response.data.snapshots) {
+            const mappedSnapshots = response.data.snapshots.map((s: any) => ({
+              strategyId: strategy.id,
+              date: s.date,
+              timestamp: s.snapshot_date,
+              portfolioValue: s.equity,
+              totalReturn: s.total_return || 0,
+              totalReturnPct: (s.cumulative_return || 0) * 100,
+              holdings: s.holdings || [],
+              rebalanceType: s.rebalance_type,
+            }));
+            snapshotsMap[strategy.id] = mappedSnapshots;
+          }
+        } catch (err: any) {
+          console.error(`Failed to fetch snapshots for strategy ${strategy.id}:`, err);
+          snapshotsMap[strategy.id] = [];
         }
-      } catch (err: any) {
-        if (!cancelled) {
-          console.error("Failed to fetch snapshots:", err);
-          setSnapshots([]);
-        }
+      }
+
+      if (!cancelled) {
+        setSnapshotsByStrategy(snapshotsMap);
       }
     };
 
-    fetchSnapshots();
+    fetchAllSnapshots();
 
-    // Poll every 30 seconds to get latest snapshots
-    const interval = setInterval(fetchSnapshots, 30000);
+    const interval = setInterval(fetchAllSnapshots, 30000);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [apiKey, apiSecret, activeStrategy]);
+  }, [apiKey, apiSecret, activeStrategies]);
 
   // Fetch account positions
   useEffect(() => {
@@ -635,14 +665,14 @@ export function Dashboard({
     }
   };
 
-  const handleSyncHoldings = async () => {
-    if (!activeStrategy || !apiKey || !apiSecret) return;
+  const handleSyncHoldings = async (strategy: ActiveStrategy) => {
+    if (!apiKey || !apiSecret) return;
 
     setSyncing(true);
 
     try {
       const response = await axios.post(
-        `${API_BASE}/api/strategy/sync-holdings`,
+        `${API_BASE}/api/strategy/${strategy.id}/sync-holdings`,
         {},
         {
           headers: {
@@ -674,12 +704,12 @@ export function Dashboard({
     }
   };
 
-  const handleLiquidate = async () => {
-    if (!activeStrategy || !apiKey || !apiSecret) return;
+  const handleLiquidate = async (strategy: ActiveStrategy) => {
+    if (!apiKey || !apiSecret) return;
 
     const confirmed = window.confirm(
-      `Are you sure you want to liquidate "${activeStrategy.name}"?\n\n` +
-      `This will sell all positions ${activeStrategy.currentValue > 0 ? "immediately or at next market open" : "when market opens"}.`
+      `Are you sure you want to liquidate "${strategy.name}"?\n\n` +
+      `This will sell all positions ${strategy.currentValue > 0 ? "immediately or at next market open" : "when market opens"}.`
     );
 
     if (!confirmed) return;
@@ -688,7 +718,7 @@ export function Dashboard({
 
     try {
       const response = await axios.post(
-        `${API_BASE}/api/liquidate`,
+        `${API_BASE}/api/strategy/${strategy.id}/liquidate`,
         {},
         {
           headers: {
@@ -706,7 +736,7 @@ export function Dashboard({
           `Sold positions: ${response.data.soldPositions.map((p: any) => `${p.qty.toFixed(4)} ${p.symbol}`).join(", ")}\n` +
           `Total proceeds: $${response.data.totalProceeds.toFixed(2)}`
         );
-        setActiveStrategy(null); // Clear strategy from UI
+        // Strategy will be removed from list on next fetch
       }
     } catch (err: any) {
       console.error("Liquidation failed:", err);
@@ -808,195 +838,274 @@ export function Dashboard({
           </div>
 
           <div style={styles.card}>
-            <div style={styles.cardTitle}>Active Strategy</div>
+            <div style={styles.cardTitle}>Active Strategies</div>
             {strategyLoading ? (
-              <div style={styles.emptyState}>Loading strategy...</div>
-            ) : !activeStrategy ? (
+              <div style={styles.emptyState}>Loading strategies...</div>
+            ) : activeStrategies.length === 0 ? (
               <div style={styles.emptyState}>
-                No active strategy. Deploy a Flow to start live trading.
+                No active strategies. Deploy a Flow to start live trading.
               </div>
             ) : (
-              <details open>
-                <summary style={{ cursor: "pointer", listStyle: "none" }}>
-                  <table style={{ ...styles.table, marginBottom: 0 }}>
-                    <thead>
-                      <tr>
-                        <th style={styles.tableHeader}>Strategy</th>
-                        <th style={styles.tableHeader}>Status</th>
-                        <th style={styles.tableHeader}>Net Deposits</th>
-                        <th style={styles.tableHeader}>Current Value</th>
-                        <th style={styles.tableHeader}>Return %</th>
-                        <th style={{ ...styles.tableHeader, textAlign: "right" as const }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td style={{ ...styles.tableCell, display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 18, color: "#999" }}>▸</span>
-                          <div>
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onViewStrategyFlow && activeStrategy.flowData) {
-                                  onViewStrategyFlow(activeStrategy.flowData);
-                                }
-                              }}
-                              style={{
-                                cursor: onViewStrategyFlow && activeStrategy.flowData ? "pointer" : "default",
-                                color: "#1677ff",
-                                fontWeight: 600,
-                              }}
-                              onMouseEnter={(e) => {
-                                if (onViewStrategyFlow && activeStrategy.flowData) {
-                                  e.currentTarget.style.textDecoration = "underline";
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.textDecoration = "none";
-                              }}
-                              title={onViewStrategyFlow && activeStrategy.flowData ? "Click to view strategy logic in Flow Builder" : undefined}
-                            >
-                              {activeStrategy.name}
-                            </div>
-                            <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
-                              Started {formatDate(activeStrategy.createdAt)}
-                            </div>
-                          </div>
-                        </td>
-                        <td style={styles.tableCell}>
-                          {activeStrategy.currentValue === 0 ? (
-                            <span style={{
-                              fontSize: 10,
-                              fontWeight: 600,
-                              padding: "4px 8px",
-                              borderRadius: 4,
-                              background: "#fff3e0",
-                              color: "#e65100",
-                              border: "1px solid #ffb74d",
-                            }}>
-                              PENDING
-                            </span>
-                          ) : (
-                            <span style={{
-                              fontSize: 10,
-                              fontWeight: 600,
-                              padding: "4px 8px",
-                              borderRadius: 4,
-                              background: "#e8f5ed",
-                              color: "#0f7a3a",
-                              border: "1px solid #b7e3c8",
-                            }}>
-                              ACTIVE
-                            </span>
-                          )}
-                        </td>
-                        <td style={styles.tableCell}>
-                          <strong>{formatCurrency(activeStrategy.investAmount)}</strong>
-                        </td>
-                        <td style={styles.tableCell}>
-                          <strong>
-                            {activeStrategy.currentValue === 0
-                              ? "Pending"
-                              : formatCurrency(activeStrategy.currentValue)}
-                          </strong>
-                        </td>
-                        <td style={styles.tableCell}>
-                          <strong style={{
-                            color: activeStrategy.currentValue === 0
-                              ? "#666"
-                              : activeStrategy.totalReturnPct && activeStrategy.totalReturnPct > 0
-                              ? "#0f7a3a"
-                              : activeStrategy.totalReturnPct && activeStrategy.totalReturnPct < 0
-                              ? "#b00020"
-                              : "#111",
-                          }}>
-                            {activeStrategy.currentValue === 0
-                              ? "—"
-                              : activeStrategy.totalReturnPct !== undefined
-                              ? `${activeStrategy.totalReturnPct > 0 ? '+' : ''}${activeStrategy.totalReturnPct.toFixed(2)}%`
-                              : "—"}
-                          </strong>
-                        </td>
-                        <td style={{ ...styles.tableCell, textAlign: "right" as const }}>
-                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSyncHoldings();
-                              }}
-                              disabled={syncing}
-                              style={{
-                                background: "#1677ff",
-                                color: "#fff",
-                                border: "none",
-                                borderRadius: 4,
-                                padding: "6px 10px",
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: syncing ? "not-allowed" : "pointer",
-                                opacity: syncing ? 0.6 : 1,
-                              }}
-                              title="Sync holdings from Alpaca positions"
-                            >
-                              {syncing ? "Syncing..." : "Sync"}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleLiquidate();
-                              }}
-                              disabled={liquidating}
-                              style={{
-                                background: "#b00020",
-                                color: "#fff",
-                                border: "none",
-                                borderRadius: 4,
-                                padding: "6px 10px",
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: liquidating ? "not-allowed" : "pointer",
-                                opacity: liquidating ? 0.6 : 1,
-                              }}
-                            >
-                              {liquidating ? "Liquidating..." : "Liquidate"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </summary>
+              <div>
+                <table style={{ ...styles.table, marginBottom: 0 }}>
+                  <thead>
+                    <tr>
+                      <th style={styles.tableHeader}>Strategy</th>
+                      <th style={styles.tableHeader}>Status</th>
+                      <th style={styles.tableHeader}>Net Deposits</th>
+                      <th style={styles.tableHeader}>Current Value</th>
+                      <th style={styles.tableHeader}>Return %</th>
+                      <th style={{ ...styles.tableHeader, textAlign: "right" as const }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeStrategies.map((strategy) => (
+                      <React.Fragment key={strategy.id}>
+                        <tr onClick={() => {
+                          const detailsEl = document.getElementById(`strategy-details-${strategy.id}`) as HTMLDetailsElement;
+                          if (detailsEl) detailsEl.open = !detailsEl.open;
+                        }} style={{ cursor: "pointer" }}>
+                            <td style={{ ...styles.tableCell, display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 14, color: "#999" }}>▸</span>
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onViewStrategyFlow && strategy.flowData) {
+                                    onViewStrategyFlow(strategy.flowData);
+                                  }
+                                }}
+                                style={{
+                                  cursor: onViewStrategyFlow && strategy.flowData ? "pointer" : "default",
+                                  color: "#1677ff",
+                                  fontWeight: 600,
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (onViewStrategyFlow && strategy.flowData) {
+                                    e.currentTarget.style.textDecoration = "underline";
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.textDecoration = "none";
+                                }}
+                                title={onViewStrategyFlow && strategy.flowData ? "Click to view strategy logic in Flow Builder" : undefined}
+                              >
+                                {strategy.name}
+                              </div>
+                            </td>
+                            <td style={styles.tableCell}>
+                              {strategy.currentValue === 0 ? (
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  padding: "4px 8px",
+                                  borderRadius: 4,
+                                  background: "#fff3e0",
+                                  color: "#e65100",
+                                  border: "1px solid #ffb74d",
+                                }}>
+                                  PENDING
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  padding: "4px 8px",
+                                  borderRadius: 4,
+                                  background: "#e8f5ed",
+                                  color: "#0f7a3a",
+                                  border: "1px solid #b7e3c8",
+                                }}>
+                                  ACTIVE
+                                </span>
+                              )}
+                            </td>
+                            <td style={styles.tableCell}>
+                              <strong>{formatCurrency(strategy.investAmount)}</strong>
+                            </td>
+                            <td style={styles.tableCell}>
+                              <strong>
+                                {strategy.currentValue === 0
+                                  ? "—"
+                                  : formatCurrency(strategy.currentValue)}
+                              </strong>
+                            </td>
+                            <td style={styles.tableCell}>
+                              <strong style={{
+                                color: strategy.currentValue === 0
+                                  ? "#666"
+                                  : strategy.totalReturnPct && strategy.totalReturnPct > 0
+                                  ? "#0f7a3a"
+                                  : strategy.totalReturnPct && strategy.totalReturnPct < 0
+                                  ? "#b00020"
+                                  : "#111",
+                              }}>
+                                {strategy.currentValue === 0
+                                  ? "—"
+                                  : strategy.totalReturnPct !== undefined
+                                  ? `${strategy.totalReturnPct > 0 ? '+' : ''}${strategy.totalReturnPct.toFixed(2)}%`
+                                  : "—"}
+                              </strong>
+                            </td>
+                            <td style={{ ...styles.tableCell, textAlign: "right" as const }}>
+                              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSyncHoldings(strategy);
+                                  }}
+                                  disabled={syncing}
+                                  style={{
+                                    background: "#1677ff",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    padding: "6px 10px",
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    cursor: syncing ? "not-allowed" : "pointer",
+                                    opacity: syncing ? 0.6 : 1,
+                                  }}
+                                  title="Sync holdings from Alpaca positions"
+                                >
+                                  {syncing ? "Syncing..." : "Sync"}
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleLiquidate(strategy);
+                                  }}
+                                  disabled={liquidating}
+                                  style={{
+                                    background: "#b00020",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    padding: "6px 10px",
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    cursor: liquidating ? "not-allowed" : "pointer",
+                                    opacity: liquidating ? 0.6 : 1,
+                                  }}
+                                >
+                                  {liquidating ? "Liquidating..." : "Liquidate"}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td colSpan={6} style={{ padding: 0, border: "none" }}>
+                              <details id={`strategy-details-${strategy.id}`}>
+                                <summary style={{ display: "none" }}></summary>
+                                <div style={{ marginTop: 16, paddingLeft: 26, paddingRight: 16, paddingBottom: 16 }}>
+                                  {/* Live Returns Graph */}
+                                  <PerformanceChart snapshots={snapshotsByStrategy[strategy.id] || []} />
 
-                <div style={{ marginTop: 16, paddingLeft: 26 }}>
-                  {/* Live Returns Graph */}
-                  <PerformanceChart snapshots={snapshots} />
+                                  {/* Current Holdings */}
+                                  <div style={{ marginTop: 20, marginBottom: 16 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#374151" }}>
+                                      Current Holdings
+                                    </div>
+                                    {strategy.holdings.length === 0 ? (
+                                      <div style={{ padding: 12, fontSize: 12, color: "#666", background: "#f9fafb", borderRadius: 4 }}>
+                                        No holdings yet - strategy will execute during next trade window
+                                      </div>
+                                    ) : (
+                                      <table style={styles.table}>
+                                        <thead>
+                                          <tr>
+                                            <th style={styles.tableHeader}>Symbol</th>
+                                            <th style={styles.tableHeader}>Quantity</th>
+                                            <th style={styles.tableHeader}>Entry Price</th>
+                                            <th style={styles.tableHeader}>Value</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {strategy.holdings.map((holding) => (
+                                            <tr key={holding.symbol}>
+                                              <td style={styles.tableCell}>
+                                                <strong>{holding.symbol}</strong>
+                                              </td>
+                                              <td style={styles.tableCell}>
+                                                {holding.qty.toFixed(4)}
+                                              </td>
+                                              <td style={styles.tableCell}>
+                                                ${(holding.marketValue / holding.qty).toFixed(2)}
+                                              </td>
+                                              <td style={styles.tableCell}>
+                                                {formatCurrency(holding.marketValue)}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </div>
 
-                  <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        <th style={styles.tableHeader}>Symbol</th>
-                        <th style={styles.tableHeader}>Quantity</th>
-                        <th style={styles.tableHeader}>Market Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeStrategy.holdings.map((holding) => (
-                        <tr key={holding.symbol}>
-                          <td style={styles.tableCell}>
-                            <strong>{holding.symbol}</strong>
-                          </td>
-                          <td style={styles.tableCell}>
-                            {holding.qty.toFixed(4)}
-                          </td>
-                          <td style={styles.tableCell}>
-                            {formatCurrency(holding.marketValue)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
+                                  {/* Historical Snapshots */}
+                                  {(snapshotsByStrategy[strategy.id] || []).length > 0 && (
+                                    <details style={{ marginTop: 16 }}>
+                                      <summary style={{
+                                        cursor: "pointer",
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        color: "#374151",
+                                        padding: "8px 0"
+                                      }}>
+                                        Historical Snapshots ({(snapshotsByStrategy[strategy.id] || []).length} days) ▼
+                                      </summary>
+                                      <div style={{ marginTop: 12, maxHeight: 400, overflow: "auto" }}>
+                                        <table style={styles.table}>
+                                          <thead>
+                                            <tr>
+                                              <th style={styles.tableHeader}>Date</th>
+                                              <th style={styles.tableHeader}>Equity</th>
+                                              <th style={styles.tableHeader}>Return $</th>
+                                              <th style={styles.tableHeader}>Return %</th>
+                                              <th style={styles.tableHeader}>Holdings</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {[...(snapshotsByStrategy[strategy.id] || [])].reverse().map((snap) => (
+                                              <tr key={snap.date}>
+                                                <td style={{...styles.tableCell, fontFamily: "monospace", fontSize: 11}}>
+                                                  {snap.date}
+                                                </td>
+                                                <td style={styles.tableCell}>
+                                                  {formatCurrency(snap.portfolioValue)}
+                                                </td>
+                                                <td style={{
+                                                  ...styles.tableCell,
+                                                  color: snap.totalReturn >= 0 ? "#059669" : "#dc2626",
+                                                  fontWeight: 600
+                                                }}>
+                                                  {snap.totalReturn >= 0 ? "+" : ""}{formatCurrency(snap.totalReturn)}
+                                                </td>
+                                                <td style={{
+                                                  ...styles.tableCell,
+                                                  color: snap.totalReturnPct >= 0 ? "#059669" : "#dc2626",
+                                                  fontWeight: 600
+                                                }}>
+                                                  {snap.totalReturnPct >= 0 ? "+" : ""}{snap.totalReturnPct.toFixed(2)}%
+                                                </td>
+                                                <td style={{...styles.tableCell, fontSize: 11}}>
+                                                  {snap.holdings.map((h: any) => `${h.symbol}: ${h.qty.toFixed(2)}`).join(", ") || "-"}
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </details>
+                                  )}
+                                </div>
+                              </details>
+                            </td>
+                          </tr>
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 

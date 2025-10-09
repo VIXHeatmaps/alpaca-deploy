@@ -899,25 +899,28 @@ app.post('/api/invest', async (req: Request, res: Response) => {
     const indicatorData = buildIndicatorMap(indicatorValues);
     const result = executeStrategy(elements, indicatorData);
 
+    let allocation: Record<string, number> = {};
+
     if (!result.positions || result.positions.length === 0) {
-      return res.status(400).json({ error: 'Strategy did not produce any positions' });
+      console.warn('[INVEST] Strategy produced no positions - will execute during next trade window');
+      // Don't error out - just save the strategy and it will execute at next rebalance
+    } else {
+      // Convert positions to allocation percentages
+      const totalWeight = result.positions.reduce((sum: number, p: any) => sum + p.weight, 0);
+      for (const position of result.positions) {
+        allocation[position.ticker] = position.weight / totalWeight;
+      }
+      console.log('Target allocation:', allocation);
     }
 
-    // Convert positions to allocation percentages
-    const totalWeight = result.positions.reduce((sum: number, p: any) => sum + p.weight, 0);
-    const allocation: Record<string, number> = {};
-    for (const position of result.positions) {
-      allocation[position.ticker] = position.weight / totalWeight;
-    }
-    console.log('Target allocation:', allocation);
-
-    // Step 2: Place orders
-    console.log('Step 2: Placing orders...');
+    // Step 2: Place orders (only if we have positions to trade)
     const holdings: Array<{ symbol: string; qty: number; entry_price?: number }> = [];
     const pendingOrders: Array<{ orderId: string; symbol: string; side: 'buy' | 'sell'; qty: number }> = [];
     let totalInvested = 0;
 
-    for (const [symbol, percentage] of Object.entries(allocation)) {
+    if (Object.keys(allocation).length > 0) {
+      console.log('Step 2: Placing orders...');
+      for (const [symbol, percentage] of Object.entries(allocation)) {
       const targetDollars = investAmount * percentage;
       const price = await getCurrentPrice(symbol, apiKey, apiSecret);
       const qty = targetDollars / price;
@@ -941,6 +944,9 @@ app.post('/api/invest', async (req: Request, res: Response) => {
         holdings.push({ symbol, qty: filledQty, entry_price: avgPrice });
         totalInvested += filledQty * avgPrice;
       }
+      }
+    } else {
+      console.log('Step 2: Skipping orders - no positions determined. Strategy will execute at next trade window.');
     }
 
     // Step 3: Create and save strategy in DATABASE
@@ -1011,6 +1017,92 @@ app.post('/api/invest', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('POST /api/invest error:', err);
     return res.status(500).json({ error: err.message || 'Investment failed' });
+  }
+});
+
+/**
+ * GET /api/active-strategies
+ * Get all active strategies from database
+ */
+app.get('/api/active-strategies', async (req: Request, res: Response) => {
+  try {
+    const strategies = await getAllActiveStrategies();
+
+    return res.json({
+      strategies: strategies.map(s => ({
+        id: s.id,
+        name: s.name,
+        status: s.status,
+        mode: s.mode,
+        initial_capital: parseFloat(s.initial_capital),
+        current_capital: s.current_capital ? parseFloat(s.current_capital) : null,
+        holdings: s.holdings || [],
+        pending_orders: s.pending_orders || [],
+        started_at: s.started_at,
+        last_rebalance_at: s.last_rebalance_at,
+      }))
+    });
+  } catch (err: any) {
+    console.error('GET /api/active-strategies error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch active strategies' });
+  }
+});
+
+/**
+ * GET /api/active-strategies/:id/snapshots
+ * Get historical snapshots for a specific strategy
+ */
+app.get('/api/active-strategies/:id/snapshots', async (req: Request, res: Response) => {
+  try {
+    const strategyId = parseInt(req.params.id);
+
+    if (!Number.isFinite(strategyId)) {
+      return res.status(400).json({ error: 'Invalid strategy ID' });
+    }
+
+    const { getSnapshotsByStrategyId } = await import('./db/activeStrategySnapshotsDb');
+    const snapshots = await getSnapshotsByStrategyId(strategyId);
+
+    return res.json({
+      snapshots: snapshots.map(s => ({
+        id: s.id,
+        date: s.snapshot_date,
+        equity: parseFloat(s.equity),
+        holdings: s.holdings || [],
+        daily_return: s.daily_return ? parseFloat(s.daily_return) : null,
+        cumulative_return: s.cumulative_return ? parseFloat(s.cumulative_return) : null,
+        total_return: s.total_return ? parseFloat(s.total_return) : null,
+        rebalance_type: s.rebalance_type,
+      }))
+    });
+  } catch (err: any) {
+    console.error('GET /api/active-strategies/:id/snapshots error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch snapshots' });
+  }
+});
+
+/**
+ * POST /api/create-snapshots
+ * Manually trigger snapshot creation for all active strategies (for testing)
+ */
+app.post('/api/create-snapshots', async (req: Request, res: Response) => {
+  try {
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    }
+
+    console.log('[API] Manual snapshot creation triggered');
+
+    const { createSnapshotsNow } = await import('./services/snapshotScheduler');
+    await createSnapshotsNow(apiKey, apiSecret);
+
+    return res.json({ success: true, message: 'Snapshots created successfully' });
+  } catch (err: any) {
+    console.error('POST /api/create-snapshots error:', err);
+    return res.status(500).json({ error: err.message || 'Snapshot creation failed' });
   }
 });
 
@@ -1187,6 +1279,67 @@ app.post('/api/liquidate', requireAuth, async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('POST /api/liquidate error:', err);
     return res.status(500).json({ error: err.message || 'Liquidation failed' });
+  }
+});
+
+/**
+ * POST /api/strategy/:id/sync-holdings
+ * Sync holdings for a specific strategy from Alpaca positions
+ */
+app.post('/api/strategy/:id/sync-holdings', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const strategyId = parseInt(req.params.id);
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    }
+
+    const strategy = await getActiveStrategyById(strategyId);
+    if (!strategy) {
+      return res.status(404).json({ error: `Strategy ${strategyId} not found` });
+    }
+
+    console.log(`\n=== SYNCING HOLDINGS FOR STRATEGY: ${strategy.name} (ID: ${strategyId}) ===`);
+
+    // Get current positions from Alpaca
+    const { getAlpacaPositions } = await import('./services/alpaca');
+    const positions = await getAlpacaPositions(apiKey, apiSecret);
+    console.log(`Found ${positions.length} total positions in Alpaca account`);
+
+    // Filter positions that belong to this strategy using position attribution
+    // For now, we'll sync ALL positions to this strategy (simple approach)
+    // TODO: In the future, use position_attribution table to filter by strategy ownership
+
+    const updatedHoldings = positions.map(pos => ({
+      symbol: pos.symbol,
+      qty: parseFloat(pos.qty),
+      entry_price: parseFloat(pos.avg_entry_price),
+      marketValue: parseFloat(pos.market_value),
+    }));
+
+    // Calculate current value
+    const currentValue = positions.reduce((sum, pos) => sum + parseFloat(pos.market_value), 0);
+
+    // Update strategy in database
+    await updateActiveStrategy(strategyId, {
+      current_capital: currentValue,
+      holdings: updatedHoldings,
+    });
+
+    console.log(`Holdings synced for strategy ${strategyId}:`, updatedHoldings);
+    console.log(`Current value: $${currentValue.toFixed(2)}`);
+
+    return res.json({
+      success: true,
+      message: 'Holdings synced from Alpaca positions',
+      holdings: updatedHoldings,
+      currentValue,
+    });
+  } catch (err: any) {
+    console.error(`POST /api/strategy/:id/sync-holdings error:`, err);
+    return res.status(500).json({ error: err.message || 'Failed to sync holdings' });
   }
 });
 
@@ -3040,10 +3193,13 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
     const equity: number[] = [];
     const benchEq: number[] = [];
     const debugRows: Array<any> = [];
+    const dailyPositions: Array<Record<string, any>> = [];
 
     if (dateGrid.length) {
       equity.push(eq);
       benchEq.push(1);
+      // Add initial empty position
+      dailyPositions.push({ date: dateGrid[0] });
     }
 
     for (let i = 1; i < dateGrid.length; i++) {
@@ -3119,6 +3275,13 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
         }
       }
 
+      // Record daily positions (ticker allocations for this day)
+      const dayPositions: Record<string, any> = { date: heldDate };
+      for (const pos of norm) {
+        dayPositions[pos.ticker] = pos.weight;
+      }
+      dailyPositions.push(dayPositions);
+
       if (debug) {
         const allocation: Record<string, number> = {};
         for (const pos of norm) allocation[pos.ticker] = pos.weight;
@@ -3163,6 +3326,7 @@ app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
         equityCurve: benchEq,
         metrics: { ...benchMetricsBase, ...benchMetricsQuant },
       },
+      dailyPositions,
       debugDays: debug ? debugRows : undefined,
     });
   } catch (err: any) {
@@ -3493,12 +3657,15 @@ app.listen(port, async () => {
 
       const { startFillChecker } = await import('./services/fillChecker');
       startFillChecker(apiKey, apiSecret);
+
+      const { startSnapshotScheduler } = await import('./services/snapshotScheduler');
+      await startSnapshotScheduler(apiKey, apiSecret);
     } catch (err: any) {
-      console.error('Failed to start T-10 scheduler:', err.message);
-      console.error('Automatic rebalancing will not be available');
+      console.error('Failed to start schedulers:', err.message);
+      console.error('Automatic rebalancing and snapshots may not be available');
     }
   } else {
-    console.log('No ALPACA_API_KEY/ALPACA_API_SECRET in environment - T-10 scheduler disabled');
+    console.log('No ALPACA_API_KEY/ALPACA_API_SECRET in environment - schedulers disabled');
     console.log('Rebalancing is still available via POST /api/rebalance endpoint');
   }
 });

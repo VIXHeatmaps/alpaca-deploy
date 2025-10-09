@@ -42,6 +42,7 @@ interface SimulationResult {
   dates: string[];
   equityCurve: number[];
   benchmark: number[];
+  dailyPositions: Array<Record<string, any>>;
   metrics: {
     totalReturn: number;
     cagr: number;
@@ -154,9 +155,13 @@ export async function runSimulation(
   let equity = 1.0;  // Normalized to 1.0 for easier comparison
   const equityCurve: number[] = [equity];
   const benchmarkCurve: number[] = [1.0];
+  const dailyPositions: Array<Record<string, any>> = [];
 
   // For metrics calculation
   const dates: string[] = [dateGrid[0]];
+
+  // Add initial empty position
+  dailyPositions.push({ date: dateGrid[0] });
 
   // Get SPY initial price for benchmark
   const spyInitialPrice = spyData[dateGrid[0]]?.c || 1;
@@ -267,6 +272,13 @@ export async function runSimulation(
       ? positions.map(p => ({ ticker: p.ticker, weight: p.weight / totalWeight }))
       : [];
 
+    // Record daily positions (ticker allocations for this day)
+    const dayPositions: Record<string, any> = { date: executionDate };
+    for (const pos of normalizedPositions) {
+      dayPositions[pos.ticker] = pos.weight;
+    }
+    dailyPositions.push(dayPositions);
+
     // Calculate daily return
     let dailyReturn = 0;
     for (const pos of normalizedPositions) {
@@ -329,6 +341,7 @@ export async function runSimulation(
     dates,
     equityCurve,
     benchmark: benchmarkCurve,
+    dailyPositions,
     metrics,
     benchmarkMetrics,
   };
