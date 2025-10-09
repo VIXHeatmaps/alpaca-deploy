@@ -1,21 +1,87 @@
 import { useState, useEffect } from "react";
-import type { VarList } from "../types/variables";
+import type { VarType } from "../types/variables";
 import {
   normalizeVarName,
   loadVarLists,
-  saveVarLists,
   normalizeValues,
+  hasBeenMigrated,
+  markAsMigrated,
+  clearLocalStorage,
 } from "../types/variables";
+import * as variablesApi from "../api/variables";
+
+type VarList = {
+  id?: number;
+  name: string;
+  type: VarType;
+  values: string[];
+};
 
 export function VariablesTab() {
-  const [vars, setVars] = useState<VarList[]>(() => loadVarLists());
-  const [sel, setSel] = useState<number>(vars.length ? 0 : -1);
+  const [vars, setVars] = useState<VarList[]>([]);
+  const [sel, setSel] = useState<number>(-1);
   const [rawText, setRawText] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [migrating, setMigrating] = useState<boolean>(false);
 
-  // Persist whenever vars changes
+  // Load variables from DB on mount
   useEffect(() => {
-    saveVarLists(vars);
-  }, [vars]);
+    loadVariables();
+  }, []);
+
+  const loadVariables = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Check if we need to migrate from localStorage
+      if (!hasBeenMigrated()) {
+        const localVars = loadVarLists();
+        if (localVars.length > 0) {
+          await migrateFromLocalStorage(localVars);
+          return;
+        } else {
+          markAsMigrated(); // Mark as migrated even if empty
+        }
+      }
+
+      // Load from API
+      const lists = await variablesApi.getAllVariableLists();
+      setVars(lists);
+      setSel(lists.length > 0 ? 0 : -1);
+    } catch (err: any) {
+      console.error("Failed to load variables:", err);
+      setError(err.message || "Failed to load variables");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const migrateFromLocalStorage = async (localVars: VarList[]) => {
+    try {
+      setMigrating(true);
+      console.log(`Migrating ${localVars.length} variables from localStorage to database...`);
+
+      const result = await variablesApi.bulkImportVariableLists(localVars);
+      console.log(`Successfully migrated ${result.imported} variables`);
+
+      markAsMigrated();
+      clearLocalStorage();
+
+      setVars(result.lists);
+      setSel(result.lists.length > 0 ? 0 : -1);
+    } catch (err: any) {
+      console.error("Migration failed:", err);
+      setError(`Migration failed: ${err.message}`);
+      // Fall back to localStorage if migration fails
+      setVars(localVars);
+      setSel(localVars.length > 0 ? 0 : -1);
+    } finally {
+      setMigrating(false);
+      setLoading(false);
+    }
+  };
 
   // Keep rawText in sync with selected variable
   useEffect(() => {
@@ -23,32 +89,57 @@ export function VariablesTab() {
     setRawText(v ? v.values.join("\n") : "");
   }, [sel, vars]);
 
-  const addVar = () => {
+  const addVar = async () => {
     const existing = new Set(vars.map((v) => v.name));
     const base = "newvar";
     let name = base,
       i = 1;
     while (existing.has(name)) name = base + ++i;
 
-    const next: VarList[] = [...vars, { name, type: "ticker" as const, values: [] }];
-    setVars(next);
-    setSel(next.length - 1);
+    try {
+      const created = await variablesApi.createVariableList({
+        name,
+        type: "ticker",
+        values: [],
+      });
+
+      const next = [...vars, created];
+      setVars(next);
+      setSel(next.length - 1);
+    } catch (err: any) {
+      console.error("Failed to create variable:", err);
+      setError(err.message || "Failed to create variable");
+    }
   };
 
-  const removeVar = (idx: number) => {
+  const removeVar = async (idx: number) => {
     if (idx < 0) return;
-    if (!confirm(`Remove variable "$${vars[idx].name}"?`)) return;
-    const next = vars.filter((_, i) => i !== idx);
-    setVars(next);
-    setSel(next.length ? Math.min(idx, next.length - 1) : -1);
+    const varToDelete = vars[idx];
+    if (!confirm(`Remove variable "$${varToDelete.name}"?`)) return;
+
+    try {
+      if (varToDelete.id) {
+        await variablesApi.deleteVariableList(varToDelete.id);
+      }
+
+      const next = vars.filter((_, i) => i !== idx);
+      setVars(next);
+      setSel(next.length ? Math.min(idx, next.length - 1) : -1);
+    } catch (err: any) {
+      console.error("Failed to delete variable:", err);
+      setError(err.message || "Failed to delete variable");
+    }
   };
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle if no input is focused
-      if (document.activeElement?.tagName === "INPUT" ||
-          document.activeElement?.tagName === "TEXTAREA") return;
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      )
+        return;
 
       if (e.key === "ArrowDown" && sel < vars.length - 1) {
         e.preventDefault();
@@ -58,43 +149,95 @@ export function VariablesTab() {
         setSel(sel - 1);
       } else if (e.key === "Delete" && sel >= 0 && vars[sel]) {
         e.preventDefault();
-        const varToDelete = vars[sel];
-        if (confirm(`Remove variable "$${varToDelete.name}"?`)) {
-          const next = vars.filter((_, i) => i !== sel);
-          setVars(next);
-          setSel(next.length ? Math.min(sel, next.length - 1) : -1);
-        }
+        removeVar(sel);
       } else if ((e.metaKey || e.ctrlKey) && e.key === "n") {
         e.preventDefault();
-        const existing = new Set(vars.map((v) => v.name));
-        const base = "newvar";
-        let name = base, i = 1;
-        while (existing.has(name)) name = base + ++i;
-        const next: VarList[] = [...vars, { name, type: "ticker" as const, values: [] }];
-        setVars(next);
-        setSel(next.length - 1);
+        addVar();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [sel, vars]);
 
-  const commitName = (idx: number, raw: string) => {
+  const commitName = async (idx: number, raw: string) => {
     const norm = normalizeVarName(raw);
-    setVars((vs) =>
-      vs.map((v, i) => (i === idx ? { ...v, name: norm } : v))
-    );
+    const varToUpdate = vars[idx];
+
+    if (!varToUpdate || norm === varToUpdate.name) return;
+
+    try {
+      if (varToUpdate.id) {
+        const updated = await variablesApi.updateVariableList(varToUpdate.id, { name: norm });
+        setVars((vs) => vs.map((v, i) => (i === idx ? updated : v)));
+      } else {
+        // Local only (shouldn't happen)
+        setVars((vs) => vs.map((v, i) => (i === idx ? { ...v, name: norm } : v)));
+      }
+    } catch (err: any) {
+      console.error("Failed to update variable name:", err);
+      setError(err.message || "Failed to update variable name");
+    }
   };
 
-  const applyValuesFromRaw = (idx: number) => {
+  const applyValuesFromRaw = async (idx: number) => {
     if (idx < 0) return;
-    const v = vars[idx];
-    const vals = normalizeValues(v.type, rawText || "");
+    const varToUpdate = vars[idx];
+    if (!varToUpdate) return;
+
+    const vals = normalizeValues(varToUpdate.type, rawText || "");
     const deduped = Array.from(new Set(vals));
-    setVars((vs) => vs.map((x, i) => (i === idx ? { ...x, values: deduped } : x)));
+
+    try {
+      if (varToUpdate.id) {
+        const updated = await variablesApi.updateVariableList(varToUpdate.id, {
+          values: deduped,
+        });
+        setVars((vs) => vs.map((v, i) => (i === idx ? updated : v)));
+      } else {
+        // Local only (shouldn't happen)
+        setVars((vs) => vs.map((v, i) => (i === idx ? { ...v, values: deduped } : v)));
+      }
+    } catch (err: any) {
+      console.error("Failed to update variable values:", err);
+      setError(err.message || "Failed to update variable values");
+    }
+  };
+
+  const updateType = async (idx: number, type: VarType) => {
+    const varToUpdate = vars[idx];
+    if (!varToUpdate) return;
+
+    try {
+      if (varToUpdate.id) {
+        const updated = await variablesApi.updateVariableList(varToUpdate.id, { type });
+        setVars((vs) => vs.map((v, i) => (i === idx ? updated : v)));
+      } else {
+        setVars((vs) => vs.map((v, i) => (i === idx ? { ...v, type } : v)));
+      }
+    } catch (err: any) {
+      console.error("Failed to update variable type:", err);
+      setError(err.message || "Failed to update variable type");
+    }
   };
 
   const selected = sel >= 0 ? vars[sel] : null;
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "calc(100vh - 120px)",
+          color: "#9ca3af",
+          fontSize: 14,
+        }}
+      >
+        {migrating ? "Migrating variables from localStorage..." : "Loading variables..."}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -107,6 +250,39 @@ export function VariablesTab() {
         height: "calc(100vh - 120px)",
       }}
     >
+      {/* Error banner */}
+      {error && (
+        <div
+          style={{
+            gridColumn: "1 / -1",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: 6,
+            padding: 12,
+            color: "#dc2626",
+            fontSize: 13,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#dc2626",
+              cursor: "pointer",
+              fontSize: 16,
+              fontWeight: "bold",
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Left sidebar: Variable list */}
       <div
         style={{
@@ -125,9 +301,7 @@ export function VariablesTab() {
             alignItems: "center",
           }}
         >
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>
-            Variables
-          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>Variables</div>
           <button
             onClick={addVar}
             title="Cmd/Ctrl + N"
@@ -178,7 +352,7 @@ export function VariablesTab() {
           ) : (
             vars.map((v, i) => (
               <button
-                key={v.name + i}
+                key={v.id || v.name + i}
                 onClick={() => setSel(i)}
                 style={{
                   textAlign: "left",
@@ -203,9 +377,7 @@ export function VariablesTab() {
                   }
                 }}
               >
-                <div style={{ fontFamily: "ui-monospace, monospace" }}>
-                  ${v.name}
-                </div>
+                <div style={{ fontFamily: "ui-monospace, monospace" }}>${v.name}</div>
                 <div
                   style={{
                     fontSize: 12,
@@ -313,9 +485,49 @@ export function VariablesTab() {
               </button>
             </div>
 
+            {/* Type selector */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "#374151",
+                }}
+              >
+                Type
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["ticker", "number", "date"] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => updateType(sel, type)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 4,
+                      border: "1px solid " + (selected.type === type ? "#3b82f6" : "#d1d5db"),
+                      background: selected.type === type ? "#eff6ff" : "#fff",
+                      color: selected.type === type ? "#1e40af" : "#6b7280",
+                      fontSize: 13,
+                      fontWeight: selected.type === type ? 500 : 400,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Values editor */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                }}
+              >
                 <label
                   style={{
                     fontSize: 13,
@@ -346,7 +558,7 @@ export function VariablesTab() {
                 style={{
                   width: "100%",
                   minHeight: 300,
-                  maxHeight: "calc(100vh - 300px)",
+                  maxHeight: "calc(100vh - 400px)",
                   padding: 14,
                   border: "1px solid #d1d5db",
                   borderRadius: 6,
@@ -373,7 +585,7 @@ export function VariablesTab() {
                   textAlign: "right",
                 }}
               >
-                {rawText.split("\n").filter(l => l.trim()).length} lines
+                {rawText.split("\n").filter((l) => l.trim()).length} lines
               </div>
             </div>
           </>

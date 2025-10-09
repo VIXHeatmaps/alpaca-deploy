@@ -19,7 +19,7 @@ import { VariablesTab } from "./VariablesTab";
 import { BatchTestsTab } from "./BatchTestsTab";
 import type { BatchJob } from "../types/batchJobs";
 import { putJob, getAllJobs } from "../storage/batchJobsStore";
-import { loadVarLists } from "../types/variables";
+import * as variablesApi from "../api/variables";
 import {
   extractStringsFromElements,
   extractVariablesFromStrings,
@@ -2338,6 +2338,29 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
 
+  // Variables state
+  const [variableLists, setVariableLists] = useState<variablesApi.VariableList[]>([]);
+  const [variablesLoading, setVariablesLoading] = useState(false);
+
+  // Load variables from API
+  const loadVariables = async () => {
+    try {
+      setVariablesLoading(true);
+      const lists = await variablesApi.getAllVariableLists();
+      setVariableLists(lists);
+    } catch (err) {
+      console.error('Failed to load variables:', err);
+    } finally {
+      setVariablesLoading(false);
+    }
+  };
+
+  // Load variables on mount and when switching tabs
+  // This ensures we always have the latest variables when checking strategies
+  useEffect(() => {
+    loadVariables();
+  }, [activeTab]);
+
   // Load batch jobs from IndexedDB on mount
   useEffect(() => {
     getAllJobs().then((jobs) => {
@@ -2396,9 +2419,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
   // Load defined variables and create lookup set
   const definedVariables = useMemo(() => {
-    const varLists = loadVarLists();
-    return new Set(varLists.map(v => v.name));
-  }, [activeTab]); // Re-check when switching tabs
+    return new Set(variableLists.map(v => v.name));
+  }, [variableLists]);
 
   // Check for undefined variables
   const undefinedVariables = useMemo(() => {
@@ -2740,8 +2762,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       // Check if strategy uses variables
       if (hasVariables) {
         // Check for undefined variables
-        const varLists = loadVarLists();
-        const defined = new Map(varLists.map((v) => [v.name, v]));
+        const defined = new Map(variableLists.map((v) => [v.name, v]));
         const missing = strategyVariables.filter((v) => !defined.has(v));
 
         if (missing.length) {

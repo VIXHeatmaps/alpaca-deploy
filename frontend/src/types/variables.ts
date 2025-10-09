@@ -12,6 +12,7 @@ export type VarList = {
 };
 
 const VARS_KEY = "vars_v1";
+const MIGRATED_KEY = "vars_migrated_to_db";
 
 // Case-insensitive, allow any normal characters after the $ (we normalize on save)
 export function normalizeVarName(input: string): string {
@@ -128,4 +129,25 @@ export function importVarsJson(jsonText: string): VarList[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Check if localStorage variables have been migrated to DB
+ */
+export function hasBeenMigrated(): boolean {
+  return localStorage.getItem(MIGRATED_KEY) === "true";
+}
+
+/**
+ * Mark localStorage variables as migrated to DB
+ */
+export function markAsMigrated(): void {
+  localStorage.setItem(MIGRATED_KEY, "true");
+}
+
+/**
+ * Clear localStorage variables (after successful migration)
+ */
+export function clearLocalStorage(): void {
+  localStorage.removeItem(VARS_KEY);
 }

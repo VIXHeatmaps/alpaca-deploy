@@ -10,6 +10,7 @@ import cookieParser from 'cookie-parser';
 import { Strategy as DiscordStrategy, Profile } from 'passport-discord';
 import passport from 'passport';
 import * as batchJobsDb from './db/batchJobsDb';
+import * as variableListsDb from './db/variableListsDb';
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -2750,6 +2751,179 @@ app.post('/api/validate_strategy', async (req: Request, res: Response) => {
   }
 });
 /* ===== END: BLOCK O ===== */
+
+
+/* ===== BEGIN: BLOCK P — Variable Lists CRUD ===== */
+// Get all variable lists
+app.get('/api/variables', async (req: Request, res: Response) => {
+  try {
+    const type = req.query.type as variableListsDb.VarType | undefined;
+    const is_shared = req.query.is_shared === 'true' ? true : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+
+    const lists = await variableListsDb.getAllVariableLists({ type, is_shared, limit });
+    return res.json(lists);
+  } catch (err: any) {
+    console.error('GET /api/variables error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch variable lists' });
+  }
+});
+
+// Get variable list by ID
+app.get('/api/variables/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    const varList = await variableListsDb.getVariableListById(id);
+    if (!varList) {
+      return res.status(404).json({ error: 'Variable list not found' });
+    }
+
+    return res.json(varList);
+  } catch (err: any) {
+    console.error('GET /api/variables/:id error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch variable list' });
+  }
+});
+
+// Create new variable list
+app.post('/api/variables', async (req: Request, res: Response) => {
+  try {
+    const { name, type, values, description, is_shared } = req.body;
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Name is required and must be a string' });
+    }
+
+    if (!type || !['ticker', 'number', 'date'].includes(type)) {
+      return res.status(400).json({ error: 'Type must be one of: ticker, number, date' });
+    }
+
+    if (!Array.isArray(values)) {
+      return res.status(400).json({ error: 'Values must be an array' });
+    }
+
+    // Check if name already exists
+    const exists = await variableListsDb.variableListNameExists(name);
+    if (exists) {
+      return res.status(409).json({ error: 'Variable list with this name already exists' });
+    }
+
+    const created = await variableListsDb.createVariableList({
+      name,
+      type,
+      values,
+      description,
+      is_shared,
+    });
+
+    return res.status(201).json(created);
+  } catch (err: any) {
+    console.error('POST /api/variables error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to create variable list' });
+  }
+});
+
+// Update variable list
+app.put('/api/variables/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    const { name, type, values, description, is_shared } = req.body;
+
+    // Validate type if provided
+    if (type && !['ticker', 'number', 'date'].includes(type)) {
+      return res.status(400).json({ error: 'Type must be one of: ticker, number, date' });
+    }
+
+    // Validate values if provided
+    if (values !== undefined && !Array.isArray(values)) {
+      return res.status(400).json({ error: 'Values must be an array' });
+    }
+
+    // Check if name already exists (excluding current ID)
+    if (name) {
+      const exists = await variableListsDb.variableListNameExists(name, id);
+      if (exists) {
+        return res.status(409).json({ error: 'Variable list with this name already exists' });
+      }
+    }
+
+    const updated = await variableListsDb.updateVariableList(id, {
+      name,
+      type,
+      values,
+      description,
+      is_shared,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Variable list not found' });
+    }
+
+    return res.json(updated);
+  } catch (err: any) {
+    console.error('PUT /api/variables/:id error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to update variable list' });
+  }
+});
+
+// Delete variable list
+app.delete('/api/variables/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid ID' });
+    }
+
+    const deleted = await variableListsDb.deleteVariableList(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Variable list not found' });
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('DELETE /api/variables/:id error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to delete variable list' });
+  }
+});
+
+// Bulk import variable lists (for migration from localStorage)
+app.post('/api/variables/bulk_import', async (req: Request, res: Response) => {
+  try {
+    const { lists } = req.body;
+
+    if (!Array.isArray(lists)) {
+      return res.status(400).json({ error: 'Lists must be an array' });
+    }
+
+    // Validate each list
+    for (const list of lists) {
+      if (!list.name || typeof list.name !== 'string') {
+        return res.status(400).json({ error: 'Each list must have a name' });
+      }
+      if (!list.type || !['ticker', 'number', 'date'].includes(list.type)) {
+        return res.status(400).json({ error: 'Each list must have a valid type' });
+      }
+      if (!Array.isArray(list.values)) {
+        return res.status(400).json({ error: 'Each list must have values as an array' });
+      }
+    }
+
+    const imported = await variableListsDb.bulkImportVariableLists(lists);
+    return res.json({ imported: imported.length, lists: imported });
+  } catch (err: any) {
+    console.error('POST /api/variables/bulk_import error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to import variable lists' });
+  }
+});
+/* ===== END: BLOCK P ===== */
 
 
 /* ===== BEGIN: BLOCK L — Boot ===== */
