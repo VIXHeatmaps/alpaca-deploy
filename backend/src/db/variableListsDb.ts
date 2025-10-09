@@ -201,10 +201,10 @@ export async function deleteVariableList(id: number): Promise<boolean> {
 }
 
 /**
- * Check if a variable list name already exists
+ * Check if a variable list name already exists for a specific user
  */
-export async function variableListNameExists(name: string, excludeId?: number): Promise<boolean> {
-  let query = db('variable_lists').where({ name });
+export async function variableListNameExists(name: string, userId: string, excludeId?: number): Promise<boolean> {
+  let query = db('variable_lists').where({ name, user_id: userId });
 
   if (excludeId !== undefined) {
     query = query.whereNot({ id: excludeId });

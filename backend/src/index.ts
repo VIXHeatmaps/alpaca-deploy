@@ -3644,8 +3644,8 @@ app.post('/api/variables', requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Values must be an array' });
     }
 
-    // Check if name already exists
-    const exists = await variableListsDb.variableListNameExists(name);
+    // Check if name already exists for this user
+    const exists = await variableListsDb.variableListNameExists(name, userId);
     if (exists) {
       return res.status(409).json({ error: 'Variable list with this name already exists' });
     }
@@ -3701,9 +3701,9 @@ app.put('/api/variables/:id', requireAuth, async (req: Request, res: Response) =
       return res.status(400).json({ error: 'Values must be an array' });
     }
 
-    // Check if name already exists (excluding current ID)
+    // Check if name already exists for this user (excluding current ID)
     if (name) {
-      const exists = await variableListsDb.variableListNameExists(name, id);
+      const exists = await variableListsDb.variableListNameExists(name, userId, id);
       if (exists) {
         return res.status(409).json({ error: 'Variable list with this name already exists' });
       }
