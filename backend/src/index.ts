@@ -15,6 +15,7 @@ import path from 'path';
 import * as batchJobsDb from './db/batchJobsDb';
 import * as variableListsDb from './db/variableListsDb';
 import * as strategiesDb from './db/strategiesDb';
+import { getMarketDateToday } from './utils/marketTime';
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -390,7 +391,7 @@ const toRFC3339End = (s: string) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59Z` : v;
 };
 const toYMD = (s: string) => (s || '').slice(0, 10);
-const todayYMD = () => new Date().toISOString().slice(0, 10);
+const todayYMD = () => getMarketDateToday();
 /* ===== END: BLOCK B ===== */
 
 
@@ -1129,7 +1130,7 @@ app.post('/api/invest', requireAuth, async (req: Request, res: Response) => {
 
       await upsertSnapshot({
         active_strategy_id: dbStrategy.id,
-        snapshot_date: new Date().toISOString().split('T')[0],
+        snapshot_date: getMarketDateToday(),
         equity: totalInvested,
         holdings: holdingsWithPrices,
         cumulative_return: cumulativeReturn,
@@ -1569,7 +1570,7 @@ app.post('/api/strategy/:id/liquidate', requireAuth, async (req: Request, res: R
       console.log('Creating final liquidation snapshot...');
       await upsertSnapshot({
         active_strategy_id: strategyId,
-        snapshot_date: new Date().toISOString().split('T')[0],
+        snapshot_date: getMarketDateToday(),
         equity: totalProceeds,
         holdings: [],
         cumulative_return: (totalProceeds - parseFloat(strategy.initial_capital)) / parseFloat(strategy.initial_capital),
@@ -1830,7 +1831,7 @@ async function startBatchStrategyJob(
         elements: mutatedElements,
         benchmarkSymbol: job.benchmark_symbol || 'SPY',
         startDate: job.start_date || 'max',
-        endDate: job.end_date || new Date().toISOString().split('T')[0],
+        endDate: job.end_date || getMarketDateToday(),
         debug: false,
       };
 

@@ -10,6 +10,7 @@ import * as cache from './cacheService';
 import { fetchPriceData } from './dataFetcher';
 import { collectRequiredIndicators, fetchIndicators } from './indicatorCache';
 import { runSimulation } from './simulation';
+import { getMarketDateToday } from '../../utils/marketTime';
 
 /**
  * Calculate warmup days needed for indicators
@@ -131,7 +132,7 @@ export async function runV2Backtest(req: Request, res: Response) {
     // Handle 'max' startDate (means "as far back as possible")
     const MAX_START = '2015-01-01'; // 10 years back (Alpaca doesn't have data before ~2015)
     const reqStartDate = (startDate && startDate !== 'max') ? startDate : MAX_START;
-    const reqEndDate = endDate || new Date().toISOString().slice(0, 10);
+    const reqEndDate = endDate || getMarketDateToday();
 
     // Calculate warmup period needed for indicators
     const warmupDays = calculateWarmupDays(requiredIndicators);
