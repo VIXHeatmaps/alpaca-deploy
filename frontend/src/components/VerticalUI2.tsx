@@ -110,8 +110,8 @@ function hasUndefinedVariableInField(value: unknown, definedVars: Set<string>): 
   // Check if it's a variable token (starts with $)
   if (!trimmed.startsWith('$')) return false;
 
-  // Extract variable name (without $) - preserve case and special chars
-  const varName = trimmed.slice(1);
+  // Extract variable name (without $) and normalize to lowercase for matching
+  const varName = trimmed.slice(1).toLowerCase();
   return !definedVars.has(varName);
 }
 

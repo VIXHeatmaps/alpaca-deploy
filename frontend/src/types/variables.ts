@@ -15,12 +15,13 @@ const VARS_KEY = "vars_v1";
 const MIGRATED_KEY = "vars_migrated_to_db";
 
 // Allow alphanumeric, underscore, and special characters like < > after the $
+// Normalize to lowercase for case-insensitive matching
 export function normalizeVarName(input: string): string {
   if (!input) return "";
   const s = String(input).trim();
   const noDollar = s.startsWith("$") ? s.slice(1) : s;
-  // Keep the original case and allow <, >, and other special characters
-  return noDollar;
+  // Convert to lowercase for case-insensitive matching, but allow special chars
+  return noDollar.toLowerCase();
 }
 
 export function loadVarLists(): VarList[] {
