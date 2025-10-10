@@ -1845,10 +1845,6 @@ async function startBatchStrategyJob(
           debug: false,
         };
 
-        console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - Assignment:`, JSON.stringify(assignment));
-        console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - First element:`, JSON.stringify(mutatedElements[0]));
-        console.log(`[BATCH WORKER] Using credentials for run ${idx + 1}/${total}: ${apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING'}`);
-
         const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
           headers: {
             'APCA-API-KEY-ID': apiKey,
@@ -1868,8 +1864,6 @@ async function startBatchStrategyJob(
           variables: assignment,
           metrics,
         });
-
-        console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - COMPLETE`);
 
         return {
           idx,
@@ -1916,7 +1910,11 @@ async function startBatchStrategyJob(
     // Update progress after each chunk
     await batchJobsDb.updateBatchJobProgress(jobId, completedCount);
 
-    console.log(`[BATCH WORKER] Chunk complete - Progress: ${completedCount}/${total}`);
+    // Log progress milestones every 100 backtests
+    if (completedCount % 100 === 0 || completedCount === total) {
+      const percentComplete = ((completedCount / total) * 100).toFixed(1);
+      console.log(`[BATCH WORKER] Progress: ${completedCount}/${total} (${percentComplete}%) - ${total - completedCount} remaining`);
+    }
   }
 
   // Calculate summary
