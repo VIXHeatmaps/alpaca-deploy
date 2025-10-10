@@ -97,7 +97,8 @@ function executeElement(
   context: ExecutionContext,
   executionPath: string[],
   errors: string[],
-  gateEvaluations: GateEvaluation[]
+  gateEvaluations: GateEvaluation[],
+  debug = false
 ): ElementExecutionResult {
   const positions: Position[] = [];
   let unallocatedWeight = 0;
@@ -135,7 +136,7 @@ function executeElement(
           indicatorData: context.indicatorData,
         };
 
-        const childResult = executeElement(child, childContext, executionPath, errors, gateEvaluations);
+        const childResult = executeElement(child, childContext, executionPath, errors, gateEvaluations, debug);
         positions.push(...childResult.positions);
         gateEvaluations.push(...childResult.gateEvaluations);
         totalUnallocated += childResult.unallocatedWeight;
@@ -169,10 +170,12 @@ function executeElement(
       const conditionMode = gate.conditionMode || "if";
       const conditions = gate.conditions || [];
 
-      console.log(`\n🚪 GATE: "${gate.name}"`);
-      console.log(`   conditionMode: ${conditionMode}`);
-      console.log(`   conditions array length: ${conditions.length}`);
-      console.log(`   conditions:`, conditions);
+      if (debug) {
+        console.log(`\n🚪 GATE: "${gate.name}"`);
+        console.log(`   conditionMode: ${conditionMode}`);
+        console.log(`   conditions array length: ${conditions.length}`);
+        console.log(`   conditions:`, conditions);
+      }
 
       if (conditions.length === 0) {
         throw new Error(`Gate "${gate.name}" has no conditions!`);
@@ -183,7 +186,9 @@ function executeElement(
         evaluateCondition(cond, context.indicatorData)
       );
 
-      console.log(`   Condition Results:`, conditionResults);
+      if (debug) {
+        console.log(`   Condition Results:`, conditionResults);
+      }
 
       // Determine if gate condition is met based on mode
       let conditionMet: boolean;
@@ -203,7 +208,9 @@ function executeElement(
         throw new Error(`Unknown condition mode: ${conditionMode}`);
       }
 
-      console.log(`🔍 Gate "${gate.name}" - Final Result: ${conditionMet ? "TRUE (→THEN)" : "FALSE (→ELSE)"}"`);
+      if (debug) {
+        console.log(`🔍 Gate "${gate.name}" - Final Result: ${conditionMet ? "TRUE (→THEN)" : "FALSE (→ELSE)"}"`);
+      }
 
       // Record gate evaluation
       gateEvaluations.push({
@@ -244,7 +251,7 @@ function executeElement(
             indicatorData: context.indicatorData,
           };
 
-          const childResult = executeElement(child, childContext, executionPath, errors, gateEvaluations);
+          const childResult = executeElement(child, childContext, executionPath, errors, gateEvaluations, debug);
           positions.push(...childResult.positions);
           gateEvaluations.push(...childResult.gateEvaluations);
           totalUnallocated += childResult.unallocatedWeight;
@@ -323,7 +330,8 @@ function normalizePositions(positions: Position[]): Position[] {
  */
 export function executeStrategy(
   elements: Element[],
-  indicatorData: Map<string, IndicatorValue>
+  indicatorData: Map<string, IndicatorValue>,
+  debug = false
 ): ExecutionResult {
   const executionPath: string[] = [];
   const errors: string[] = [];
@@ -338,7 +346,7 @@ export function executeStrategy(
       indicatorData,
     };
 
-    const result = executeElement(element, context, executionPath, errors, allGateEvaluations);
+    const result = executeElement(element, context, executionPath, errors, allGateEvaluations, debug);
     allPositions.push(...result.positions);
     allGateEvaluations.push(...result.gateEvaluations);
     totalUnallocated += result.unallocatedWeight;

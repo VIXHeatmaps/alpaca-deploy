@@ -80,7 +80,7 @@ export async function runV2Backtest(req: Request, res: Response) {
   console.log('\n=== V2 BACKTEST ENGINE ===');
 
   try {
-    const { elements, startDate, endDate } = req.body;
+    const { elements, startDate, endDate, debug = false } = req.body;
 
     if (!elements || !Array.isArray(elements)) {
       return res.status(400).json({ error: 'Missing or invalid elements array' });
@@ -188,7 +188,8 @@ export async function runV2Backtest(req: Request, res: Response) {
       priceData,
       indicatorData,
       reqStartDate,
-      reqEndDate
+      reqEndDate,
+      debug
     );
 
     // Get cache stats

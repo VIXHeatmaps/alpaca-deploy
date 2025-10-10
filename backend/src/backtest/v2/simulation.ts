@@ -114,7 +114,8 @@ export async function runSimulation(
   priceData: PriceData,
   indicatorData: IndicatorValues,
   startDate: string,
-  endDate: string
+  endDate: string,
+  debug = false
 ): Promise<SimulationResult> {
   console.log('\n[SIMULATION] Starting backtest simulation...');
   console.log(`[SIMULATION] Date range: ${startDate} → ${endDate}`);
@@ -249,7 +250,7 @@ export async function runSimulation(
     const indicatorMap = buildIndicatorMap(indicatorValuesForDate);
 
     // Execute strategy to get positions
-    const result: ExecutionResult = executeStrategy(elements, indicatorMap);
+    const result: ExecutionResult = executeStrategy(elements, indicatorMap, debug);
     const positions = result.positions;
 
     // Debug: log first few days
