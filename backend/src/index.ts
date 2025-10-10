@@ -1835,6 +1835,8 @@ async function startBatchStrategyJob(
       };
 
       // Use API keys passed from the original request
+      console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - Assignment:`, JSON.stringify(assignment));
+      console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - First element:`, JSON.stringify(mutatedElements[0]));
       console.log(`[BATCH WORKER] Using credentials for run ${idx + 1}/${total}: ${apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING'}`);
 
       const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
@@ -1866,9 +1868,12 @@ async function startBatchStrategyJob(
       await batchJobsDb.updateBatchJobProgress(jobId, idx + 1);
 
     } catch (err: any) {
+      const errorMsg = err?.response?.data?.error || err?.message || 'Batch strategy backtest failed';
+      console.error(`[BATCH WORKER] Run ${idx + 1}/${total} FAILED:`, errorMsg);
+      console.error(`[BATCH WORKER] Full error:`, JSON.stringify(err?.response?.data || err?.message));
       await batchJobsDb.updateBatchJob(jobId, {
         status: 'failed',
-        error: err?.response?.data?.error || err?.message || 'Batch strategy backtest failed',
+        error: errorMsg,
       });
       return;
     }
