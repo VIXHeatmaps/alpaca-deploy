@@ -4,8 +4,8 @@
 
 import { normalizeVarName } from "../types/variables";
 
-export const VARIABLE_REGEX = /\$[A-Za-z0-9_]+/g;
-export const VARIABLE_TOKEN_RE = /^\$[A-Za-z0-9_]+$/;
+export const VARIABLE_REGEX = /\$[^\s,;]+/g;
+export const VARIABLE_TOKEN_RE = /^\$[^\s,;]+$/;
 
 export const normalizeVariableToken = (token: string): string =>
   normalizeVarName(token.replace("$", ""));
