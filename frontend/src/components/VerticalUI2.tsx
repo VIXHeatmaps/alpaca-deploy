@@ -912,7 +912,8 @@ function IndicatorParams({
                   background: (hasError || hasUndefinedVar) ? '#fee2e2' : (value ? '#fff' : '#f9fafb'),
                   fontSize: '13px',
                   color: value ? '#111827' : '#9ca3af',
-                  width: '45px',
+                  width: `${Math.max((value || String(defaultValue)).length * 9 + 16, 45)}px`,
+                  maxWidth: '200px',
                   borderRadius: '3px',
                   textAlign: 'center',
                 }}
@@ -1032,7 +1033,8 @@ function ConditionRow({
           background: (hasFieldError(elementId, `conditions.${conditionIndex}.ticker`, validationErrors) || tickerHasUndefinedVar) ? '#fee2e2' : '#fff',
           fontSize: '13px',
           color: condition.ticker ? '#111827' : '#9ca3af',
-          width: '80px',
+          width: `${Math.max((condition.ticker || 'Ticker').length * 9 + 20, 80)}px`,
+          maxWidth: '300px',
           flexShrink: 0,
           borderRadius: '4px',
         }}
@@ -1107,7 +1109,8 @@ function ConditionRow({
             background: (hasFieldError(elementId, `conditions.${conditionIndex}.threshold`, validationErrors) || thresholdHasUndefinedVar) ? '#fee2e2' : '#fff',
             fontSize: '13px',
             color: condition.threshold ? '#111827' : '#9ca3af',
-            width: '80px',
+            width: `${Math.max((condition.threshold || 'Value').length * 9 + 20, 80)}px`,
+            maxWidth: '300px',
             flexShrink: 0,
             borderRadius: '4px',
           }}
@@ -1177,7 +1180,8 @@ function ConditionRow({
               background: (hasFieldError(elementId, `conditions.${conditionIndex}.rightTicker`, validationErrors) || rightTickerHasUndefinedVar) ? '#fee2e2' : '#fff',
               fontSize: '13px',
               color: condition.rightTicker ? '#111827' : '#9ca3af',
-              width: '80px',
+              width: `${Math.max((condition.rightTicker || 'Ticker').length * 9 + 20, 80)}px`,
+              maxWidth: '300px',
               flexShrink: 0,
               borderRadius: '4px',
             }}

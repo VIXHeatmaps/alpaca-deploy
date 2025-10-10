@@ -14,12 +14,13 @@ export type VarList = {
 const VARS_KEY = "vars_v1";
 const MIGRATED_KEY = "vars_migrated_to_db";
 
-// Case-insensitive, allow any normal characters after the $ (we normalize on save)
+// Allow alphanumeric, underscore, and special characters like < > after the $
 export function normalizeVarName(input: string): string {
   if (!input) return "";
   const s = String(input).trim();
   const noDollar = s.startsWith("$") ? s.slice(1) : s;
-  return noDollar.toLowerCase();
+  // Keep the original case and allow <, >, and other special characters
+  return noDollar;
 }
 
 export function loadVarLists(): VarList[] {

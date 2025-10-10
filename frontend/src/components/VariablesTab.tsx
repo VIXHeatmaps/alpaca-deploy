@@ -203,22 +203,6 @@ export function VariablesTab() {
     }
   };
 
-  const updateType = async (idx: number, type: VarType) => {
-    const varToUpdate = vars[idx];
-    if (!varToUpdate) return;
-
-    try {
-      if (varToUpdate.id) {
-        const updated = await variablesApi.updateVariableList(varToUpdate.id, { type });
-        setVars((vs) => vs.map((v, i) => (i === idx ? updated : v)));
-      } else {
-        setVars((vs) => vs.map((v, i) => (i === idx ? { ...v, type } : v)));
-      }
-    } catch (err: any) {
-      console.error("Failed to update variable type:", err);
-      setError(err.message || "Failed to update variable type");
-    }
-  };
 
   const selected = sel >= 0 ? vars[sel] : null;
 
@@ -483,40 +467,6 @@ export function VariablesTab() {
               >
                 Remove
               </button>
-            </div>
-
-            {/* Type selector */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <label
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "#374151",
-                }}
-              >
-                Type
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["ticker", "number", "date"] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => updateType(sel, type)}
-                    style={{
-                      padding: "6px 12px",
-                      borderRadius: 4,
-                      border: "1px solid " + (selected.type === type ? "#3b82f6" : "#d1d5db"),
-                      background: selected.type === type ? "#eff6ff" : "#fff",
-                      color: selected.type === type ? "#1e40af" : "#6b7280",
-                      fontSize: 13,
-                      fontWeight: selected.type === type ? 500 : 400,
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Values editor */}
