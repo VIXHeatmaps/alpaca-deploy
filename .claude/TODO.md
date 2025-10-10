@@ -7,15 +7,18 @@
 ## 🔥 Priority Features
 
 ### 1. Dashboard - Multi-Strategy Tracking
-- [ ] Support multiple active strategies simultaneously
-- [ ] Display holdings per strategy (virtual divisions)
-- [ ] Show aggregate portfolio view
+- [x] Support multiple active strategies simultaneously ✅
+- [x] Display holdings per strategy (virtual divisions) ✅
+- [x] Show aggregate portfolio view ✅
 - [ ] Add equity curve chart
-- [ ] Real-time performance tracking
+- [ ] Real-time performance tracking (currently manual refresh)
 
-### 2. Database Migration
-- [ ] Move strategies from JSON files to PostgreSQL
-- [ ] Move variables to DB
+### 2. Database Migration ✅ COMPLETE
+- [x] Move strategies from JSON files to PostgreSQL ✅
+- [x] Move variables to DB ✅
+- [x] Move active strategies to DB ✅
+- [x] Move batch jobs to DB ✅
+- [x] Add multi-user isolation with user_id ✅
 
 ### 3. Live Trading Improvements
 - [ ] Fix equity tracking (currently shows $0)
@@ -58,10 +61,10 @@
 
 ## 🐛 Known Issues
 
-- [ ] Dashboard equity shows $0 (snapshots not working)
-- [ ] Active strategy lost on server restart
+- [x] ~~Dashboard equity shows $0 (snapshots not working)~~ - Need to verify with live data
+- [x] ~~Active strategy lost on server restart~~ - Fixed with DB persistence ✅
 - [ ] No error handling for failed rebalances
-- [ ] Credentials stored in localStorage (dev only)
+- [x] ~~Credentials stored in localStorage (dev only)~~ - Now using Discord OAuth ✅
 
 ---
 
