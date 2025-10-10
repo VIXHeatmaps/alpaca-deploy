@@ -168,10 +168,15 @@ async function fetchBarsFromAlpaca(
   try {
     // Alpaca multi-symbol endpoint
     const url = `${ALPACA_DATA_URL}/v2/stocks/bars`;
+
+    // Ensure dates are in YYYY-MM-DD format (strip any time/timezone info)
+    const startDate = typeof start === 'string' ? start.split('T')[0] : start;
+    const endDate = typeof end === 'string' ? end.split('T')[0] : end;
+
     const params = {
       symbols: symbols.join(','),
-      start,
-      end,
+      start: startDate,
+      end: endDate,
       timeframe: '1Day',
       adjustment: 'all',
       feed: 'sip',
