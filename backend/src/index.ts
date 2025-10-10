@@ -3205,7 +3205,7 @@ app.post('/api/execute_strategy', requireAuth, async (req: Request, res: Respons
 /* ===== BEGIN: BLOCK N — Strategy Backtest Endpoint (Historical) ===== */
 
 // Toggle between legacy and v2 backtest engines
-const USE_V2_ENGINE = process.env.USE_NEW_ENGINE === 'true';
+const USE_V2_ENGINE = true;  // Force V2 for testing
 
 app.post('/api/backtest_strategy', async (req: Request, res: Response) => {
   if (USE_V2_ENGINE) {
