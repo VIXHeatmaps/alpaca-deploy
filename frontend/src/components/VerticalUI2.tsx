@@ -3018,6 +3018,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           'APCA-API-SECRET-KEY': apiSecret,
         },
         body: JSON.stringify({
+          variables: detail.map(d => ({ name: d.name, values: d.values })),
           assignments,
           baseStrategy: {
             elements,
