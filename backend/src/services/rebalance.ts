@@ -150,11 +150,13 @@ export async function rebalanceActiveStrategy(
   apiKey: string,
   apiSecret: string
 ): Promise<RebalanceResult> {
-  console.log('\n=== STARTING REBALANCE ===');
+  const startTime = Date.now();
+  console.log('\n🔄 [TRADE WINDOW START] === STARTING REBALANCE ===');
 
   // Get active strategy
   const strategy = await getActiveStrategy();
   if (!strategy) {
+    console.log('✗ [TRADE WINDOW END] No active strategy to rebalance');
     throw new Error('No active strategy to rebalance');
   }
 
@@ -211,6 +213,8 @@ export async function rebalanceActiveStrategy(
       'daily'
     );
 
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✓ [TRADE WINDOW END] Rebalance complete in ${duration}s - No changes needed`);
     console.log('=== REBALANCE COMPLETE (NO CHANGES) ===\n');
     return {
       soldSymbols: [],
@@ -242,11 +246,18 @@ export async function rebalanceActiveStrategy(
     'daily'
   );
 
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  const soldSymbols = toSell.map(s => s.symbol);
+  const boughtSymbols = toBuy.map(b => b.symbol);
+  console.log(`✓ [TRADE WINDOW END] Rebalance complete in ${duration}s`);
+  console.log(`  → Sold: ${soldSymbols.length} positions ${soldSymbols.length > 0 ? `(${soldSymbols.join(', ')})` : ''}`);
+  console.log(`  → Bought: ${boughtSymbols.length} positions ${boughtSymbols.length > 0 ? `(${boughtSymbols.join(', ')})` : ''}`);
+  console.log(`  → Cash remaining: $${cashRemaining.toFixed(2)}`);
   console.log('=== REBALANCE COMPLETE ===\n');
 
   return {
-    soldSymbols: toSell.map(s => s.symbol),
-    boughtSymbols: toBuy.map(b => b.symbol),
+    soldSymbols,
+    boughtSymbols,
     updatedHoldings: newHoldings.map(h => ({ symbol: h.symbol, qty: h.qty })),
     cashRemaining,
   };

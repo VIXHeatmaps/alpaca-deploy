@@ -45,9 +45,11 @@ async function checkPendingOrders() {
       return; // No pending orders to check
     }
 
-    console.log(`[FILL CHECKER] Checking ${strategy.pendingOrders.length} pending orders...`);
+    console.log(`\n📋 [FILL CHECK] Checking ${strategy.pendingOrders.length} pending orders...`);
 
     let anyFilled = false;
+    let filledCount = 0;
+    let canceledCount = 0;
     const stillPending = [];
 
     for (const pendingOrder of strategy.pendingOrders) {
@@ -57,6 +59,7 @@ async function checkPendingOrders() {
         if (order.status === 'filled' || order.status === 'partially_filled') {
           console.log(`[FILL CHECKER] Order ${pendingOrder.orderId} filled: ${order.filled_qty} ${pendingOrder.symbol} @ ${order.filled_avg_price}`);
           anyFilled = true;
+          filledCount++;
 
           // Update holdings with filled quantity
           const filledQty = parseFloat(order.filled_qty);
@@ -73,6 +76,7 @@ async function checkPendingOrders() {
         } else if (order.status === 'canceled' || order.status === 'expired' || order.status === 'rejected') {
           console.warn(`[FILL CHECKER] Order ${pendingOrder.orderId} ${order.status} - removing from pending`);
           anyFilled = true; // Need to update strategy
+          canceledCount++;
         } else {
           // Unknown status, keep it pending
           console.warn(`[FILL CHECKER] Order ${pendingOrder.orderId} has unknown status: ${order.status}`);
@@ -99,7 +103,8 @@ async function checkPendingOrders() {
         pendingOrders: stillPending.length > 0 ? stillPending : undefined,
       });
 
-      console.log(`[FILL CHECKER] Strategy updated - current value: $${currentValue.toFixed(2)}, ${stillPending.length} orders still pending`);
+      console.log(`✓ [FILL CHECK] ${filledCount} filled, ${canceledCount} canceled, ${stillPending.length} still pending`);
+      console.log(`  → Portfolio value: $${currentValue.toFixed(2)}`);
 
       // Create initial snapshot if all orders are now filled and no snapshot exists yet
       if (stillPending.length === 0) {
@@ -128,7 +133,7 @@ async function checkPendingOrders() {
         }
       }
     } else {
-      console.log('[FILL CHECKER] No orders filled yet');
+      console.log(`✓ [FILL CHECK] No fills - ${stillPending.length} orders still pending`);
     }
   } catch (err: any) {
     console.error('[FILL CHECKER] Error checking pending orders:', err.message);
