@@ -43,7 +43,9 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
       const updates = await Promise.all(
         runningJobs.map(async (job) => {
           try {
-            const response = await fetch(`${API_BASE}/api/batch_backtest_strategy/${job.id}`);
+            const response = await fetch(`${API_BASE}/api/batch_backtest_strategy/${job.id}`, {
+              credentials: 'include'
+            });
             if (response.ok) {
               const data = await response.json();
               return {
@@ -147,6 +149,7 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
     try {
       const response = await fetch(`${API_BASE}/api/batch_backtest_strategy/${job.id}/cancel`, {
         method: 'POST',
+        credentials: 'include',
       });
 
       if (!response.ok) {
