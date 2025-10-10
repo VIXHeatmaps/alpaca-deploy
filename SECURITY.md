@@ -69,15 +69,29 @@ All data deletion should happen through the API endpoints which have proper auth
 
 ## Security Audit Trail
 
-### 2025-10-10: Data Loss Incident
+### 2025-10-10: Data Loss Incident - Root Cause Analysis
 - **What happened**: All production data (strategies, variables, active_strategies) was deleted
-- **Cause**: Records had `user_id = NULL` after migration, likely deleted by cleanup script
+- **Root cause**: Migration `20251009235046_add_user_id_not_null_constraints.ts` contained deletion logic:
+  ```typescript
+  await knex('strategies').whereNull('user_id').del();
+  await knex('variable_lists').whereNull('user_id').del();
+  await knex('active_strategies').whereNull('user_id').del();
+  ```
+- **Timeline**:
+  1. User created strategies last night - saved with `user_id = NULL` (before full user_id implementation)
+  2. Migration created today to add NOT NULL constraints
+  3. Migration auto-ran on Railway when code was pushed
+  4. All NULL user_id records were deleted (including user's test strategies)
 - **Resolution**:
-  - Added NOT NULL constraints to prevent future NULL user_ids
-  - Deleted all cleanup scripts from repository
+  - Modified migration to FAIL instead of DELETE when NULL records found
+  - Added NOT NULL constraints (still active - prevents future NULL data)
   - Created backup script for manual backups
-  - Documented security measures
-- **Prevention**: Database now rejects any data without user_id
+  - Documented incident and prevention measures
+- **Prevention**:
+  - Migrations must NEVER delete data automatically
+  - Database now rejects any data without user_id
+  - Always backup before migrations
+  - Test migrations on local database first
 
 ## Code Review Checklist
 
