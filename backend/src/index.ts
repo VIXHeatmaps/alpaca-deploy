@@ -25,6 +25,7 @@ const QUANTSTATS_TIMEOUT_MS = Number(process.env.QUANTSTATS_TIMEOUT_MS || 5000);
 const FEED: string = (process.env.ALPACA_FEED || 'sip').toLowerCase();
 const INTERNAL_API_BASE = process.env.INTERNAL_API_BASE || `http://127.0.0.1:${port}`;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const BATCH_CONCURRENCY = Number(process.env.BATCH_CONCURRENCY) || 4;
 
 const parseCsvEnv = (value: string | undefined, normalize?: (input: string) => string): Set<string> => {
   if (!value) return new Set();
@@ -1822,62 +1823,100 @@ async function startBatchStrategyJob(
   }
 
   const runs: Array<{variables: Record<string, string>; metrics: any}> = [];
+  let completedCount = 0;
 
-  for (let idx = 0; idx < combos.length; idx++) {
-    const assignment = combos[idx];
-    try {
-      const mutatedElements = applyVariablesToElements(JSON.parse(JSON.stringify(job.strategy_elements)), assignment);
-      const payload = {
-        elements: mutatedElements,
-        benchmarkSymbol: job.benchmark_symbol || 'SPY',
-        startDate: job.start_date || 'max',
-        endDate: job.end_date || getMarketDateToday(),
-        debug: false,
-      };
+  console.log(`[BATCH WORKER] Processing ${total} backtests with concurrency=${BATCH_CONCURRENCY}`);
 
-      // Use API keys passed from the original request
-      console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - Assignment:`, JSON.stringify(assignment));
-      console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - First element:`, JSON.stringify(mutatedElements[0]));
-      console.log(`[BATCH WORKER] Using credentials for run ${idx + 1}/${total}: ${apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING'}`);
+  // Process in chunks for parallel execution
+  for (let chunkStart = 0; chunkStart < combos.length; chunkStart += BATCH_CONCURRENCY) {
+    const chunk = combos.slice(chunkStart, chunkStart + BATCH_CONCURRENCY);
+    console.log(`[BATCH WORKER] Processing chunk ${Math.floor(chunkStart / BATCH_CONCURRENCY) + 1}/${Math.ceil(total / BATCH_CONCURRENCY)} (${chunk.length} backtests)`);
 
-      const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
-        headers: {
-          'APCA-API-KEY-ID': apiKey,
-          'APCA-API-SECRET-KEY': apiSecret,
-        },
-        timeout: 300000, // 5 minutes per backtest
-      });
+    // Run chunk in parallel
+    const chunkPromises = chunk.map(async (assignment, chunkIdx) => {
+      const idx = chunkStart + chunkIdx;
+      try {
+        const mutatedElements = applyVariablesToElements(JSON.parse(JSON.stringify(job.strategy_elements)), assignment);
+        const payload = {
+          elements: mutatedElements,
+          benchmarkSymbol: job.benchmark_symbol || 'SPY',
+          startDate: job.start_date || 'max',
+          endDate: job.end_date || getMarketDateToday(),
+          debug: false,
+        };
 
-      const resp = response?.data || {};
-      const metricsRaw = resp.metrics || {};
-      const metrics = normalizeMetrics(metricsRaw);
+        console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - Assignment:`, JSON.stringify(assignment));
+        console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - First element:`, JSON.stringify(mutatedElements[0]));
+        console.log(`[BATCH WORKER] Using credentials for run ${idx + 1}/${total}: ${apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING'}`);
 
-      runs.push({
-        variables: assignment,
-        metrics,
-      });
+        const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': apiSecret,
+          },
+          timeout: 300000, // 5 minutes per backtest
+        });
 
-      // Save this run to database immediately
-      await batchJobsDb.createBatchJobRun({
-        batch_job_id: jobId,
-        run_index: idx,
-        variables: assignment,
-        metrics,
-      });
+        const resp = response?.data || {};
+        const metricsRaw = resp.metrics || {};
+        const metrics = normalizeMetrics(metricsRaw);
 
-      // Update progress in database
-      await batchJobsDb.updateBatchJobProgress(jobId, idx + 1);
+        // Save this run to database immediately
+        await batchJobsDb.createBatchJobRun({
+          batch_job_id: jobId,
+          run_index: idx,
+          variables: assignment,
+          metrics,
+        });
 
-    } catch (err: any) {
-      const errorMsg = err?.response?.data?.error || err?.message || 'Batch strategy backtest failed';
-      console.error(`[BATCH WORKER] Run ${idx + 1}/${total} FAILED:`, errorMsg);
-      console.error(`[BATCH WORKER] Full error:`, JSON.stringify(err?.response?.data || err?.message));
-      await batchJobsDb.updateBatchJob(jobId, {
-        status: 'failed',
-        error: errorMsg,
-      });
-      return;
+        console.log(`[BATCH WORKER] Run ${idx + 1}/${total} - COMPLETE`);
+
+        return {
+          idx,
+          variables: assignment,
+          metrics,
+        };
+
+      } catch (err: any) {
+        const errorMsg = err?.response?.data?.error || err?.message || 'Batch strategy backtest failed';
+        console.error(`[BATCH WORKER] Run ${idx + 1}/${total} FAILED:`, errorMsg);
+        console.error(`[BATCH WORKER] Full error:`, JSON.stringify(err?.response?.data || err?.message));
+
+        // Mark individual run as failed but continue processing other runs
+        await batchJobsDb.createBatchJobRun({
+          batch_job_id: jobId,
+          run_index: idx,
+          variables: assignment,
+          metrics: { error: errorMsg },
+        });
+
+        return {
+          idx,
+          variables: assignment,
+          metrics: { error: errorMsg },
+          failed: true,
+        };
+      }
+    });
+
+    // Wait for all backtests in chunk to complete
+    const chunkResults = await Promise.all(chunkPromises);
+
+    // Add successful results to runs array (in order)
+    for (const result of chunkResults.sort((a, b) => a.idx - b.idx)) {
+      if (!result.failed) {
+        runs.push({
+          variables: result.variables,
+          metrics: result.metrics,
+        });
+      }
+      completedCount++;
     }
+
+    // Update progress after each chunk
+    await batchJobsDb.updateBatchJobProgress(jobId, completedCount);
+
+    console.log(`[BATCH WORKER] Chunk complete - Progress: ${completedCount}/${total}`);
   }
 
   // Calculate summary
