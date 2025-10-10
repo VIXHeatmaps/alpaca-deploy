@@ -4345,7 +4345,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
               setLoadingResults(true);
               try {
-                const response = await fetch(`${API_BASE}${job.viewUrl}`);
+                const response = await fetch(`${API_BASE}${job.viewUrl}`, {
+                  credentials: 'include'
+                });
                 const data = await response.json();
 
                 if (!response.ok) {

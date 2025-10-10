@@ -91,7 +91,9 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
 
     setLoadingResults(true);
     try {
-      const response = await fetch(`${API_BASE}${job.viewUrl}`);
+      const response = await fetch(`${API_BASE}${job.viewUrl}`, {
+        credentials: 'include'
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -122,7 +124,9 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
     }
 
     try {
-      const response = await fetch(`${API_BASE}${job.csvUrl}`);
+      const response = await fetch(`${API_BASE}${job.csvUrl}`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error('Failed to download CSV');
       }
