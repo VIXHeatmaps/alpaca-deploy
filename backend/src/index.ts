@@ -3638,6 +3638,14 @@ app.delete('/api/strategies/:id', requireAuth, async (req: Request, res: Respons
 app.listen(port, async () => {
   console.log(`Alpaca algo backend listening on port ${port} (feed=${FEED}, indicator=split, returns=all)`);
 
+  // Ensure database tables exist
+  try {
+    const { ensureAllTables } = await import('./db/ensureTables');
+    await ensureAllTables();
+  } catch (err: any) {
+    console.error('Failed to ensure database tables:', err.message);
+  }
+
   // Start cache purge scheduler for V2 backtest engine
   try {
     const { startCachePurgeScheduler } = await import('./backtest/v2/cachePurgeScheduler');
