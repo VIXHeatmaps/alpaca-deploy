@@ -12,7 +12,7 @@ export interface ActiveStrategyDb {
   name: string;
   flow_data: any; // JSONB - Flow nodes/edges/globals
   mode: 'paper' | 'live';
-  status: 'pending' | 'active' | 'liquidating' | 'stopped';
+  status: 'active' | 'paused' | 'stopped';
   initial_capital: string; // DECIMAL stored as string
   current_capital: string | null;
   position_attribution: any | null; // JSONB - { symbol: { qty, allocation_pct }}
@@ -44,7 +44,7 @@ export interface CreateActiveStrategyInput {
 }
 
 export interface UpdateActiveStrategyInput {
-  status?: 'pending' | 'active' | 'liquidating' | 'stopped';
+  status?: 'active' | 'paused' | 'stopped';
   current_capital?: number;
   position_attribution?: any;
   holdings?: any[];
@@ -89,23 +89,23 @@ export async function getActiveStrategyById(id: number): Promise<ActiveStrategyD
 }
 
 /**
- * Get all active strategies (pending, active, liquidating - excludes stopped)
+ * Get all active strategies (not stopped)
  */
 export async function getAllActiveStrategies(): Promise<ActiveStrategyDb[]> {
   const strategies = await db('active_strategies')
-    .whereIn('status', ['pending', 'active', 'liquidating'])
+    .whereIn('status', ['active', 'paused'])
     .orderBy('started_at', 'desc');
 
   return strategies.map(parseActiveStrategy);
 }
 
 /**
- * Get all active strategies for a specific user (pending, active, liquidating - excludes stopped)
+ * Get all active strategies for a specific user (not stopped)
  */
 export async function getActiveStrategiesByUserId(userId: string): Promise<ActiveStrategyDb[]> {
   const strategies = await db('active_strategies')
     .where({ user_id: userId })
-    .whereIn('status', ['pending', 'active', 'liquidating'])
+    .whereIn('status', ['active', 'paused'])
     .orderBy('started_at', 'desc');
 
   return strategies.map(parseActiveStrategy);
@@ -165,11 +165,11 @@ export async function deleteActiveStrategy(id: number): Promise<boolean> {
 }
 
 /**
- * Check if any active strategies exist (pending, active, liquidating - excludes stopped)
+ * Check if any active strategies exist
  */
 export async function hasActiveStrategies(): Promise<boolean> {
   const count = await db('active_strategies')
-    .whereIn('status', ['pending', 'active', 'liquidating'])
+    .whereIn('status', ['active', 'paused'])
     .count('* as count')
     .first();
 
