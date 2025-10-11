@@ -142,18 +142,6 @@ export async function deleteBatchJob(id: string): Promise<boolean> {
 }
 
 /**
- * Delete stuck batch jobs (running or queued with 0 progress)
- */
-export async function deleteStuckJobs(userId: string): Promise<number> {
-  const deleted = await db('batch_jobs')
-    .where({ user_id: userId })
-    .whereIn('status', ['running', 'queued'])
-    .where('completed', 0)
-    .del();
-  return deleted;
-}
-
-/**
  * Create batch job run
  */
 export async function createBatchJobRun(run: Omit<BatchJobRunDb, 'id' | 'created_at'>): Promise<BatchJobRunDb> {

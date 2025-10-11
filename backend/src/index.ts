@@ -2085,26 +2085,14 @@ app.post('/api/batch_backtest_strategy/:id/cancel', requireAuth, async (req: Req
     return res.status(400).json({ error: 'Can only cancel running or queued jobs' });
   }
 
-  await batchJobsDb.updateBatchJob(req.params.id, {
-    status: 'failed',
-    error: 'Cancelled by user',
-    completed_at: new Date(),
-  });
+  // Delete the job completely (cascades to runs)
+  const deleted = await batchJobsDb.deleteBatchJob(req.params.id);
 
-  return res.json({ success: true, message: 'Job cancelled' });
-});
-
-// Admin endpoint to delete stuck jobs
-app.delete('/api/batch_backtest_strategy/admin/stuck', requireAuth, async (req: Request, res: Response) => {
-  const userId = (req as any).user?.id;
-  if (!userId) {
-    return res.status(401).json({ error: 'User not authenticated' });
+  if (!deleted) {
+    return res.status(500).json({ error: 'Failed to delete job' });
   }
 
-  // Delete jobs that are stuck at 0 progress
-  const result = await batchJobsDb.deleteStuckJobs(userId);
-
-  return res.json({ success: true, deleted: result });
+  return res.json({ success: true, message: 'Job deleted' });
 });
 
 app.get('/api/batch_backtest_strategy/:id/view', requireAuth, async (req: Request, res: Response) => {
