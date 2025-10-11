@@ -1533,7 +1533,9 @@ app.post('/api/strategy/:id/liquidate', requireAuth, async (req: Request, res: R
     console.log(`\n=== LIQUIDATING STRATEGY ${strategyId}: ${strategy.name} ===`);
 
     const soldPositions: Array<{ symbol: string; qty: number; proceeds: number }> = [];
+    const pendingOrders: Array<{ orderId: string; symbol: string; qty: number; side: string }> = [];
     let totalProceeds = 0;
+    let hasPendingOrders = false;
 
     // Calculate this strategy's virtual holdings using attribution
     const attribution = strategy.position_attribution || {};
@@ -1554,6 +1556,8 @@ app.post('/api/strategy/:id/liquidate', requireAuth, async (req: Request, res: R
         if (pending) {
           console.log(`Sell order pending for ${holding.symbol} - will fill when market opens`);
           soldPositions.push({ symbol: holding.symbol, qty: filledQty, proceeds: 0 });
+          pendingOrders.push({ orderId: order.id, symbol: holding.symbol, qty: qtyToSell, side: 'sell' });
+          hasPendingOrders = true;
         } else {
           const proceeds = filledQty * avgPrice;
           totalProceeds += proceeds;
@@ -1565,6 +1569,31 @@ app.post('/api/strategy/:id/liquidate', requireAuth, async (req: Request, res: R
         // Continue selling other positions
       }
     }
+
+    // If orders are pending, set status to 'liquidating' and keep holdings
+    // If all filled immediately, set status to 'stopped' and clear holdings
+    if (hasPendingOrders) {
+      console.log('=== LIQUIDATION PENDING ===');
+      console.log(`${pendingOrders.length} sell orders pending - strategy status set to 'liquidating'`);
+
+      await updateActiveStrategy(strategyId, {
+        status: 'liquidating',
+        pending_orders: pendingOrders,
+        // Keep holdings intact so user can see what's being liquidated
+      });
+
+      return res.json({
+        success: true,
+        message: 'Liquidation started - sell orders pending',
+        soldPositions,
+        pendingOrders: pendingOrders.length,
+        totalProceeds: 0, // Will be calculated after fills
+      });
+    }
+
+    // All orders filled immediately - complete liquidation
+    console.log('=== LIQUIDATION COMPLETE ===');
+    console.log(`Total proceeds: $${totalProceeds.toFixed(2)}`);
 
     // Create final snapshot
     if (totalProceeds > 0) {
@@ -1587,13 +1616,11 @@ app.post('/api/strategy/:id/liquidate', requireAuth, async (req: Request, res: R
       stopped_at: new Date().toISOString(),
       current_capital: totalProceeds,
       holdings: [],
+      pending_orders: [],
     });
 
     // Remove from attribution (redistribute to remaining strategies)
     await removeStrategyFromAttribution(strategyId);
-
-    console.log('=== LIQUIDATION COMPLETE ===');
-    console.log(`Total proceeds: $${totalProceeds.toFixed(2)}`);
 
     return res.json({
       success: true,

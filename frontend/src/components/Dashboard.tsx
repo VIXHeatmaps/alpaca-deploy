@@ -38,6 +38,7 @@ type StrategyHolding = {
 type ActiveStrategy = {
   id: string;
   name: string;
+  status?: string;
   investAmount: number;
   currentValue: number;
   totalReturn?: number;
@@ -501,6 +502,7 @@ export function Dashboard({
           const mappedStrategies = response.data.strategies.map((dbStrategy: any) => ({
             id: String(dbStrategy.id),
             name: dbStrategy.name,
+            status: dbStrategy.status,
             investAmount: dbStrategy.initial_capital,
             currentValue: dbStrategy.current_capital || 0,
             totalReturn: 0,
@@ -893,19 +895,19 @@ export function Dashboard({
                               </div>
                             </td>
                             <td style={styles.tableCell}>
-                              {!strategy.lastRebalance ? (
+                              {strategy.status === 'liquidating' ? (
                                 <span style={{
                                   fontSize: 10,
                                   fontWeight: 600,
                                   padding: "4px 8px",
                                   borderRadius: 4,
-                                  background: "#fff3e0",
-                                  color: "#e65100",
-                                  border: "1px solid #ffb74d",
+                                  background: "#fce4ec",
+                                  color: "#b00020",
+                                  border: "1px solid #f48fb1",
                                 }}>
-                                  PENDING
+                                  LIQUIDATING
                                 </span>
-                              ) : (
+                              ) : strategy.holdings.length > 0 ? (
                                 <span style={{
                                   fontSize: 10,
                                   fontWeight: 600,
@@ -916,6 +918,18 @@ export function Dashboard({
                                   border: "1px solid #b7e3c8",
                                 }}>
                                   LIVE
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  padding: "4px 8px",
+                                  borderRadius: 4,
+                                  background: "#fff3e0",
+                                  color: "#e65100",
+                                  border: "1px solid #ffb74d",
+                                }}>
+                                  PENDING
                                 </span>
                               )}
                             </td>
