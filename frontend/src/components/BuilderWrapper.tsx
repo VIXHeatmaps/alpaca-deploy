@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import VerticalUI2 from "./VerticalUI2";
 import { LibraryView } from "./LibraryView";
 import type { BatchJob } from "../types/batchJobs";
-import { getAllJobs, putJob } from "../storage/batchJobsStore";
+import { getAllJobs, putJob, deleteJob } from "../storage/batchJobsStore";
 import type { Strategy } from "../api/strategies";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
@@ -40,6 +40,7 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
     if (runningJobs.length === 0) return;
 
     const pollJobs = async () => {
+      const jobsToRemove: string[] = [];
       const updates = await Promise.all(
         runningJobs.map(async (job) => {
           try {
@@ -57,6 +58,11 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
                 csvUrl: data.csvUrl,
                 error: data.error,
               };
+            } else if (response.status === 404) {
+              // Job doesn't exist in backend - mark for removal
+              console.log(`Job ${job.id} not found (404), removing from list`);
+              jobsToRemove.push(job.id);
+              return null;
             }
           } catch (err) {
             console.error(`Failed to poll job ${job.id}:`, err);
@@ -67,13 +73,21 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
 
       // Update batch jobs with polling results and persist to IndexedDB
       setBatchJobs(prev => {
-        const updated = prev.map(job => {
-          const polled = updates.find(u => u.id === job.id);
-          return polled || job;
-        });
+        const updated = prev
+          .filter(job => !jobsToRemove.includes(job.id)) // Remove 404'd jobs
+          .map(job => {
+            const polled = updates.find(u => u?.id === job.id);
+            return polled || job;
+          });
         // Persist each updated job to IndexedDB
         updates.forEach(job => {
-          putJob(job).catch(err => console.error('Failed to persist job:', err));
+          if (job) {
+            putJob(job).catch(err => console.error('Failed to persist job:', err));
+          }
+        });
+        // Delete removed jobs from IndexedDB
+        jobsToRemove.forEach(jobId => {
+          deleteJob(jobId).catch(err => console.error('Failed to delete job from IndexedDB:', err));
         });
         return updated;
       });
