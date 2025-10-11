@@ -505,25 +505,17 @@ app.post('/api/feedback', feedbackUpload.single('screenshot'), async (req: Reque
       return res.status(400).json({ error: 'Type and title are required' });
     }
 
-    // Create feedback record
-    const feedback = {
+    const { createFeedback } = await import('./db/feedbackDb');
+
+    // Create feedback record in database
+    const feedback = await createFeedback({
       id: randomUUID(),
       type,
       title,
       description: description || '',
       screenshot: screenshot ? screenshot.filename : null,
       user_id: (req as any).user?.id || null,
-      created_at: new Date().toISOString(),
-    };
-
-    // Save to JSON file (simple approach for alpha)
-    const feedbackDir = path.join(__dirname, '../feedback');
-    if (!fs.existsSync(feedbackDir)) {
-      fs.mkdirSync(feedbackDir, { recursive: true });
-    }
-
-    const feedbackFile = path.join(feedbackDir, `${feedback.id}.json`);
-    fs.writeFileSync(feedbackFile, JSON.stringify(feedback, null, 2));
+    });
 
     console.log(`[FEEDBACK] ${type.toUpperCase()} submitted: ${title}`);
 
@@ -540,20 +532,8 @@ app.post('/api/feedback', feedbackUpload.single('screenshot'), async (req: Reque
  */
 app.get('/api/feedback', async (req: Request, res: Response) => {
   try {
-    const feedbackDir = path.join(__dirname, '../feedback');
-
-    if (!fs.existsSync(feedbackDir)) {
-      return res.json({ feedback: [] });
-    }
-
-    const files = fs.readdirSync(feedbackDir).filter(f => f.endsWith('.json'));
-    const feedback = files.map(file => {
-      const content = fs.readFileSync(path.join(feedbackDir, file), 'utf-8');
-      return JSON.parse(content);
-    });
-
-    // Sort by created_at descending (newest first)
-    feedback.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const { getAllFeedback } = await import('./db/feedbackDb');
+    const feedback = await getAllFeedback();
 
     return res.json({ feedback });
   } catch (err: any) {
@@ -569,14 +549,13 @@ app.get('/api/feedback', async (req: Request, res: Response) => {
 app.get('/api/feedback/:id/screenshot', async (req: Request, res: Response) => {
   try {
     const feedbackId = req.params.id;
-    const feedbackDir = path.join(__dirname, '../feedback');
-    const feedbackFile = path.join(feedbackDir, `${feedbackId}.json`);
+    const { getFeedbackById } = await import('./db/feedbackDb');
 
-    if (!fs.existsSync(feedbackFile)) {
+    const feedback = await getFeedbackById(feedbackId);
+
+    if (!feedback) {
       return res.status(404).json({ error: 'Feedback not found' });
     }
-
-    const feedback = JSON.parse(fs.readFileSync(feedbackFile, 'utf-8'));
 
     if (!feedback.screenshot) {
       return res.status(404).json({ error: 'No screenshot attached' });
