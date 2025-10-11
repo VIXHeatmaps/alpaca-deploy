@@ -260,11 +260,15 @@ export async function rebalanceActiveStrategy(
 
   if (strategyId) {
     // Update database strategy
-    const { updateActiveStrategy } = await import('../db/activeStrategiesDb');
+    const { updateActiveStrategy, getActiveStrategyById } = await import('../db/activeStrategiesDb');
+    const currentStrategy = await getActiveStrategyById(strategyId);
+
     await updateActiveStrategy(strategyId, {
       holdings: newHoldings.map(h => ({ symbol: h.symbol, qty: h.qty })),
       current_capital: newValue,
       last_rebalance_at: new Date().toISOString(),
+      // Set status to 'active' after first successful rebalance
+      status: currentStrategy?.status === 'pending' ? 'active' : undefined,
     });
   } else {
     // Update legacy file-based strategy

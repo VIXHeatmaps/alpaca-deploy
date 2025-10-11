@@ -38,6 +38,7 @@ type StrategyHolding = {
 type ActiveStrategy = {
   id: string;
   name: string;
+  status: 'pending' | 'active' | 'liquidating' | 'stopped';
   investAmount: number;
   currentValue: number;
   totalReturn?: number;
@@ -501,6 +502,7 @@ export function Dashboard({
           const mappedStrategies = response.data.strategies.map((dbStrategy: any) => ({
             id: String(dbStrategy.id),
             name: dbStrategy.name,
+            status: dbStrategy.status,
             investAmount: dbStrategy.initial_capital,
             currentValue: dbStrategy.current_capital || 0,
             totalReturn: 0,
@@ -893,7 +895,7 @@ export function Dashboard({
                               </div>
                             </td>
                             <td style={styles.tableCell}>
-                              {strategy.currentValue === 0 ? (
+                              {strategy.status === 'pending' ? (
                                 <span style={{
                                   fontSize: 10,
                                   fontWeight: 600,
@@ -905,7 +907,7 @@ export function Dashboard({
                                 }}>
                                   PENDING
                                 </span>
-                              ) : (
+                              ) : strategy.status === 'active' ? (
                                 <span style={{
                                   fontSize: 10,
                                   fontWeight: 600,
@@ -917,7 +919,19 @@ export function Dashboard({
                                 }}>
                                   ACTIVE
                                 </span>
-                              )}
+                              ) : strategy.status === 'liquidating' ? (
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  padding: "4px 8px",
+                                  borderRadius: 4,
+                                  background: "#fce4ec",
+                                  color: "#b00020",
+                                  border: "1px solid #f48fb1",
+                                }}>
+                                  LIQUIDATING
+                                </span>
+                              ) : null}
                             </td>
                             <td style={styles.tableCell}>
                               <strong>{formatCurrency(strategy.investAmount)}</strong>
