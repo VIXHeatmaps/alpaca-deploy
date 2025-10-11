@@ -1863,7 +1863,7 @@ async function startBatchStrategyJob(
           benchmarkSymbol: job.benchmark_symbol || 'SPY',
           startDate: job.start_date || 'max',
           endDate: job.end_date || getMarketDateToday(),
-          debug: false,
+          debug: true,
         };
 
         const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
