@@ -61,6 +61,30 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCance
     const downloadDisabled = job.status !== "finished";
     const cancelDisabled = job.status !== "running" && job.status !== "queued";
 
+    const getDuration = () => {
+      if (!job.completedAt || !job.createdAt) return "—";
+      const start = new Date(job.createdAt).getTime();
+      const end = new Date(job.completedAt).getTime();
+      const durationMs = end - start;
+      const durationSec = Math.round(durationMs / 1000);
+
+      if (durationSec < 60) {
+        return `${durationSec}s`;
+      }
+      const minutes = Math.floor(durationSec / 60);
+      const seconds = durationSec % 60;
+      return `${minutes}m ${seconds}s`;
+    };
+
+    const getBacktestsPerSecond = () => {
+      if (!job.completedAt || !job.createdAt || job.status !== "finished") return null;
+      const start = new Date(job.createdAt).getTime();
+      const end = new Date(job.completedAt).getTime();
+      const durationSec = (end - start) / 1000;
+      const bps = job.total / durationSec;
+      return bps.toFixed(1);
+    };
+
     const getStatusBadge = () => {
       const baseStyle = {
         fontSize: 10,
@@ -113,6 +137,16 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCance
           <div style={{ fontSize: 12, color: "#666" }}>
             {new Date(job.createdAt).toLocaleString()}
           </div>
+        </td>
+        <td style={tableStyles.td}>
+          <div style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>
+            {getDuration()}
+          </div>
+          {getBacktestsPerSecond() && (
+            <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+              {getBacktestsPerSecond()} backtests/sec
+            </div>
+          )}
         </td>
         <td style={tableStyles.td}>{getStatusBadge()}</td>
         <td style={{ ...tableStyles.td, textAlign: "center" as const }}>
@@ -196,6 +230,7 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCance
           <tr>
             <th style={tableStyles.th}>Name</th>
             <th style={tableStyles.th}>Date</th>
+            <th style={tableStyles.th}>Duration</th>
             <th style={tableStyles.th}>Status</th>
             <th style={{ ...tableStyles.th, textAlign: "center" as const }}>View</th>
             <th style={{ ...tableStyles.th, textAlign: "center" as const }}>Download CSV</th>

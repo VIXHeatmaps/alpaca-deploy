@@ -11,7 +11,7 @@
 - [x] Display holdings per strategy (virtual divisions) ✅
 - [x] Show aggregate portfolio view ✅
 - [ ] Add equity curve chart
-- [ ] Real-time performance tracking (currently manual refresh)
+
 
 ### 2. Database Migration ✅ COMPLETE
 - [x] Move strategies from JSON files to PostgreSQL ✅
