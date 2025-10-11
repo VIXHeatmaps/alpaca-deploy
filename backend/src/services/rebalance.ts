@@ -144,20 +144,48 @@ async function executeRebalance(
 
 /**
  * Main rebalancing function
- * Called daily at T-10 to rebalance the active strategy
+ * Called daily at T-10 to rebalance active strategies
  */
 export async function rebalanceActiveStrategy(
   apiKey: string,
-  apiSecret: string
+  apiSecret: string,
+  strategyId?: number
 ): Promise<RebalanceResult> {
   const startTime = Date.now();
   console.log('\n🔄 [TRADE WINDOW START] === STARTING REBALANCE ===');
 
-  // Get active strategy
-  const strategy = await getActiveStrategy();
-  if (!strategy) {
-    console.log('✗ [TRADE WINDOW END] No active strategy to rebalance');
-    throw new Error('No active strategy to rebalance');
+  // Get active strategy (legacy file-based or database-based)
+  let strategy: any;
+
+  if (strategyId) {
+    // Database version - get specific strategy by ID
+    const { getActiveStrategyById } = await import('../db/activeStrategiesDb');
+    const dbStrategy = await getActiveStrategyById(strategyId);
+
+    if (!dbStrategy) {
+      console.log(`✗ [TRADE WINDOW END] Strategy #${strategyId} not found`);
+      throw new Error(`Strategy #${strategyId} not found`);
+    }
+
+    // Convert database format to legacy format for compatibility
+    strategy = {
+      id: dbStrategy.id.toString(),
+      name: dbStrategy.name,
+      investAmount: parseFloat(dbStrategy.initial_capital),
+      currentValue: dbStrategy.current_capital ? parseFloat(dbStrategy.current_capital) : parseFloat(dbStrategy.initial_capital),
+      flowData: typeof dbStrategy.flow_data === 'string' ? JSON.parse(dbStrategy.flow_data) : dbStrategy.flow_data,
+      holdings: typeof dbStrategy.holdings === 'string' ? JSON.parse(dbStrategy.holdings) : (dbStrategy.holdings || []),
+      pendingOrders: dbStrategy.pending_orders ? (typeof dbStrategy.pending_orders === 'string' ? JSON.parse(dbStrategy.pending_orders) : dbStrategy.pending_orders) : undefined,
+      createdAt: dbStrategy.started_at.toISOString(),
+      lastRebalance: dbStrategy.last_rebalance_at?.toISOString() || null,
+    };
+  } else {
+    // Legacy file-based version
+    strategy = await getActiveStrategy();
+    if (!strategy) {
+      console.log('✗ [TRADE WINDOW END] No active strategy to rebalance');
+      throw new Error('No active strategy to rebalance');
+    }
   }
 
   console.log(`Rebalancing strategy: ${strategy.name}`);
@@ -230,12 +258,23 @@ export async function rebalanceActiveStrategy(
   // Update strategy storage
   const newValue = newHoldings.reduce((sum, h) => sum + (h.qty * h.price), cashRemaining);
 
-  await setActiveStrategy({
-    ...strategy,
-    holdings: newHoldings.map(h => ({ symbol: h.symbol, qty: h.qty })),
-    currentValue: newValue,
-    lastRebalance: new Date().toISOString(),
-  });
+  if (strategyId) {
+    // Update database strategy
+    const { updateActiveStrategy } = await import('../db/activeStrategiesDb');
+    await updateActiveStrategy(strategyId, {
+      holdings: newHoldings.map(h => ({ symbol: h.symbol, qty: h.qty })),
+      current_capital: newValue,
+      last_rebalance_at: new Date().toISOString(),
+    });
+  } else {
+    // Update legacy file-based strategy
+    await setActiveStrategy({
+      ...strategy,
+      holdings: newHoldings.map(h => ({ symbol: h.symbol, qty: h.qty })),
+      currentValue: newValue,
+      lastRebalance: new Date().toISOString(),
+    });
+  }
 
   // Create snapshot with actual filled prices
   const { createSnapshot } = await import('../storage/strategySnapshots');

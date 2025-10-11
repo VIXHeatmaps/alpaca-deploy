@@ -6,7 +6,7 @@
  */
 
 import { rebalanceActiveStrategy } from './rebalance';
-import { hasActiveStrategy } from '../storage/activeStrategy';
+import { getAllActiveStrategies } from '../db/activeStrategiesDb';
 
 type AlpacaClock = {
   timestamp: string;
@@ -63,26 +63,37 @@ async function getMillisecondsUntilT10(key: string, secret: string): Promise<num
 }
 
 /**
- * Execute T-10 rebalance if there's an active strategy
+ * Execute T-10 rebalance for all active strategies
  */
 async function executeT10Rebalance() {
   try {
-    console.log('\n[T-10 SCHEDULER] Checking for active strategy...');
+    console.log('\n[T-10 SCHEDULER] Checking for active strategies...');
 
-    if (!await hasActiveStrategy()) {
-      console.log('[T-10 SCHEDULER] No active strategy - skipping rebalance');
+    const activeStrategies = await getAllActiveStrategies();
+
+    if (activeStrategies.length === 0) {
+      console.log('[T-10 SCHEDULER] No active strategies - skipping rebalance');
       return;
     }
 
-    console.log('[T-10 SCHEDULER] Active strategy found - starting rebalance');
-    const result = await rebalanceActiveStrategy(apiKey, apiSecret);
+    console.log(`[T-10 SCHEDULER] Found ${activeStrategies.length} active strategies - rebalancing each...`);
 
-    console.log('[T-10 SCHEDULER] Rebalance completed:');
-    console.log(`  Sold: ${result.soldSymbols.join(', ') || 'none'}`);
-    console.log(`  Bought: ${result.boughtSymbols.join(', ') || 'none'}`);
-    console.log(`  Cash remaining: $${result.cashRemaining.toFixed(2)}`);
+    for (const strategy of activeStrategies) {
+      try {
+        console.log(`\n[T-10 SCHEDULER] Rebalancing strategy #${strategy.id}: ${strategy.name}`);
+        const result = await rebalanceActiveStrategy(apiKey, apiSecret, strategy.id);
+
+        console.log(`[T-10 SCHEDULER] Strategy #${strategy.id} rebalance completed:`);
+        console.log(`  Sold: ${result.soldSymbols.join(', ') || 'none'}`);
+        console.log(`  Bought: ${result.boughtSymbols.join(', ') || 'none'}`);
+        console.log(`  Cash remaining: $${result.cashRemaining.toFixed(2)}`);
+      } catch (err: any) {
+        console.error(`[T-10 SCHEDULER] Strategy #${strategy.id} rebalance failed:`, err.message);
+        // Continue with other strategies even if one fails
+      }
+    }
   } catch (err: any) {
-    console.error('[T-10 SCHEDULER] Rebalance failed:', err.message);
+    console.error('[T-10 SCHEDULER] Error fetching active strategies:', err.message);
   } finally {
     // Schedule next rebalance
     scheduleNextRebalance();
