@@ -893,7 +893,7 @@ export function Dashboard({
                               </div>
                             </td>
                             <td style={styles.tableCell}>
-                              {strategy.currentValue === 0 ? (
+                              {!strategy.lastRebalance ? (
                                 <span style={{
                                   fontSize: 10,
                                   fontWeight: 600,
@@ -915,7 +915,7 @@ export function Dashboard({
                                   color: "#0f7a3a",
                                   border: "1px solid #b7e3c8",
                                 }}>
-                                  ACTIVE
+                                  LIVE
                                 </span>
                               )}
                             </td>
