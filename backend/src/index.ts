@@ -1831,7 +1831,19 @@ async function startBatchStrategyJob(
   const runs: Array<{variables: Record<string, string>; metrics: any}> = [];
   let completedCount = 0;
 
-  console.log(`[BATCH WORKER] Processing ${total} backtests with concurrency=${BATCH_CONCURRENCY}`);
+  // Buffer for batch database writes
+  const WRITE_BUFFER_SIZE = 200;
+  const writeBuffer: Array<{batch_job_id: string; run_index: number; variables: any; metrics: any}> = [];
+
+  // Function to flush buffer to database
+  const flushBuffer = async () => {
+    if (writeBuffer.length === 0) return;
+    console.log(`[BATCH WORKER] Flushing ${writeBuffer.length} results to database...`);
+    await batchJobsDb.createBatchJobRunsBulk(writeBuffer);
+    writeBuffer.length = 0; // Clear buffer
+  };
+
+  console.log(`[BATCH WORKER] Processing ${total} backtests with concurrency=${BATCH_CONCURRENCY}, write buffer=${WRITE_BUFFER_SIZE}`);
 
   // Process in chunks for parallel execution
   for (let chunkStart = 0; chunkStart < combos.length; chunkStart += BATCH_CONCURRENCY) {
@@ -1863,8 +1875,8 @@ async function startBatchStrategyJob(
         const metricsRaw = resp.metrics || {};
         const metrics = normalizeMetrics(metricsRaw);
 
-        // Save this run to database immediately
-        await batchJobsDb.createBatchJobRun({
+        // Add to write buffer instead of immediate database write
+        writeBuffer.push({
           batch_job_id: jobId,
           run_index: idx,
           variables: assignment,
@@ -1882,8 +1894,8 @@ async function startBatchStrategyJob(
         console.error(`[BATCH WORKER] Run ${idx + 1}/${total} FAILED:`, errorMsg);
         console.error(`[BATCH WORKER] Full error:`, JSON.stringify(err?.response?.data || err?.message));
 
-        // Mark individual run as failed but continue processing other runs
-        await batchJobsDb.createBatchJobRun({
+        // Add failed run to buffer too
+        writeBuffer.push({
           batch_job_id: jobId,
           run_index: idx,
           variables: assignment,
@@ -1913,6 +1925,11 @@ async function startBatchStrategyJob(
       completedCount++;
     }
 
+    // Flush buffer if it reaches the size limit
+    if (writeBuffer.length >= WRITE_BUFFER_SIZE) {
+      await flushBuffer();
+    }
+
     // Update progress after each chunk
     await batchJobsDb.updateBatchJobProgress(jobId, completedCount);
 
@@ -1922,6 +1939,9 @@ async function startBatchStrategyJob(
       console.log(`[BATCH WORKER] Progress: ${completedCount}/${total} (${percentComplete}%) - ${total - completedCount} remaining`);
     }
   }
+
+  // Flush any remaining buffered writes
+  await flushBuffer();
 
   // Calculate summary
   const summary = buildSummary(runs, runs.length);
