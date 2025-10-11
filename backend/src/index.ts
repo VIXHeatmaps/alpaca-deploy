@@ -1946,12 +1946,9 @@ async function startBatchStrategyJob(
   // Calculate summary
   const summary = buildSummary(runs, runs.length);
 
-  // Mark job as finished with summary
-  await batchJobsDb.updateBatchJob(jobId, {
-    status: 'finished',
-    completed: runs.length,
-    summary,
-  });
+  // Mark job as finished with summary (using updateBatchJobProgress to set completed_at)
+  await batchJobsDb.updateBatchJobProgress(jobId, runs.length, 'finished');
+  await batchJobsDb.updateBatchJob(jobId, { summary });
 }
 
 app.post('/api/batch_backtest_strategy', requireAuth, async (req: Request, res: Response) => {
