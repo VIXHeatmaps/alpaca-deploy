@@ -1822,6 +1822,7 @@ async function startBatchStrategyJob(
 
   // Track actual processing time
   const startTime = Date.now();
+  console.log(`[BATCH WORKER START] Job ${jobId} starting with ${total} backtests at ${new Date().toISOString()}`);
 
   if (!job.strategy_elements) {
     await batchJobsDb.updateBatchJob(jobId, {
