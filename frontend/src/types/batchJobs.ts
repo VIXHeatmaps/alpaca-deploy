@@ -29,6 +29,10 @@ export type BatchJob = {
   csvUrl?: string | null;
   completedAt?: string | null;
   preview?: BatchJobPreviewItem[];
+  summary?: {
+    duration_ms?: number;
+    [key: string]: any;
+  } | null;
 };
 
 export const BATCH_JOBS_KEY = "flow_batch_jobs_v1";

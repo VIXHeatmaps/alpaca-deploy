@@ -62,10 +62,20 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCance
     const cancelDisabled = job.status !== "running" && job.status !== "queued";
 
     const getDuration = () => {
-      if (!job.completedAt || !job.createdAt) return "—";
-      const start = new Date(job.createdAt).getTime();
-      const end = new Date(job.completedAt).getTime();
-      const durationMs = end - start;
+      // Prefer duration_ms from summary (actual processing time) over timestamp math
+      let durationMs: number;
+
+      if (job.summary?.duration_ms !== undefined && job.summary.duration_ms > 0) {
+        durationMs = job.summary.duration_ms;
+      } else if (job.completedAt && job.createdAt) {
+        // Fallback to timestamp math for old jobs
+        const start = new Date(job.createdAt).getTime();
+        const end = new Date(job.completedAt).getTime();
+        durationMs = end - start;
+      } else {
+        return "—";
+      }
+
       const durationSec = Math.round(durationMs / 1000);
 
       if (durationSec < 60) {
@@ -77,10 +87,23 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCance
     };
 
     const getBacktestsPerSecond = () => {
-      if (!job.completedAt || !job.createdAt || job.status !== "finished") return null;
-      const start = new Date(job.createdAt).getTime();
-      const end = new Date(job.completedAt).getTime();
-      const durationSec = (end - start) / 1000;
+      if (job.status !== "finished") return null;
+
+      // Prefer duration_ms from summary (actual processing time) over timestamp math
+      let durationMs: number;
+
+      if (job.summary?.duration_ms !== undefined && job.summary.duration_ms > 0) {
+        durationMs = job.summary.duration_ms;
+      } else if (job.completedAt && job.createdAt) {
+        // Fallback to timestamp math for old jobs
+        const start = new Date(job.createdAt).getTime();
+        const end = new Date(job.completedAt).getTime();
+        durationMs = end - start;
+      } else {
+        return null;
+      }
+
+      const durationSec = durationMs / 1000;
       const bps = job.total / durationSec;
       return bps.toFixed(1);
     };

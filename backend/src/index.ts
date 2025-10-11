@@ -1820,6 +1820,9 @@ async function startBatchStrategyJob(
     error: null,
   });
 
+  // Track actual processing time
+  const startTime = Date.now();
+
   if (!job.strategy_elements) {
     await batchJobsDb.updateBatchJob(jobId, {
       status: 'failed',
@@ -1943,8 +1946,17 @@ async function startBatchStrategyJob(
   // Flush any remaining buffered writes
   await flushBuffer();
 
-  // Calculate summary
-  const summary = buildSummary(runs, runs.length);
+  // Calculate duration
+  const endTime = Date.now();
+  const durationMs = endTime - startTime;
+  const durationSec = (durationMs / 1000).toFixed(1);
+  console.log(`[BATCH WORKER] ✓ Batch completed in ${durationSec}s (${(runs.length / (durationMs / 1000)).toFixed(1)} backtests/sec)`);
+
+  // Calculate summary with duration included in JSONB
+  const summary = {
+    ...buildSummary(runs, runs.length),
+    duration_ms: durationMs,
+  };
 
   // Mark job as finished with summary (using updateBatchJobProgress to set completed_at)
   await batchJobsDb.updateBatchJobProgress(jobId, runs.length, 'finished');
@@ -2064,6 +2076,7 @@ app.get('/api/batch_backtest_strategy/:id', requireAuth, async (req: Request, re
     detail: (job.variables as any[]).map((v) => ({ name: v.name, count: v.values?.length || 0 })),
     viewUrl: job.status === 'finished' ? `/api/batch_backtest_strategy/${job.id}/view` : null,
     csvUrl: job.status === 'finished' ? `/api/batch_backtest_strategy/${job.id}/results.csv` : null,
+    summary: job.summary || null,
   });
 });
 
