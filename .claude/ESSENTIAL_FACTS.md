@@ -15,6 +15,9 @@
 
 ## Critical Notes
 - When user says something is ESSENTIAL, add it to this file
+- **USER ONLY WORKS IN LIVE/PRODUCTION APP (Railway/Vercel) - NEVER LOCAL**
+- All testing, bug reports, and feedback submissions happen on the live deployed app
+- Local development environment is NOT used by the user
 - Railway services are NOT the same as local development
 - Local uses Docker for Redis/Postgres, Railway uses Railway-hosted services
 - Environment variables must be set separately in Railway dashboard
