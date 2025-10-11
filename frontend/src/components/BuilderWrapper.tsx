@@ -157,7 +157,8 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
       });
 
       if (!response.ok) {
-        throw new Error('Failed to cancel job');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Failed to cancel job');
       }
 
       // Update job status immediately and persist to IndexedDB
