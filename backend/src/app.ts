@@ -8,6 +8,7 @@ import { FRONTEND_URL } from './config/constants';
 import authRouter from './routes/auth';
 import feedbackRouter from './routes/feedback';
 import systemRouter from './routes/system';
+import tradingRouter from './routes/trading';
 import { configureDiscordStrategy } from './auth/discord';
 import { ensureJwtSecret } from './auth/jwt';
 
@@ -28,6 +29,7 @@ export const createApp = () => {
   app.use(passport.initialize());
 
   app.use('/auth', authRouter);
+  app.use('/api', tradingRouter);
   app.use('/api', feedbackRouter);
   app.use(systemRouter);
 
