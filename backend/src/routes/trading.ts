@@ -18,6 +18,22 @@ import { placeMarketOrder, waitForFill, getCurrentPrice, getAlpacaPositions } fr
 
 const tradingRouter = Router();
 
+const normalizeHoldings = (raw: any[] | undefined | null) => {
+  if (!Array.isArray(raw)) return [] as Array<{ symbol: string; qty: number; entry_price?: number }>;
+
+  return raw
+    .map((holding) => {
+      const qty = Number((holding as any)?.qty ?? (holding as any)?.quantity ?? 0);
+      const entryPrice = Number((holding as any)?.entry_price ?? (holding as any)?.price ?? 0);
+      return {
+        ...holding,
+        qty,
+        entry_price: entryPrice,
+      };
+    })
+    .filter((holding) => holding.qty > 0);
+};
+
 tradingRouter.get('/strategy', async (_req: Request, res: Response) => {
   try {
     const strategy = await getActiveStrategy();
@@ -26,17 +42,24 @@ tradingRouter.get('/strategy', async (_req: Request, res: Response) => {
       return res.json({ strategy: null });
     }
 
+    const sanitizedHoldings = normalizeHoldings(strategy.holdings);
+
     const apiKey = (_req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
     const apiSecret = (_req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
 
     if (!apiKey || !apiSecret) {
-      return res.json({ strategy });
+      return res.json({
+        strategy: {
+          ...strategy,
+          holdings: sanitizedHoldings,
+        },
+      });
     }
 
     const positions = await getAlpacaPositions(apiKey, apiSecret);
 
     let currentValue = 0;
-    const liveHoldings = strategy.holdings.map((h) => {
+    const liveHoldings = sanitizedHoldings.map((h) => {
       const pos = positions.find((p) => p.symbol === h.symbol);
       const marketValue = pos?.market_value || 0;
       currentValue += marketValue;
@@ -422,7 +445,7 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
         name: dbStrategy.name,
         initial_capital: parseFloat(dbStrategy.initial_capital),
         current_capital: dbStrategy.current_capital ? parseFloat(dbStrategy.current_capital) : 0,
-        holdings: dbStrategy.holdings,
+        holdings: normalizeHoldings(dbStrategy.holdings),
         status: dbStrategy.status,
       },
     });
@@ -449,10 +472,11 @@ tradingRouter.get('/active-strategies', requireAuth, async (req: Request, res: R
         mode: s.mode,
         initial_capital: parseFloat(s.initial_capital),
         current_capital: s.current_capital ? parseFloat(s.current_capital) : null,
-        holdings: s.holdings || [],
+        holdings: normalizeHoldings(s.holdings),
         pending_orders: s.pending_orders || [],
         started_at: s.started_at,
         last_rebalance_at: s.last_rebalance_at,
+        flowData: s.flow_data || null,
       })),
     });
   } catch (err: any) {
