@@ -607,6 +607,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       csvUrl: null,
       completedAt: null,
       truncated: false,
+      startedAt: null,
+      durationMs: null,
+      summary: null,
     };
 
     // Add job to list and persist to IndexedDB
@@ -615,7 +618,14 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
     try {
       // Update job status to running
-      const runningJob = { ...newJob, status: "running" as const };
+      const startedAtIso = new Date().toISOString();
+      const runningJob = {
+        ...newJob,
+        status: "running" as const,
+        startedAt: startedAtIso,
+        durationMs: 0,
+        updatedAt: startedAtIso,
+      };
       setBatchJobs(prev => prev.map(j =>
         j.id === jobId ? runningJob : j
       ));
@@ -672,16 +682,103 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
             throw new Error(statusData.error || 'Failed to get job status');
           }
 
+          const previousJob = batchJobs.find(j => j.id === jobId) || newJob;
+          const status =
+            typeof statusData.status === "string" ? statusData.status : previousJob.status;
+
+          const detailFromStatus = Array.isArray(statusData.detail)
+            ? statusData.detail.map((item: any) => {
+                const existing = previousJob.detail.find((d) => d.name === item?.name);
+                const rawValues = Array.isArray(item?.values) ? item.values : existing?.values || [];
+                const values = rawValues.map((value: any) => String(value));
+                const count =
+                  typeof item?.count === "number"
+                    ? item.count
+                    : Array.isArray(values)
+                    ? values.length
+                    : existing?.count || 0;
+                return {
+                  name: typeof item?.name === "string" ? item.name : existing?.name || "var",
+                  count,
+                  values,
+                  label: item?.label ?? existing?.label,
+                  originalName: item?.originalName ?? existing?.originalName,
+                };
+              })
+            : previousJob.detail;
+
+          const startedAt =
+            typeof statusData.startedAt === "string"
+              ? statusData.startedAt
+              : statusData.startedAt instanceof Date
+              ? statusData.startedAt.toISOString()
+              : status === "running" || status === "finished" || status === "failed"
+              ? previousJob.startedAt ?? null
+              : null;
+
+          const completedAt =
+            typeof statusData.completedAt === "string"
+              ? statusData.completedAt
+              : statusData.completedAt instanceof Date
+              ? statusData.completedAt.toISOString()
+              : previousJob.completedAt ?? null;
+
+          const parsedDuration =
+            statusData.durationMs !== undefined && statusData.durationMs !== null
+              ? Number(statusData.durationMs)
+              : null;
+
+          let durationMs: number | null = null;
+          if (parsedDuration !== null && Number.isFinite(parsedDuration) && parsedDuration >= 0) {
+            durationMs = parsedDuration;
+          } else if (startedAt) {
+            const startMs = new Date(startedAt).getTime();
+            if (Number.isFinite(startMs)) {
+              const endMs =
+                completedAt && (status === "finished" || status === "failed")
+                  ? new Date(completedAt).getTime()
+                  : status === "running"
+                  ? Date.now()
+                  : NaN;
+              if (Number.isFinite(endMs)) {
+                durationMs = Math.max(0, endMs - startMs);
+              }
+            }
+          }
+
+          if (durationMs === null) {
+            durationMs = previousJob.durationMs ?? null;
+          }
+
           // Update job with current status
           const updatedJob = {
-            ...(batchJobs.find(j => j.id === jobId) || newJob),
-            status: statusData.status,
-            completed: statusData.completed || 0,
-            viewUrl: statusData.viewUrl || null,
-            csvUrl: statusData.csvUrl || null,
-            error: statusData.error || null,
-            updatedAt: new Date().toISOString(),
-            completedAt: statusData.status === 'finished' ? new Date().toISOString() : null,
+            ...previousJob,
+            name: statusData.name || previousJob.name,
+            status,
+            total: typeof statusData.total === "number" ? statusData.total : previousJob.total,
+            completed:
+              typeof statusData.completed === "number" ? statusData.completed : previousJob.completed,
+            viewUrl: statusData.viewUrl ?? previousJob.viewUrl ?? null,
+            csvUrl: statusData.csvUrl ?? previousJob.csvUrl ?? null,
+            error: statusData.error ?? null,
+            updatedAt:
+              typeof statusData.updatedAt === "string"
+                ? statusData.updatedAt
+                : statusData.updatedAt instanceof Date
+                ? statusData.updatedAt.toISOString()
+                : new Date().toISOString(),
+            createdAt:
+              typeof statusData.createdAt === "string"
+                ? statusData.createdAt
+                : statusData.createdAt instanceof Date
+                ? statusData.createdAt.toISOString()
+                : previousJob.createdAt,
+            completedAt,
+            startedAt,
+            durationMs,
+            detail: detailFromStatus,
+            truncated: statusData.truncated ?? previousJob.truncated,
+            summary: statusData.summary ?? previousJob.summary ?? null,
           };
           setBatchJobs(prev => prev.map(j =>
             j.id === jobId ? updatedJob : j
@@ -689,13 +786,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           await putJob(updatedJob);
 
           // If still running, poll again
-          if (statusData.status === 'running' || statusData.status === 'queued') {
+          if (status === 'running' || status === 'queued') {
             setTimeout(pollJobStatus, 2000); // Poll every 2 seconds
-          } else if (statusData.status === 'finished') {
+          } else if (status === 'finished') {
             // Switch to Batch Tests tab to show results
             setActiveTab("batchtests");
             alert(`Batch backtest completed! ${statusData.completed || assignments.length} strategies tested.`);
-          } else if (statusData.status === 'failed') {
+          } else if (status === 'failed') {
             alert(`Batch backtest failed: ${statusData.error || 'Unknown error'}`);
           }
         } catch (err: any) {
@@ -710,12 +807,18 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       console.error('Batch backtest error:', err);
 
       // Update job with error
+      const previousJob = batchJobs.find(j => j.id === jobId) || newJob;
+      const computedDuration =
+        previousJob.startedAt && Number.isFinite(new Date(previousJob.startedAt).getTime())
+          ? Math.max(0, Date.now() - new Date(previousJob.startedAt).getTime())
+          : previousJob.durationMs ?? null;
       const failedJob = {
-        ...(batchJobs.find(j => j.id === jobId) || newJob),
+        ...previousJob,
         status: "failed" as const,
         error: err.message || "Batch backtest failed",
         updatedAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
+        durationMs: computedDuration,
       };
       setBatchJobs(prev => prev.map(j =>
         j.id === jobId ? failedJob : j

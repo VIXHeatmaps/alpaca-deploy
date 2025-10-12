@@ -86,6 +86,7 @@ const normalizeJob = (raw: unknown): BatchJob => {
   const viewUrl = rawData?.viewUrl ? toStringSafe(rawData.viewUrl) : null;
   const csvUrl = rawData?.csvUrl ? toStringSafe(rawData.csvUrl) : null;
   const completedAt = rawData?.completedAt ? toStringSafe(rawData.completedAt) : null;
+  const startedAt = rawData?.startedAt ? toStringSafe(rawData.startedAt) : null;
   const preview = Array.isArray(rawData?.preview)
     ? (rawData.preview as unknown[]).map((item: unknown) => ({
         vars: toStringRecord((item as Record<string, unknown> | null | undefined)?.vars),
@@ -93,6 +94,32 @@ const normalizeJob = (raw: unknown): BatchJob => {
       }))
     : undefined;
   const previewCount = preview ? preview.length : 0;
+  const summary =
+    rawData && typeof rawData === "object" && rawData.summary && typeof rawData.summary === "object"
+      ? (rawData.summary as Record<string, unknown>)
+      : rawData?.summary === null
+      ? null
+      : undefined;
+
+  let durationMs: number | null = null;
+  const rawDuration =
+    (rawData as any)?.durationMs ??
+    (rawData as any)?.duration_ms ??
+    (summary && (summary as any).duration_ms);
+  if (rawDuration !== undefined && rawDuration !== null) {
+    const parsed = Number(rawDuration);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      durationMs = parsed;
+    }
+  }
+
+  if (durationMs === null && startedAt) {
+    const startMs = new Date(startedAt).getTime();
+    const endMs = completedAt ? new Date(completedAt).getTime() : Date.now();
+    if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+      durationMs = Math.max(0, endMs - startMs);
+    }
+  }
 
   let status = normalizeBatchJobStatus(rawData?.status, "queued");
 
@@ -135,6 +162,9 @@ const normalizeJob = (raw: unknown): BatchJob => {
     csvUrl,
     completedAt,
     preview,
+    startedAt,
+    durationMs,
+    summary,
   };
 };
 

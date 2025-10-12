@@ -1422,6 +1422,7 @@ backtestRouter.post('/batch_backtest_strategy', requireAuth, async (req: Request
     benchmark_symbol: body.baseStrategy?.benchmarkSymbol || body.benchmarkSymbol || 'SPY',
     assignments_preview: assignmentsRaw.slice(0, 25) as any,
     summary: null,
+    started_at: total ? null : new Date(),
   });
 
   if (total) {
@@ -1455,12 +1456,23 @@ backtestRouter.post('/batch_backtest_strategy', requireAuth, async (req: Request
     });
   }
 
+  const createdAtIso =
+    dbJob.created_at instanceof Date ? dbJob.created_at.toISOString() : new Date().toISOString();
+  const updatedAtIso =
+    dbJob.updated_at instanceof Date ? dbJob.updated_at.toISOString() : createdAtIso;
+  const startedAtIso =
+    dbJob.started_at instanceof Date ? dbJob.started_at.toISOString() : null;
+
   return res.status(202).json({
     jobId: id,
     status: dbJob.status,
     total: dbJob.total,
     completed: dbJob.completed,
     truncated: dbJob.truncated,
+    createdAt: createdAtIso,
+    updatedAt: updatedAtIso,
+    startedAt: startedAtIso,
+    durationMs: null,
   });
 });
 
@@ -1476,18 +1488,47 @@ backtestRouter.get('/batch_backtest_strategy/:id', requireAuth, async (req: Requ
   if (job.user_id !== userId) {
     return res.status(403).json({ error: 'Forbidden: You do not own this batch job' });
   }
+
+  const toIso = (value: Date | string | null | undefined) => {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  };
+
+  const createdAtIso = toIso(job.created_at);
+  const updatedAtIso = toIso(job.updated_at);
+  const startedAtIso = toIso(job.started_at);
+  const completedAtIso = toIso(job.completed_at);
+
+  let durationMs: number | null = null;
+  if (startedAtIso) {
+    const startMs = new Date(startedAtIso).getTime();
+    const endMs = completedAtIso ? new Date(completedAtIso).getTime() : Date.now();
+    if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+      durationMs = Math.max(0, endMs - startMs);
+    }
+  }
+
   return res.json({
     jobId: job.id,
     name: job.name,
     status: job.status,
     total: job.total,
     completed: job.completed,
-    createdAt: job.created_at,
-    updatedAt: job.updated_at,
-    completedAt: job.completed_at,
+    createdAt: createdAtIso,
+    updatedAt: updatedAtIso,
+    startedAt: startedAtIso,
+    completedAt: completedAtIso,
+    durationMs,
     truncated: job.truncated || false,
     error: job.error || null,
-    detail: (job.variables as any[]).map((v) => ({ name: v.name, count: v.values?.length || 0 })),
+    detail: (job.variables as any[]).map((v) => ({
+      name: v.name,
+      count: Array.isArray(v.values) ? v.values.length : 0,
+      values: Array.isArray(v.values) ? v.values : [],
+      label: v.label,
+      originalName: v.originalName,
+    })),
     viewUrl: job.status === 'finished' ? `/api/batch_backtest_strategy/${job.id}/view` : null,
     csvUrl: job.status === 'finished' ? `/api/batch_backtest_strategy/${job.id}/results.csv` : null,
     summary: job.summary || null,

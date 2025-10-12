@@ -61,20 +61,46 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCance
     const downloadDisabled = job.status !== "finished";
     const cancelDisabled = job.status !== "running" && job.status !== "queued";
 
-    const getDuration = () => {
-      // Prefer duration_ms from summary (actual processing time) over timestamp math
-      let durationMs: number;
+    const computeDurationMs = () => {
+      if (job.durationMs !== undefined && job.durationMs !== null) {
+        if (Number.isFinite(job.durationMs)) {
+          return Math.max(0, job.durationMs);
+        }
+      }
 
-      if (job.summary?.duration_ms !== undefined && job.summary.duration_ms > 0) {
-        durationMs = job.summary.duration_ms;
-      } else if (job.completedAt && job.createdAt) {
-        // Fallback to timestamp math for old jobs
+      if (job.summary?.duration_ms !== undefined && job.summary.duration_ms !== null) {
+        const parsed = Number(job.summary.duration_ms);
+        if (Number.isFinite(parsed)) {
+          return Math.max(0, parsed);
+        }
+      }
+
+      if (job.startedAt) {
+        const start = new Date(job.startedAt).getTime();
+        if (Number.isFinite(start)) {
+          const end = job.completedAt
+            ? new Date(job.completedAt).getTime()
+            : Date.now();
+          if (Number.isFinite(end)) {
+            return Math.max(0, end - start);
+          }
+        }
+      }
+
+      if (job.completedAt && job.createdAt) {
         const start = new Date(job.createdAt).getTime();
         const end = new Date(job.completedAt).getTime();
-        durationMs = end - start;
-      } else {
-        return "—";
+        if (Number.isFinite(start) && Number.isFinite(end)) {
+          return Math.max(0, end - start);
+        }
       }
+
+      return null;
+    };
+
+    const getDuration = () => {
+      const durationMs = computeDurationMs();
+      if (durationMs === null) return "—";
 
       const durationSec = Math.round(durationMs / 1000);
 
@@ -89,19 +115,8 @@ export function BatchTestsTab({ jobs, loading, onViewJob, onDownloadCsv, onCance
     const getBacktestsPerSecond = () => {
       if (job.status !== "finished") return null;
 
-      // Prefer duration_ms from summary (actual processing time) over timestamp math
-      let durationMs: number;
-
-      if (job.summary?.duration_ms !== undefined && job.summary.duration_ms > 0) {
-        durationMs = job.summary.duration_ms;
-      } else if (job.completedAt && job.createdAt) {
-        // Fallback to timestamp math for old jobs
-        const start = new Date(job.createdAt).getTime();
-        const end = new Date(job.completedAt).getTime();
-        durationMs = end - start;
-      } else {
-        return null;
-      }
+      const durationMs = computeDurationMs();
+      if (durationMs === null || durationMs === 0) return null;
 
       const durationSec = durationMs / 1000;
       const bps = job.total / durationSec;

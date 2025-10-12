@@ -22,6 +22,8 @@ export type BatchJob = {
   completed: number;
   createdAt: string;
   updatedAt: string;
+  startedAt?: string | null;
+  durationMs?: number | null;
   detail: BatchJobVariable[];
   error?: string | null;
   truncated?: boolean;

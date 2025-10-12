@@ -8,6 +8,7 @@ interface BatchResultsSummary {
   avgTotalReturn: number;
   bestTotalReturn: number;
   worstTotalReturn: number;
+  duration_ms?: number;
 }
 
 export interface BatchResultsData {
@@ -27,6 +28,33 @@ export function BatchResultsModal({ open, results, onClose }: BatchResultsModalP
   if (!open || !results) return null;
 
   const variableHeaders = results.runs[0] ? Object.keys(results.runs[0].variables) : [];
+  const rawDuration = results.summary.duration_ms;
+  let durationMs: number | null = null;
+  if (rawDuration !== undefined && rawDuration !== null) {
+    const parsed = Number(rawDuration);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      durationMs = parsed;
+    }
+  }
+
+  const formatDuration = (ms: number) => {
+    const totalSeconds = Math.round(ms / 1000);
+    if (totalSeconds < 60) {
+      return `${totalSeconds}s`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes < 60) {
+      return `${minutes}m ${seconds}s`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remMinutes = minutes % 60;
+    return `${hours}h ${remMinutes}m`;
+  };
+
+  const formattedDuration = durationMs !== null && durationMs > 0 ? formatDuration(durationMs) : null;
+  const formattedBps = durationMs !== null && durationMs > 0 ? (results.summary.totalRuns / (durationMs / 1000)).toFixed(1) : null;
+
 
   return (
     <div
@@ -76,7 +104,14 @@ export function BatchResultsModal({ open, results, onClose }: BatchResultsModalP
         </div>
 
         {/* Summary Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 12,
+            marginBottom: 24,
+          }}
+        >
           <div style={{ background: "#f9fafb", padding: 16, borderRadius: 8, border: "1px solid #e5e7eb" }}>
             <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>
               Total Runs
@@ -109,6 +144,26 @@ export function BatchResultsModal({ open, results, onClose }: BatchResultsModalP
               {(results.summary.avgTotalReturn * 100).toFixed(2)}%
             </div>
           </div>
+          {formattedDuration && (
+            <div style={{ background: "#fdf4ff", padding: 16, borderRadius: 8, border: "1px solid #f5d0fe" }}>
+              <div style={{ fontSize: 11, color: "#86198f", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>
+                Duration
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "#86198f" }}>
+                {formattedDuration}
+              </div>
+            </div>
+          )}
+          {formattedBps && (
+            <div style={{ background: "#eef2ff", padding: 16, borderRadius: 8, border: "1px solid #c7d2fe" }}>
+              <div style={{ fontSize: 11, color: "#312e81", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>
+                Throughput
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "#312e81" }}>
+                {formattedBps} runs/sec
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Results Table */}

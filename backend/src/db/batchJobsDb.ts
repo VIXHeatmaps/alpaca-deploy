@@ -18,6 +18,7 @@ export interface BatchJobDb {
   user_id: string | null;
   created_at: Date;
   updated_at: Date;
+  started_at: Date | null;
   completed_at: Date | null;
   error: string | null;
   truncated: boolean;
