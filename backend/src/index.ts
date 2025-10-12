@@ -316,7 +316,14 @@ app.use(bodyParser.json());
 app.use(cookieParser());
 
 // JWT configuration
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'default-secret-change-in-production';
+const resolvedJwtSecret = (process.env.JWT_SECRET || process.env.SESSION_SECRET || '').trim();
+if (!resolvedJwtSecret) {
+  const message =
+    'JWT secret is required. Set JWT_SECRET (preferred) or SESSION_SECRET in the environment before starting the server.';
+  console.error(`[CONFIG] ${message}`);
+  throw new Error(message);
+}
+const JWT_SECRET = resolvedJwtSecret;
 const JWT_EXPIRES_IN = '7d'; // 7 days
 
 // Helper functions for JWT
