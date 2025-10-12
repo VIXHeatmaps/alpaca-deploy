@@ -10,6 +10,8 @@ import feedbackRouter from './routes/feedback';
 import systemRouter from './routes/system';
 import tradingRouter from './routes/trading';
 import backtestRouter from './routes/backtest';
+import variablesRouter from './routes/variables';
+import strategiesRouter from './routes/strategies';
 import { configureDiscordStrategy } from './auth/discord';
 import { ensureJwtSecret } from './auth/jwt';
 
@@ -32,6 +34,8 @@ export const createApp = () => {
   app.use('/auth', authRouter);
   app.use('/api', tradingRouter);
   app.use('/api', backtestRouter);
+  app.use('/api', variablesRouter);
+  app.use('/api', strategiesRouter);
   app.use('/api', feedbackRouter);
   app.use(systemRouter);
 
