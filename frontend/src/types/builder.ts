@@ -1,0 +1,68 @@
+import type { IndicatorName } from "./indicators";
+
+export interface GateCondition {
+  ticker: string;
+  indicator: IndicatorName;
+  period: string;
+  params?: Record<string, string>;
+  operator: "gt" | "lt";
+  compareTo: "threshold" | "indicator";
+  threshold: string;
+  rightTicker?: string;
+  rightIndicator?: IndicatorName;
+  rightPeriod?: string;
+  rightParams?: Record<string, string>;
+}
+
+export interface GateElement {
+  id: string;
+  type: "gate";
+  name: string;
+  weight: number;
+  conditionMode: "if" | "if_all" | "if_any" | "if_none";
+  conditions: GateCondition[];
+  condition?: GateCondition;
+  thenChildren: Element[];
+  elseChildren: Element[];
+}
+
+export interface TickerElement {
+  id: string;
+  type: "ticker";
+  ticker: string;
+  weight: number;
+}
+
+export interface WeightElement {
+  id: string;
+  type: "weight";
+  name: string;
+  weight: number;
+  weightMode: "equal" | "defined";
+  children: Element[];
+}
+
+export type Element = GateElement | TickerElement | WeightElement;
+
+export interface StrategyVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  fork: string;
+}
+
+export interface StrategyTab {
+  id: string;
+  elements: Element[];
+  history: Element[][];
+  historyIndex: number;
+  benchmarkSymbol: string;
+  startDate: string;
+  endDate: string;
+  backtestResults: any;
+  strategyName: string;
+  versioningEnabled: boolean;
+  version: StrategyVersion;
+  createdAt: string;
+  updatedAt: string;
+}
