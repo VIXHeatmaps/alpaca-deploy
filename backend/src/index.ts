@@ -1,135 +1,44 @@
 /* ===== BEGIN: BLOCK A — Imports & Config (Backend) ===== */
 import 'dotenv/config';
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-import bodyParser from 'body-parser';
+import { Request, Response } from 'express';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
-import jwt from 'jsonwebtoken';
-import cookieParser from 'cookie-parser';
-import { Strategy as DiscordStrategy, Profile } from 'passport-discord';
-import passport from 'passport';
-import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import * as batchJobsDb from './db/batchJobsDb';
 import * as variableListsDb from './db/variableListsDb';
 import * as strategiesDb from './db/strategiesDb';
 import { getMarketDateToday } from './utils/marketTime';
+import { createApp } from './app';
+import { BATCH_CONCURRENCY, INDICATOR_SERVICE_URL, INTERNAL_API_BASE, PORT, QUANTSTATS_TIMEOUT_MS, QUANTSTATS_URL, FEED } from './config/constants';
+import { requireAuth } from './auth/jwt';
+import { BatchJobRecord, BatchJobResult, BatchJobStatus, FlowEdge, FlowGlobals, FlowNode } from './batch/types';
+import {
+  applyVariablesToElements,
+  applyVariablesToNodes,
+  buildSummary,
+  clampNumber,
+  generateAllAssignments,
+  sanitizedVariables,
+} from './batch/helpers';
+import { normalizeMetrics } from './batch/metrics';
+import { spawnBatchStrategyWorker } from './workers/spawnBatchStrategyWorker';
+import { normalizeDate, toRFC3339End, toRFC3339Start, toYMD, todayYMD } from './utils/date';
+import { getActiveStrategy, setActiveStrategy, clearActiveStrategy, hasActiveStrategy } from './storage/activeStrategy';
+import { placeMarketOrder, waitForFill, getCurrentPrice, getAlpacaPositions } from './services/orders';
+import { evaluateFlowWithCurrentPrices, extractSymbols } from './services/flowEval';
+import { genId } from './utils/id';
+import {
+  createActiveStrategy,
+  getAllActiveStrategies,
+  getActiveStrategiesByUserId,
+  getActiveStrategyById,
+  updateActiveStrategy,
+} from './db/activeStrategiesDb';
+import { upsertSnapshot } from './db/activeStrategySnapshotsDb';
+import { calculateAttributionOnDeploy, removeStrategyFromAttribution } from './services/positionAttribution';
 
-const app = express();
-const port = Number(process.env.PORT) || 4000;
-const INDICATOR_SERVICE_URL = process.env.INDICATOR_SERVICE_URL || 'http://127.0.0.1:8001';
-const QUANTSTATS_URL = `${INDICATOR_SERVICE_URL}/metrics/quantstats`;
-const QUANTSTATS_TIMEOUT_MS = Number(process.env.QUANTSTATS_TIMEOUT_MS || 5000);
-const FEED: string = (process.env.ALPACA_FEED || 'sip').toLowerCase();
-const INTERNAL_API_BASE = process.env.INTERNAL_API_BASE || `http://127.0.0.1:${port}`;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
-const BATCH_CONCURRENCY = Number(process.env.BATCH_CONCURRENCY) || 4;
-
-const parseCsvEnv = (value: string | undefined, normalize?: (input: string) => string): Set<string> => {
-  if (!value) return new Set();
-  return new Set(
-    value
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .map((item) => (normalize ? normalize(item) : item))
-  );
-};
-
-const DISCORD_ALLOWED_USER_IDS = parseCsvEnv(process.env.DISCORD_ALLOWED_USER_IDS);
-const DISCORD_ALLOWED_EMAILS = parseCsvEnv(process.env.DISCORD_ALLOWED_EMAILS, (email) => email.toLowerCase());
-const DISCORD_ALLOWED_EMAIL_DOMAINS = parseCsvEnv(
-  process.env.DISCORD_ALLOWED_EMAIL_DOMAINS,
-  (domain) => domain.replace(/^\./, '').toLowerCase()
-);
-
-type DiscordWhitelistResult =
-  | { allowed: true }
-  | { allowed: false; code: 'discord_email_required' | 'discord_whitelist_denied'; detail: string };
-
-const isDiscordWhitelistEnabled =
-  DISCORD_ALLOWED_USER_IDS.size > 0 ||
-  DISCORD_ALLOWED_EMAILS.size > 0 ||
-  DISCORD_ALLOWED_EMAIL_DOMAINS.size > 0;
-
-const checkDiscordWhitelist = (profile: Profile): DiscordWhitelistResult => {
-  if (!isDiscordWhitelistEnabled) {
-    return { allowed: true };
-  }
-
-  const userId = profile.id;
-  if (DISCORD_ALLOWED_USER_IDS.has(userId)) {
-    return { allowed: true };
-  }
-
-  const email = (profile.email || '').toLowerCase();
-  if (!email && (DISCORD_ALLOWED_EMAILS.size > 0 || DISCORD_ALLOWED_EMAIL_DOMAINS.size > 0)) {
-    return {
-      allowed: false,
-      code: 'discord_email_required',
-      detail: 'Discord account must have a verified email to access this application.',
-    };
-  }
-
-  if (email && DISCORD_ALLOWED_EMAILS.has(email)) {
-    return { allowed: true };
-  }
-
-  if (email) {
-    const domain = email.split('@')[1]?.toLowerCase() || '';
-    if (domain && DISCORD_ALLOWED_EMAIL_DOMAINS.has(domain)) {
-      return { allowed: true };
-    }
-  }
-
-  return {
-    allowed: false,
-    code: 'discord_whitelist_denied',
-    detail: 'Your Discord account is not on the approved access list.',
-  };
-};
-
-type BatchJobStatus = 'queued' | 'running' | 'finished' | 'failed';
-
-type BatchJobRecord = {
-  id: string;
-  name: string;
-  status: BatchJobStatus;
-  total: number;
-  completed: number;
-  createdAt: string;
-  updatedAt: string;
-  variables: Array<{ name: string; values: string[] }>;
-  truncated?: boolean;
-  error?: string | null;
-  assignmentsPreview: Array<Record<string, string>>;
-  result?: BatchJobResult | null;
-  viewUrl?: string | null;
-  csvUrl?: string | null;
-  completedAt?: string | null;
-  flow: {
-    globals: FlowGlobals;
-    nodes: FlowNode[];
-    edges: FlowEdge[];
-    apiKey: string;
-    apiSecret: string;
-  };
-};
-
-type BatchJobResult = {
-  summary: {
-    totalRuns: number;
-    avgTotalReturn: number;
-    bestTotalReturn: number;
-    worstTotalReturn: number;
-  };
-  runs: Array<{
-    variables: Record<string, string>;
-    metrics: Record<string, number>;
-  }>;
-};
+const app = createApp();
 
 const batchJobs = new Map<string, BatchJobRecord>();
 
@@ -145,100 +54,6 @@ type BatchRequestBody = {
     nodes: FlowNode[];
     edges: FlowEdge[];
   };
-};
-
-const clampNumber = (val: any, fallback: number) => {
-  const n = Number(val);
-  return Number.isFinite(n) ? n : fallback;
-};
-
-const sanitizedVariables = (vars: Array<{ name: string; values: string[] }> | undefined) =>
-  (vars || []).map((v) => ({
-    name: String(v?.name || 'var'),
-    values: Array.isArray(v?.values) ? v!.values.map((x) => String(x)) : [],
-  }));
-
-const buildSummary = (runs: BatchJobResult['runs'], totalRuns: number) => {
-  if (!runs.length) {
-    return {
-      totalRuns,
-      avgTotalReturn: 0,
-      bestTotalReturn: 0,
-      worstTotalReturn: 0,
-    };
-  }
-  let sum = 0;
-  let best = -Infinity;
-  let worst = Infinity;
-  for (const r of runs) {
-    const totalReturn = r.metrics.totalReturn ?? 0;
-    sum += totalReturn;
-    if (totalReturn > best) best = totalReturn;
-    if (totalReturn < worst) worst = totalReturn;
-  }
-  return {
-    totalRuns,
-    avgTotalReturn: Number((sum / runs.length).toFixed(4)),
-    bestTotalReturn: Number(best.toFixed(4)),
-    worstTotalReturn: Number(worst.toFixed(4)),
-  };
-};
-
-const generateAllAssignments = (vars: Array<{ name: string; values: string[] }>): Array<Record<string, string>> => {
-  const out: Array<Record<string, string>> = [];
-  if (!vars.length) return out;
-  const helper = (idx: number, current: Record<string, string>) => {
-    if (idx === vars.length) {
-      out.push({ ...current });
-      return;
-    }
-    const v = vars[idx];
-    if (!v) return;
-    const values = v.values.length ? v.values : [''];
-    for (const val of values) {
-      current[v.name] = String(val);
-      helper(idx + 1, current);
-    }
-    delete current[v.name];
-  };
-  helper(0, {});
-  return out;
-};
-const normalizeVarToken = (input: string): string => {
-  const trimmed = input.trim();
-  return trimmed.startsWith('$') ? trimmed.slice(1).toLowerCase() : trimmed.toLowerCase();
-};
-
-const replaceVariableTokens = (value: any, vars: Record<string, string>): any => {
-  if (Array.isArray(value)) return value.map((item) => replaceVariableTokens(item, vars));
-  if (value && typeof value === 'object') {
-    const out: Record<string, any> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = replaceVariableTokens(v, vars);
-    return out;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.startsWith('$')) {
-      const key = normalizeVarToken(trimmed);
-      if (vars[key] !== undefined) return vars[key];
-    }
-  }
-  return value;
-};
-
-const applyVariablesToNodes = (nodes: FlowNode[], assignment: Record<string, string>): FlowNode[] => {
-  const normalized: Record<string, string> = {};
-  for (const [k, v] of Object.entries(assignment)) normalized[normalizeVarToken(k)] = String(v);
-  return nodes.map((node) => ({
-    ...node,
-    data: replaceVariableTokens(node.data, normalized),
-  }));
-};
-
-const applyVariablesToElements = (elements: any[], assignment: Record<string, string>): any[] => {
-  const normalized: Record<string, string> = {};
-  for (const [k, v] of Object.entries(assignment)) normalized[normalizeVarToken(k)] = String(v);
-  return elements.map((element) => replaceVariableTokens(element, normalized));
 };
 
 async function startBatchJob(job: BatchJobRecord, assignments: Array<Record<string, string>>) {
@@ -308,389 +123,7 @@ async function startBatchJob(job: BatchJobRecord, assignments: Array<Record<stri
   };
 }
 
-app.use(cors({
-  origin: FRONTEND_URL,
-  credentials: true
-}));
-app.use(bodyParser.json());
-app.use(cookieParser());
-
-// JWT configuration
-const resolvedJwtSecret = (process.env.JWT_SECRET || process.env.SESSION_SECRET || '').trim();
-if (!resolvedJwtSecret) {
-  const message =
-    'JWT secret is required. Set JWT_SECRET (preferred) or SESSION_SECRET in the environment before starting the server.';
-  console.error(`[CONFIG] ${message}`);
-  throw new Error(message);
-}
-const JWT_SECRET = resolvedJwtSecret;
-const JWT_EXPIRES_IN = '7d'; // 7 days
-
-// Helper functions for JWT
-function generateToken(user: any): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-}
-
-function verifyToken(token: string): any {
-  try {
-    return jwt.verify(token, JWT_SECRET);
-  } catch (err) {
-    return null;
-  }
-}
-
-// Passport configuration (minimal, just for OAuth)
-app.use(passport.initialize());
-
-// Discord OAuth Strategy
-passport.use(new DiscordStrategy({
-  clientID: process.env.DISCORD_CLIENT_ID || '',
-  clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
-  callbackURL: `${process.env.BACKEND_URL || `http://localhost:${port}`}/auth/discord/callback`,
-  scope: ['identify', 'email']
-}, (_accessToken: string, _refreshToken: string, profile: Profile, done: any) => {
-  const whitelistResult = checkDiscordWhitelist(profile);
-  if (whitelistResult.allowed === false) {
-    const { code, detail } = whitelistResult;
-    console.warn(`[AUTH] Discord user ${profile.id} rejected: ${detail} (code: ${code})`);
-    return done(null, false, {
-      message: code,
-      detail,
-    });
-  }
-
-  // Return user profile (will be encoded in JWT)
-  return done(null, {
-    id: profile.id,
-    username: profile.username,
-    discriminator: profile.discriminator,
-    avatar: profile.avatar,
-    email: profile.email
-  });
-}));
-
-// Auth middleware to protect routes
-function requireAuth(req: Request, res: Response, next: any) {
-  const token = req.cookies.auth_token;
-  if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  const user = verifyToken(token);
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
-  (req as any).user = user;
-  return next();
-}
-
-/* ===== END: BLOCK A ===== */
-
-
-/* ===== BEGIN: BLOCK B — Date Utilities (RFC3339 helpers) ===== */
-const normalizeDate = (s: string) => (s ? s.replace(/[./]/g, '-') : s);
-const toRFC3339Start = (s: string) => {
-  const v = normalizeDate(s || '');
-  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00Z` : v;
-};
-const toRFC3339End = (s: string) => {
-  const v = normalizeDate(s || '');
-  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59Z` : v;
-};
-const toYMD = (s: string) => (s || '').slice(0, 10);
-const todayYMD = () => getMarketDateToday();
-/* ===== END: BLOCK B ===== */
-
-
-/* ===== BEGIN: BLOCK AUTH — Discord OAuth Routes ===== */
-
-// Initiate Discord OAuth
-app.get('/auth/discord', passport.authenticate('discord'));
-
-// Discord OAuth callback
-app.get('/auth/discord/callback', (req: Request, res: Response, next) => {
-  passport.authenticate('discord', { session: false }, (err, user, info) => {
-    if (err) {
-      console.error('[AUTH] Discord callback error:', err);
-      const redirectUrl = new URL(FRONTEND_URL);
-      redirectUrl.searchParams.set('authError', 'auth_internal_error');
-      return res.redirect(redirectUrl.toString());
-    }
-
-    if (!user) {
-      const redirectUrl = new URL(FRONTEND_URL);
-      const errorCode = typeof info?.message === 'string' ? info.message : 'auth_failed';
-      redirectUrl.searchParams.set('authError', errorCode);
-      if (info?.detail && typeof info.detail === 'string') {
-        redirectUrl.searchParams.set('authErrorDetail', info.detail);
-      }
-      return res.redirect(redirectUrl.toString());
-    }
-
-    const token = generateToken(user);
-
-    res.cookie('auth_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    return res.redirect(FRONTEND_URL);
-  })(req, res, next);
-});
-
-// Get current user
-app.get('/auth/user', (req: Request, res: Response) => {
-  const token = req.cookies.auth_token;
-
-  if (!token) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-
-  const user = verifyToken(token);
-
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
-  res.json({ user });
-});
-
-// Logout
-app.post('/auth/logout', (_req: Request, res: Response) => {
-  res.clearCookie('auth_token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
-  });
-  res.json({ success: true });
-});
-
-/* ===== END: BLOCK AUTH ===== */
-
-/* ===== BEGIN: BLOCK FEEDBACK ===== */
-
-// Configure multer for file uploads
-const feedbackStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../feedback_uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const feedbackUpload = multer({
-  storage: feedbackStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images are allowed'));
-    }
-  }
-});
-
-/**
- * POST /api/feedback
- * Submit bug report or feature request
- */
-app.post('/api/feedback', feedbackUpload.single('screenshot'), async (req: Request, res: Response) => {
-  try {
-    const { type, title, description } = req.body;
-    const screenshot = req.file;
-
-    if (!type || !title) {
-      return res.status(400).json({ error: 'Type and title are required' });
-    }
-
-    const { createFeedback } = await import('./db/feedbackDb');
-
-    // Create feedback record in database
-    const feedback = await createFeedback({
-      id: randomUUID(),
-      type,
-      title,
-      description: description || '',
-      screenshot: screenshot ? screenshot.filename : null,
-      user_id: (req as any).user?.id || null,
-    });
-
-    console.log(`[FEEDBACK] ${type.toUpperCase()} submitted: ${title}`);
-
-    return res.json({ success: true, id: feedback.id });
-  } catch (err: any) {
-    console.error('POST /api/feedback error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to submit feedback' });
-  }
-});
-
-/**
- * GET /api/feedback
- * List all feedback submissions
- */
-app.get('/api/feedback', async (req: Request, res: Response) => {
-  try {
-    const { getAllFeedback } = await import('./db/feedbackDb');
-    const feedback = await getAllFeedback();
-
-    return res.json({ feedback });
-  } catch (err: any) {
-    console.error('GET /api/feedback error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to fetch feedback' });
-  }
-});
-
-/**
- * GET /api/feedback/:id/screenshot
- * View screenshot for a feedback submission
- */
-app.get('/api/feedback/:id/screenshot', async (req: Request, res: Response) => {
-  try {
-    const feedbackId = req.params.id;
-    const { getFeedbackById } = await import('./db/feedbackDb');
-
-    const feedback = await getFeedbackById(feedbackId);
-
-    if (!feedback) {
-      return res.status(404).json({ error: 'Feedback not found' });
-    }
-
-    if (!feedback.screenshot) {
-      return res.status(404).json({ error: 'No screenshot attached' });
-    }
-
-    const screenshotPath = path.join(__dirname, '../feedback_uploads', feedback.screenshot);
-
-    if (!fs.existsSync(screenshotPath)) {
-      return res.status(404).json({ error: 'Screenshot file not found' });
-    }
-
-    return res.sendFile(screenshotPath);
-  } catch (err: any) {
-    console.error('GET /api/feedback/:id/screenshot error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to fetch screenshot' });
-  }
-});
-
-/* ===== END: BLOCK FEEDBACK ===== */
-
-
-/* ===== BEGIN: BLOCK C — Health/Debug Endpoints ===== */
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'api', port }));
-app.get('/api/health', (_req: Request, res: Response) => res.json({ status: 'ok', port }));
-
-app.get('/indicators/health', async (_req, res) => {
-  try {
-    const r = await axios.get(`${INDICATOR_SERVICE_URL}/health`).catch((err) =>
-      err.response ? err.response : Promise.reject(err)
-    );
-    return res.json({ ok: true, reachable: true, status: r.status, upstream: r.data ?? null });
-  } catch (err: any) {
-    return res.status(502).json({ ok: false, reachable: false, error: err.message });
-  }
-});
-
-app.get('/api/debug/env', (req: Request, res: Response) => {
-  res.json({
-    hasKey: !!process.env.ALPACA_API_KEY,
-    hasSecret: !!process.env.ALPACA_API_SECRET,
-    headerKey: !!req.header('APCA-API-KEY-ID'),
-    headerSecret: !!req.header('APCA-API-SECRET-KEY'),
-    feed: FEED,
-    indicatorAdjustment: 'split',
-    returnsAdjustment: 'all',
-  });
-});
-
-app.get('/api/account', async (req: Request, res: Response) => {
-  const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
-  const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
-
-  if (!apiKey || !apiSecret) {
-    return res.status(400).json({ error: 'Missing Alpaca API credentials' });
-  }
-
-  try {
-    const response = await axios.get('https://paper-api.alpaca.markets/v2/account', {
-      headers: {
-        'APCA-API-KEY-ID': apiKey,
-        'APCA-API-SECRET-KEY': apiSecret,
-      },
-      timeout: 10000,
-    });
-
-    return res.json(response.data);
-  } catch (err: any) {
-    console.error('GET /api/account error:', err?.response?.data || err?.message);
-    return res.status(err?.response?.status || 500).json({
-      error: err?.response?.data?.message || err?.message || 'Failed to fetch account information',
-    });
-  }
-});
-
-/**
- * GET /api/positions
- * Get all current positions in the account
- */
-app.get('/api/positions', async (req: Request, res: Response) => {
-  const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
-  const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
-
-  if (!apiKey || !apiSecret) {
-    return res.status(400).json({ error: 'Missing Alpaca API credentials' });
-  }
-
-  try {
-    const response = await axios.get('https://paper-api.alpaca.markets/v2/positions', {
-      headers: {
-        'APCA-API-KEY-ID': apiKey,
-        'APCA-API-SECRET-KEY': apiSecret,
-      },
-      timeout: 10000,
-    });
-
-    // Return positions with relevant fields
-    const positions = response.data.map((pos: any) => ({
-      symbol: pos.symbol,
-      qty: parseFloat(pos.qty),
-      avgEntryPrice: parseFloat(pos.avg_entry_price),
-      currentPrice: parseFloat(pos.current_price),
-      marketValue: parseFloat(pos.market_value),
-      costBasis: parseFloat(pos.cost_basis),
-      unrealizedPl: parseFloat(pos.unrealized_pl),
-      unrealizedPlpc: parseFloat(pos.unrealized_plpc),
-      side: pos.side,
-    }));
-
-    return res.json({ positions });
-  } catch (err: any) {
-    console.error('GET /api/positions error:', err?.response?.data || err?.message);
-    return res.status(err?.response?.status || 500).json({
-      error: err?.response?.data?.message || err?.message || 'Failed to fetch positions',
-    });
-  }
-});
-/* ===== END: BLOCK C ===== */
-
-
 /* ===== BEGIN: BLOCK C-2 — Live Trading Endpoints ===== */
-import { getActiveStrategy, setActiveStrategy, clearActiveStrategy, hasActiveStrategy } from './storage/activeStrategy';
-import { placeMarketOrder, waitForFill, getCurrentPrice, getAlpacaPositions } from './services/orders';
-import { evaluateFlowWithCurrentPrices, extractSymbols } from './services/flowEval';
-import { genId } from './utils/id';
-import { createActiveStrategy, getAllActiveStrategies, getActiveStrategiesByUserId, getActiveStrategyById, updateActiveStrategy } from './db/activeStrategiesDb';
-import { upsertSnapshot } from './db/activeStrategySnapshotsDb';
-import { calculateAttributionOnDeploy, removeStrategyFromAttribution } from './services/positionAttribution';
-
 /**
  * GET /api/strategy
  * Get current active strategy with live holdings data
@@ -1803,174 +1236,6 @@ type BatchStrategyRequestBody = {
 // Batch jobs now stored in PostgreSQL database (see db/batchJobsDb.ts)
 // All job data and types defined in backend/src/db/batchJobsDb.ts
 
-async function startBatchStrategyJob(
-  jobId: string,
-  assignments: Array<Record<string, string>>,
-  apiKey: string,
-  apiSecret: string
-) {
-  // Load job from database
-  const job = await batchJobsDb.getBatchJobById(jobId);
-  if (!job) {
-    console.error(`[BATCH] Job ${jobId} not found in database`);
-    return;
-  }
-
-  let combos = assignments.length ? assignments : generateAllAssignments(JSON.parse(JSON.stringify(job.variables)));
-  const total = combos.length;
-
-  // Update job to running status
-  await batchJobsDb.updateBatchJob(jobId, {
-    status: 'running',
-    total,
-    completed: 0,
-    error: null,
-  });
-
-  // Track actual processing time
-  const startTime = Date.now();
-  console.log(`[BATCH WORKER START] Job ${jobId} starting with ${total} backtests at ${new Date().toISOString()}`);
-
-  if (!job.strategy_elements) {
-    await batchJobsDb.updateBatchJob(jobId, {
-      status: 'failed',
-      error: 'Missing strategy payload',
-    });
-    return;
-  }
-
-  const runs: Array<{variables: Record<string, string>; metrics: any}> = [];
-  let completedCount = 0;
-
-  // Buffer for batch database writes
-  const WRITE_BUFFER_SIZE = 200;
-  const writeBuffer: Array<{batch_job_id: string; run_index: number; variables: any; metrics: any}> = [];
-
-  // Function to flush buffer to database
-  const flushBuffer = async () => {
-    if (writeBuffer.length === 0) return;
-    console.log(`[BATCH WORKER] Flushing ${writeBuffer.length} results to database...`);
-    await batchJobsDb.createBatchJobRunsBulk(writeBuffer);
-    writeBuffer.length = 0; // Clear buffer
-  };
-
-  console.log(`[BATCH WORKER] Processing ${total} backtests with concurrency=${BATCH_CONCURRENCY}, write buffer=${WRITE_BUFFER_SIZE}`);
-
-  // Process in chunks for parallel execution
-  for (let chunkStart = 0; chunkStart < combos.length; chunkStart += BATCH_CONCURRENCY) {
-    const chunk = combos.slice(chunkStart, chunkStart + BATCH_CONCURRENCY);
-    console.log(`[BATCH WORKER] Processing chunk ${Math.floor(chunkStart / BATCH_CONCURRENCY) + 1}/${Math.ceil(total / BATCH_CONCURRENCY)} (${chunk.length} backtests)`);
-
-    // Run chunk in parallel
-    const chunkPromises = chunk.map(async (assignment, chunkIdx) => {
-      const idx = chunkStart + chunkIdx;
-      try {
-        const mutatedElements = applyVariablesToElements(JSON.parse(JSON.stringify(job.strategy_elements)), assignment);
-        const payload = {
-          elements: mutatedElements,
-          benchmarkSymbol: job.benchmark_symbol || 'SPY',
-          startDate: job.start_date || 'max',
-          endDate: job.end_date || getMarketDateToday(),
-          debug: true,
-        };
-
-        const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
-          headers: {
-            'APCA-API-KEY-ID': apiKey,
-            'APCA-API-SECRET-KEY': apiSecret,
-          },
-          timeout: 300000, // 5 minutes per backtest
-        });
-
-        const resp = response?.data || {};
-        const metricsRaw = resp.metrics || {};
-        const metrics = normalizeMetrics(metricsRaw);
-
-        // Add to write buffer instead of immediate database write
-        writeBuffer.push({
-          batch_job_id: jobId,
-          run_index: idx,
-          variables: assignment,
-          metrics,
-        });
-
-        return {
-          idx,
-          variables: assignment,
-          metrics,
-        };
-
-      } catch (err: any) {
-        const errorMsg = err?.response?.data?.error || err?.message || 'Batch strategy backtest failed';
-        console.error(`[BATCH WORKER] Run ${idx + 1}/${total} FAILED:`, errorMsg);
-        console.error(`[BATCH WORKER] Full error:`, JSON.stringify(err?.response?.data || err?.message));
-
-        // Add failed run to buffer too
-        writeBuffer.push({
-          batch_job_id: jobId,
-          run_index: idx,
-          variables: assignment,
-          metrics: { error: errorMsg },
-        });
-
-        return {
-          idx,
-          variables: assignment,
-          metrics: { error: errorMsg },
-          failed: true,
-        };
-      }
-    });
-
-    // Wait for all backtests in chunk to complete
-    const chunkResults = await Promise.all(chunkPromises);
-
-    // Add successful results to runs array (in order)
-    for (const result of chunkResults.sort((a, b) => a.idx - b.idx)) {
-      if (!result.failed) {
-        runs.push({
-          variables: result.variables,
-          metrics: result.metrics,
-        });
-      }
-      completedCount++;
-    }
-
-    // Flush buffer if it reaches the size limit
-    if (writeBuffer.length >= WRITE_BUFFER_SIZE) {
-      await flushBuffer();
-    }
-
-    // Update progress after each chunk
-    await batchJobsDb.updateBatchJobProgress(jobId, completedCount);
-
-    // Log progress milestones every 100 backtests
-    if (completedCount % 100 === 0 || completedCount === total) {
-      const percentComplete = ((completedCount / total) * 100).toFixed(1);
-      console.log(`[BATCH WORKER] Progress: ${completedCount}/${total} (${percentComplete}%) - ${total - completedCount} remaining`);
-    }
-  }
-
-  // Flush any remaining buffered writes
-  await flushBuffer();
-
-  // Calculate duration
-  const endTime = Date.now();
-  const durationMs = endTime - startTime;
-  const durationSec = (durationMs / 1000).toFixed(1);
-  console.log(`[BATCH WORKER] ✓ Batch completed in ${durationSec}s (${(runs.length / (durationMs / 1000)).toFixed(1)} backtests/sec)`);
-
-  // Calculate summary with duration included in JSONB
-  const summary = {
-    ...buildSummary(runs, runs.length),
-    duration_ms: durationMs,
-  };
-
-  // Mark job as finished with summary (using updateBatchJobProgress to set completed_at)
-  await batchJobsDb.updateBatchJobProgress(jobId, runs.length, 'finished');
-  await batchJobsDb.updateBatchJob(jobId, { summary });
-}
-
 app.post('/api/batch_backtest_strategy', requireAuth, async (req: Request, res: Response) => {
   const userId = (req as any).user?.id;
   if (!userId) {
@@ -2028,18 +1293,29 @@ app.post('/api/batch_backtest_strategy', requireAuth, async (req: Request, res: 
   });
 
   if (total) {
-    // Start background job processing
-    startBatchStrategyJob(id, assignmentsRaw, apiKey, apiSecret).catch(async (err: any) => {
-      console.error('[BATCH] Fatal error in batch worker:', err);
-      console.error('[BATCH] Error details:', {
-        message: err?.message,
-        stack: err?.stack,
-        data: err?.response?.data,
-      });
+    const worker = spawnBatchStrategyWorker({
+      jobId: id,
+      assignments: assignmentsRaw,
+      apiKey,
+      apiSecret,
+    });
+
+    worker.on('error', async (err) => {
+      console.error('[BATCH] Worker spawn error:', err);
       await batchJobsDb.updateBatchJob(id, {
         status: 'failed',
-        error: err?.message || 'Batch strategy backtest failed',
+        error: err?.message || 'Batch worker failed to start',
       });
+    });
+
+    worker.on('exit', async (code) => {
+      if (code && code !== 0) {
+        console.error(`[BATCH] Worker exited with code ${code}`);
+        await batchJobsDb.updateBatchJob(id, {
+          status: 'failed',
+          error: `Batch worker exited with status ${code}`,
+        });
+      }
     });
   } else {
     // Empty batch - already marked as finished, add summary
@@ -2464,26 +1740,6 @@ async function fetchQuantStatsMetrics(dailyReturns: number[]): Promise<Record<st
 }
 
 
-function normalizeMetrics(raw: any): Record<string, number> {
-  const out: Record<string, number> = {};
-  if (raw && typeof raw === 'object') {
-    for (const [key, value] of Object.entries(raw)) {
-      const num = Number(value);
-      if (Number.isFinite(num)) out[key] = num;
-    }
-  }
-
-  out.totalReturn = Number(out.totalReturn ?? out.total_return ?? 0);
-  out.CAGR = Number(out.CAGR ?? out.cagr ?? 0);
-  out.cagr = Number(out.cagr ?? out.CAGR ?? 0);
-  out.sharpe = Number(out.sharpe ?? out.Sharpe ?? 0);
-  out.sortino = Number(out.sortino ?? out.Sortino ?? 0);
-  out.maxDrawdown = Number(out.maxDrawdown ?? out.max_drawdown ?? 0);
-
-  return out;
-}
-
-
 /* ===== BEGIN: BLOCK G — Series Alignment Helpers ===== */
 function toDateCloseMap(bars: SimpleBar[]): Map<string, number> {
   const m = new Map<string, number>();
@@ -2785,9 +2041,6 @@ type IndicatorName =
   | 'BBANDS_UPPER' | 'BBANDS_MIDDLE' | 'BBANDS_LOWER'
   | 'ATR' | 'OBV' | 'ADX' | 'STOCH_K' | 'MFI' | 'AROONOSC';
 
-type FlowGlobals = { benchmarkSymbol: string; start: string; end: string; debug: boolean };
-type FlowNode = { id: string; type: 'start' | 'gate' | 'weights' | 'portfolio'; data: any; };
-type FlowEdge = { from: string; to: string; label?: 'then' | 'else' };
 type Condition = {
   left: { symbol: string; type: IndicatorName; params: Record<string, any> };
   op: 'gt' | 'lt';
@@ -3674,8 +2927,8 @@ app.delete('/api/strategies/:id', requireAuth, async (req: Request, res: Respons
 
 
 /* ===== BEGIN: BLOCK L — Boot ===== */
-app.listen(port, async () => {
-  console.log(`Alpaca algo backend listening on port ${port} (feed=${FEED}, indicator=split, returns=all)`);
+app.listen(PORT, async () => {
+  console.log(`Alpaca algo backend listening on port ${PORT} (feed=${FEED}, indicator=split, returns=all)`);
 
   // Ensure database tables exist
   try {
