@@ -19,12 +19,12 @@ const resolveWorkerPath = () => {
 
 export const spawnBatchStrategyWorker = (payload: WorkerPayload): ChildProcess => {
   const { path: workerPath, execArgv } = resolveWorkerPath();
-  const child = fork(workerPath, [], {
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64');
+  const child = fork(workerPath, [encoded], {
     execArgv,
     env: process.env,
     stdio: 'inherit',
   });
 
-  child.send(payload);
   return child;
 };
