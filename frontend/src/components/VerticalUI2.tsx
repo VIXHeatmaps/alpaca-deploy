@@ -731,17 +731,24 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           let durationMs: number | null = null;
           if (parsedDuration !== null && Number.isFinite(parsedDuration) && parsedDuration >= 0) {
             durationMs = parsedDuration;
-          } else if (startedAt) {
-            const startMs = new Date(startedAt).getTime();
-            if (Number.isFinite(startMs)) {
-              const endMs =
-                completedAt && (status === "finished" || status === "failed")
-                  ? new Date(completedAt).getTime()
-                  : status === "running"
-                  ? Date.now()
-                  : NaN;
-              if (Number.isFinite(endMs)) {
-                durationMs = Math.max(0, endMs - startMs);
+          } else {
+            // Calculate duration using createdAt (same as batchJobsStore.ts)
+            const createdAtForCalc = typeof statusData.createdAt === "string"
+              ? statusData.createdAt
+              : previousJob.createdAt;
+
+            if (createdAtForCalc) {
+              const startMs = new Date(createdAtForCalc).getTime();
+              if (Number.isFinite(startMs)) {
+                const endMs =
+                  completedAt && (status === "finished" || status === "failed")
+                    ? new Date(completedAt).getTime()
+                    : status === "running"
+                    ? Date.now()
+                    : NaN;
+                if (Number.isFinite(endMs)) {
+                  durationMs = Math.max(0, endMs - startMs);
+                }
               }
             }
           }
