@@ -695,7 +695,7 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const toBranchHasError = hasFieldError(element.id, "toChildren", validationErrors);
 
   const indicatorLabel = (config.indicator || "").replace(/_/g, " ");
-  const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 8 + 32, 120)}px`;
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
 
   const updateConfig = (updates: Partial<ScaleElement["config"]>) => {
     onUpdate({ ...element, config: { ...config, ...updates } });
@@ -1769,9 +1769,9 @@ function ConditionRow({
   const rightTickerHasUndefinedVar = hasUndefinedVariableInField(condition.rightTicker, definedVariables);
   const rightPeriodHasUndefinedVar = hasUndefinedVariableInField(condition.rightPeriod, definedVariables);
   const indicatorLabel = (condition.indicator || "").replace(/_/g, " ");
-  const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 8 + 32, 120)}px`;
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
   const rightIndicatorLabel = ((condition.rightIndicator || "RSI") as string).replace(/_/g, " ");
-  const rightIndicatorSelectWidth = `${Math.max(rightIndicatorLabel.length * 8 + 32, 120)}px`;
+  const rightIndicatorSelectWidth = `${Math.max(rightIndicatorLabel.length + 3, 10)}ch`;
 
   return (
     <div style={{
