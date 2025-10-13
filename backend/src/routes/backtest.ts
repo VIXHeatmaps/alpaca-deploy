@@ -1422,7 +1422,6 @@ backtestRouter.post('/batch_backtest_strategy', requireAuth, async (req: Request
     benchmark_symbol: body.baseStrategy?.benchmarkSymbol || body.benchmarkSymbol || 'SPY',
     assignments_preview: assignmentsRaw.slice(0, 25) as any,
     summary: null,
-    started_at: total ? null : new Date(),
   });
 
   if (total) {

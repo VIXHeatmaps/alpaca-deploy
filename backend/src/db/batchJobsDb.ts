@@ -43,7 +43,7 @@ export interface BatchJobRunDb {
 /**
  * Create a new batch job
  */
-export async function createBatchJob(job: Omit<BatchJobDb, 'created_at' | 'updated_at'>): Promise<BatchJobDb> {
+export async function createBatchJob(job: Omit<BatchJobDb, 'created_at' | 'updated_at' | 'started_at'> & { started_at?: Date | null }): Promise<BatchJobDb> {
   // Manually stringify JSONB fields for pg driver
   const jobData: any = { ...job };
   jobData.variables = JSON.stringify(job.variables);
