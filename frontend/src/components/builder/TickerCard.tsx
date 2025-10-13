@@ -15,6 +15,8 @@ export interface TickerCardProps {
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
   tickerMetadata?: Map<string, TickerMetadata>;
+  metadataLoading?: boolean;
+  metadataError?: string | null;
 }
 
 export function TickerCard({
@@ -28,6 +30,8 @@ export function TickerCard({
   validationErrors = [],
   definedVariables = new Set<string>(),
   tickerMetadata,
+  metadataLoading = false,
+  metadataError = null,
 }: TickerCardProps) {
   const hasUndefinedVar = hasUndefinedVariableInField(element.ticker, definedVariables);
   const hasValidationError = hasFieldError(element.id, "ticker", validationErrors);
@@ -35,9 +39,18 @@ export function TickerCard({
   const symbol = element.ticker?.toUpperCase() ?? "";
   const resolvedMetadata = symbol && tickerMetadata ? tickerMetadata.get(symbol) : undefined;
   const resolvedName = resolvedMetadata?.name?.trim() ? resolvedMetadata.name.trim() : null;
+  const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
+  const isUnknownTicker =
+    metadataReady &&
+    symbol.length > 0 &&
+    !hasUndefinedVar &&
+    !tickerMetadata.has(symbol);
+  const showErrorBorder = hasValidationError || hasUndefinedVar || isUnknownTicker;
   const tickerTooltip = hasUndefinedVar
     ? `Variable ${element.ticker} is not defined in Variables tab`
-    : resolvedName || undefined;
+    : isUnknownTicker
+      ? `${symbol} not found in Alpaca asset list`
+      : resolvedName || undefined;
 
   return (
     <div
@@ -117,12 +130,12 @@ export function TickerCard({
         value={element.ticker}
         onChange={(e) => onUpdate({ ...element, ticker: e.target.value.toUpperCase() })}
         style={{
-          border: hasValidationError || hasUndefinedVar ? "2px solid #ef4444" : "1px solid #d1d5db",
+          border: showErrorBorder ? "2px solid #ef4444" : "1px solid #d1d5db",
           outline: "none",
           padding: "4px 8px",
-          background: hasValidationError || hasUndefinedVar ? "#fee2e2" : "#fff",
+          background: showErrorBorder ? "#fee2e2" : "#fff",
           fontSize: "13px",
-          color: "#111827",
+          color: showErrorBorder ? "#b91c1c" : "#111827",
           width: `${(element.ticker.length || 1) * 9 + 20}px`,
           minWidth: "60px",
           flexShrink: 0,

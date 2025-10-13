@@ -46,6 +46,8 @@ export interface WeightCardProps {
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
   tickerMetadata?: Map<string, TickerMetadata>;
+  metadataLoading?: boolean;
+  metadataError?: string | null;
 }
 
 export const createDefaultGateElement = (allElements: Element[] = []): GateElement => {
@@ -104,7 +106,7 @@ export const createDefaultScaleElement = (weight: number, allElements: Element[]
   };
 };
 
-export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata }: WeightCardProps & { initiallyOpen?: boolean }) {
+export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError }: WeightCardProps & { initiallyOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [showDropdown, setShowDropdown] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
@@ -429,6 +431,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     } else if (child.type === "ticker") {
@@ -445,6 +449,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                   } else if (child.type === "weight") {
@@ -463,6 +469,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                       />
                     );
                     } else if (child.type === "scale") {
@@ -480,6 +488,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     }
@@ -669,9 +679,11 @@ export interface ScaleCardProps {
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
   tickerMetadata?: Map<string, TickerMetadata>;
+  metadataLoading?: boolean;
+  metadataError?: string | null;
 }
 
-export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata }: ScaleCardProps) {
+export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError }: ScaleCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
@@ -701,10 +713,19 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const fromBranchHasError = hasFieldError(element.id, "fromChildren", validationErrors);
   const toBranchHasError = hasFieldError(element.id, "toChildren", validationErrors);
   const configTickerSymbol = config.ticker?.toUpperCase() ?? "";
+  const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
   const configTickerMetadata = configTickerSymbol && tickerMetadata ? tickerMetadata.get(configTickerSymbol) : undefined;
+  const configTickerUnknown =
+    metadataReady &&
+    configTickerSymbol.length > 0 &&
+    !tickerHasUndefinedVar &&
+    !tickerMetadata?.has(configTickerSymbol);
   const configTickerTooltip = tickerHasUndefinedVar
     ? `Variable ${config.ticker} is not defined in Variables tab`
-    : (configTickerMetadata?.name?.trim() || undefined);
+    : configTickerUnknown
+      ? `${configTickerSymbol} not found in Alpaca asset list`
+      : (configTickerMetadata?.name?.trim() || undefined);
+  const tickerHasVisualError = tickerHasError || tickerHasUndefinedVar || configTickerUnknown;
 
   const indicatorLabel = (config.indicator || "").replace(/_/g, " ");
   const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
@@ -988,12 +1009,12 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
             onChange={(e) => updateConfig({ ticker: e.target.value.toUpperCase() })}
             onClick={(e) => e.stopPropagation()}
             style={{
-              border: (tickerHasError || tickerHasUndefinedVar) ? "2px solid #ef4444" : "1px solid #d1d5db",
+              border: tickerHasVisualError ? "2px solid #ef4444" : "1px solid #d1d5db",
               outline: "none",
               padding: "4px 8px",
-              background: (tickerHasError || tickerHasUndefinedVar) ? "#fee2e2" : "#fff",
+              background: tickerHasVisualError ? "#fee2e2" : "#fff",
               fontSize: "13px",
-              color: config.ticker ? "#111827" : "#9ca3af",
+              color: tickerHasVisualError ? "#b91c1c" : config.ticker ? "#111827" : "#9ca3af",
               width: `${Math.max((config.ticker || "Ticker").length * 9 + 20, 80)}px`,
               maxWidth: "300px",
               flexShrink: 0,
@@ -1152,6 +1173,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     }
@@ -1168,6 +1191,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     }
@@ -1186,6 +1211,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                         }
@@ -1204,6 +1231,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
                               tickerMetadata={tickerMetadata}
+                              metadataLoading={metadataLoading}
+                              metadataError={metadataError}
                             />
                           );
                         }
@@ -1417,6 +1446,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     }
@@ -1433,6 +1464,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     }
@@ -1451,6 +1484,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                         }
@@ -1469,6 +1504,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
                               tickerMetadata={tickerMetadata}
+                              metadataLoading={metadataLoading}
+                              metadataError={metadataError}
                             />
                           );
                         }
@@ -1770,6 +1807,8 @@ interface ConditionRowProps {
   definedVariables: Set<string>;
   inline?: boolean; // If true, render without background (for single-line IF mode)
   tickerMetadata?: Map<string, TickerMetadata>;
+  metadataLoading?: boolean;
+  metadataError?: string | null;
 }
 
 function ConditionRow({
@@ -1783,6 +1822,8 @@ function ConditionRow({
   definedVariables,
   inline = false,
   tickerMetadata,
+  metadataLoading,
+  metadataError,
 }: ConditionRowProps) {
   // Check for undefined variables in this condition's fields
   const tickerHasUndefinedVar = hasUndefinedVariableInField(condition.ticker, definedVariables);
@@ -1795,15 +1836,34 @@ function ConditionRow({
   const rightIndicatorLabel = ((condition.rightIndicator || "RSI") as string).replace(/_/g, " ");
   const rightIndicatorSelectWidth = `${Math.max(rightIndicatorLabel.length + 3, 10)}ch`;
   const conditionTickerSymbol = condition.ticker?.toUpperCase() ?? "";
+  const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
   const conditionTickerMetadata = conditionTickerSymbol && tickerMetadata ? tickerMetadata.get(conditionTickerSymbol) : undefined;
+  const conditionTickerUnknown =
+    metadataReady &&
+    conditionTickerSymbol.length > 0 &&
+    !tickerHasUndefinedVar &&
+    !tickerMetadata?.has(conditionTickerSymbol);
   const conditionTickerTooltip = tickerHasUndefinedVar
     ? `Variable ${condition.ticker} is not defined in Variables tab`
-    : (conditionTickerMetadata?.name?.trim() || undefined);
+    : conditionTickerUnknown
+      ? `${conditionTickerSymbol} not found in Alpaca asset list`
+      : (conditionTickerMetadata?.name?.trim() || undefined);
   const rightTickerSymbol = condition.rightTicker?.toUpperCase() ?? "";
   const rightTickerMetadata = rightTickerSymbol && tickerMetadata ? tickerMetadata.get(rightTickerSymbol) : undefined;
+  const rightTickerUnknown =
+    metadataReady &&
+    rightTickerSymbol.length > 0 &&
+    !rightTickerHasUndefinedVar &&
+    !tickerMetadata?.has(rightTickerSymbol);
   const rightTickerTooltip = rightTickerHasUndefinedVar
     ? `Variable ${condition.rightTicker} is not defined in Variables tab`
-    : (rightTickerMetadata?.name?.trim() || undefined);
+    : rightTickerUnknown
+      ? `${rightTickerSymbol} not found in Alpaca asset list`
+      : (rightTickerMetadata?.name?.trim() || undefined);
+  const leftTickerHasFieldError = hasFieldError(elementId, `conditions.${conditionIndex}.ticker`, validationErrors);
+  const rightTickerHasFieldError = hasFieldError(elementId, `conditions.${conditionIndex}.rightTicker`, validationErrors);
+  const leftTickerVisualError = leftTickerHasFieldError || tickerHasUndefinedVar || conditionTickerUnknown;
+  const rightTickerVisualError = rightTickerHasFieldError || rightTickerHasUndefinedVar || rightTickerUnknown;
 
   return (
     <div style={{
@@ -1870,12 +1930,12 @@ function ConditionRow({
         onChange={(e) => onUpdate({ ticker: e.target.value.toUpperCase() })}
         onClick={(e) => e.stopPropagation()}
         style={{
-          border: (hasFieldError(elementId, `conditions.${conditionIndex}.ticker`, validationErrors) || tickerHasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
+          border: leftTickerVisualError ? '2px solid #ef4444' : '1px solid #d1d5db',
           outline: 'none',
           padding: '4px 8px',
-          background: (hasFieldError(elementId, `conditions.${conditionIndex}.ticker`, validationErrors) || tickerHasUndefinedVar) ? '#fee2e2' : '#fff',
+          background: leftTickerVisualError ? '#fee2e2' : '#fff',
           fontSize: '13px',
-          color: condition.ticker ? '#111827' : '#9ca3af',
+          color: leftTickerVisualError ? '#b91c1c' : condition.ticker ? '#111827' : '#9ca3af',
           width: `${Math.max((condition.ticker || 'Ticker').length * 9 + 20, 80)}px`,
           maxWidth: '300px',
           flexShrink: 0,
@@ -2016,12 +2076,12 @@ function ConditionRow({
             onChange={(e) => onUpdate({ rightTicker: e.target.value.toUpperCase() })}
             onClick={(e) => e.stopPropagation()}
             style={{
-              border: (hasFieldError(elementId, `conditions.${conditionIndex}.rightTicker`, validationErrors) || rightTickerHasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
+              border: rightTickerVisualError ? '2px solid #ef4444' : '1px solid #d1d5db',
               outline: 'none',
               padding: '4px 8px',
-              background: (hasFieldError(elementId, `conditions.${conditionIndex}.rightTicker`, validationErrors) || rightTickerHasUndefinedVar) ? '#fee2e2' : '#fff',
+              background: rightTickerVisualError ? '#fee2e2' : '#fff',
               fontSize: '13px',
-              color: condition.rightTicker ? '#111827' : '#9ca3af',
+              color: rightTickerVisualError ? '#b91c1c' : condition.rightTicker ? '#111827' : '#9ca3af',
               width: `${Math.max((condition.rightTicker || 'Ticker').length * 9 + 20, 80)}px`,
               maxWidth: '300px',
               flexShrink: 0,
@@ -2077,9 +2137,11 @@ export interface GateCardProps {
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
   tickerMetadata?: Map<string, TickerMetadata>;
+  metadataLoading?: boolean;
+  metadataError?: string | null;
 }
 
-export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata }: GateCardProps) {
+export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError }: GateCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showThenDropdown, setShowThenDropdown] = useState(false);
   const [showElseDropdown, setShowElseDropdown] = useState(false);
@@ -2470,6 +2532,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
             definedVariables={definedVariables}
             inline={true}
             tickerMetadata={tickerMetadata}
+            metadataLoading={metadataLoading}
+            metadataError={metadataError}
           />
 
           {/* Copy and Delete buttons - inline on same row */}
@@ -2574,6 +2638,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                 definedVariables={definedVariables}
                 inline={true}
                 tickerMetadata={tickerMetadata}
+                metadataLoading={metadataLoading}
+                metadataError={metadataError}
               />
             </div>
           ))}
@@ -2683,6 +2749,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     } else if (child.type === "ticker") {
@@ -2698,6 +2766,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     } else if (child.type === "weight") {
@@ -2715,6 +2785,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                         } else if (child.type === "scale") {
@@ -2732,6 +2804,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
                               tickerMetadata={tickerMetadata}
+                              metadataLoading={metadataLoading}
+                              metadataError={metadataError}
                             />
                           );
                         }
@@ -2924,6 +2998,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     } else if (child.type === "ticker") {
@@ -2939,6 +3015,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                     } else if (child.type === "weight") {
@@ -2956,6 +3034,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
                           tickerMetadata={tickerMetadata}
+                          metadataLoading={metadataLoading}
+                          metadataError={metadataError}
                         />
                       );
                         } else if (child.type === "scale") {
@@ -2973,6 +3053,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
                               tickerMetadata={tickerMetadata}
+                              metadataLoading={metadataLoading}
+                              metadataError={metadataError}
                             />
                           );
                         }

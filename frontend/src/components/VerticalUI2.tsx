@@ -150,7 +150,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   const [loadingResults, setLoadingResults] = useState(false);
 
   // Real-time validation - updates whenever elements change
-  const validationErrors = useMemo(() => {
+  const baseValidationErrors = useMemo(() => {
     if (elements.length === 0) return [];
     const validation = validateStrategy(elements as any);
     return validation.errors;
@@ -171,36 +171,47 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     return strategyVariables.filter(varName => !definedVariables.has(varName));
   }, [strategyVariables, definedVariables]);
 
-  const referencedTickers = useMemo(() => {
+  const { symbols: referencedTickers, references: tickerReferencesForValidation } = useMemo(() => {
     const tickers = new Set<string>();
+    const references: Array<{ symbol: string; elementId: string; elementType: string; field: string }> = [];
 
-    const addTicker = (value: unknown) => {
+    const recordTicker = (
+      value: unknown,
+      elementId: string,
+      elementType: string,
+      field: string,
+      shouldRecordReference: boolean = true
+    ) => {
       if (typeof value !== "string") return;
       const trimmed = value.trim();
       if (!trimmed || containsVariable(trimmed)) return;
       const normalized = trimmed.toUpperCase();
       if (!TICKER_REGEX.test(normalized)) return;
       tickers.add(normalized);
+      if (shouldRecordReference) {
+        references.push({ symbol: normalized, elementId, elementType, field });
+      }
     };
 
     const walkElement = (element: Element | null | undefined) => {
       if (!element) return;
 
       if (element.type === "ticker") {
-        addTicker((element as TickerElement).ticker);
+        const tickerElement = element as TickerElement;
+        recordTicker(tickerElement.ticker, tickerElement.id, "ticker", "ticker");
         return;
       }
 
       if (element.type === "gate") {
         const gate = element as GateElement;
         if (Array.isArray(gate.conditions)) {
-          gate.conditions.forEach((cond) => {
-            addTicker(cond.ticker);
-            addTicker(cond.rightTicker);
+          gate.conditions.forEach((cond, idx) => {
+            recordTicker(cond.ticker, gate.id, "gate", `conditions.${idx}.ticker`);
+            recordTicker(cond.rightTicker, gate.id, "gate", `conditions.${idx}.rightTicker`);
           });
         } else if (gate.condition) {
-          addTicker(gate.condition.ticker);
-          addTicker(gate.condition.rightTicker);
+          recordTicker(gate.condition.ticker, gate.id, "gate", "conditions.0.ticker");
+          recordTicker(gate.condition.rightTicker, gate.id, "gate", "conditions.0.rightTicker");
         }
         gate.thenChildren?.forEach(walkElement);
         gate.elseChildren?.forEach(walkElement);
@@ -214,7 +225,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
       if (element.type === "scale") {
         const scale = element as ScaleElement;
-        addTicker(scale.config?.ticker);
+        recordTicker(scale.config?.ticker, scale.id, "scale", "ticker");
         scale.fromChildren?.forEach(walkElement);
         scale.toChildren?.forEach(walkElement);
         return;
@@ -222,7 +233,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     };
 
     elements.forEach(walkElement);
-    addTicker(benchmarkSymbol);
+    recordTicker(benchmarkSymbol, "benchmark", "strategy", "benchmarkSymbol");
 
     if (backtestResults) {
       const {
@@ -245,36 +256,84 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
             const upperKey = key.toUpperCase();
             if (key !== upperKey) return;
             if (!TICKER_REGEX.test(upperKey)) return;
-            addTicker(upperKey);
+            recordTicker(upperKey, "result.dailyPositions", "result", key, false);
           });
         });
       }
 
       if (Array.isArray(debugDays)) {
         debugDays.forEach((day: any) => {
-          Object.keys(day?.allocation || {}).forEach(addTicker);
+          Object.keys(day?.allocation || {}).forEach((ticker) =>
+            recordTicker(ticker, "result.debugDays", "result", "allocation", false)
+          );
         });
       }
 
       const arraysWithSymbol = [holdings, positions, soldPositions, pendingOrders];
       arraysWithSymbol.forEach((arr) => {
         if (Array.isArray(arr)) {
-          arr.forEach((item) => addTicker(item?.symbol));
+          arr.forEach((item) => recordTicker(item?.symbol, "result.positions", "result", "symbol", false));
         }
       });
 
       if (allocation && typeof allocation === "object") {
-        Object.keys(allocation).forEach(addTicker);
+        Object.keys(allocation).forEach((ticker) =>
+          recordTicker(ticker, "result.allocation", "result", "allocation", false)
+        );
       }
 
-      addTicker(resultBenchmarkSymbol);
-      addTicker(benchmark?.symbol);
+      recordTicker(resultBenchmarkSymbol, "result.benchmark", "result", "benchmarkSymbol", false);
+      recordTicker(benchmark?.symbol, "result.benchmarkData", "result", "benchmarkSymbol", false);
     }
 
-    return Array.from(tickers);
+    return {
+      symbols: Array.from(tickers),
+      references,
+    };
   }, [elements, benchmarkSymbol, backtestResults]);
 
-  const { metadata: tickerMetadata } = useTickerMetadata(referencedTickers);
+  const {
+    metadata: tickerMetadata,
+    loading: tickerMetadataLoading,
+    error: tickerMetadataError,
+  } = useTickerMetadata(referencedTickers);
+
+  const metadataValidationErrors = useMemo(() => {
+    if (tickerMetadataLoading || tickerMetadataError) return [];
+    const errorMap = new Map<string, ValidationError>();
+
+    for (const ref of tickerReferencesForValidation) {
+      if (!tickerMetadata.has(ref.symbol)) {
+        const key = `${ref.elementId}:${ref.field}`;
+        if (!errorMap.has(key)) {
+          errorMap.set(key, {
+            elementId: ref.elementId,
+            elementType: ref.elementType,
+            field: ref.field,
+            message: `Ticker ${ref.symbol} not found in Alpaca asset list`,
+            severity: "error",
+          });
+        }
+      }
+    }
+
+    return Array.from(errorMap.values());
+  }, [tickerMetadata, tickerMetadataLoading, tickerMetadataError, tickerReferencesForValidation]);
+
+  const validationErrors = useMemo(
+    () => [...baseValidationErrors, ...metadataValidationErrors],
+    [baseValidationErrors, metadataValidationErrors]
+  );
+
+  const metadataReady = !tickerMetadataLoading && !tickerMetadataError;
+  const normalizedBenchmark = benchmarkSymbol?.trim().toUpperCase() ?? "";
+  const benchmarkIsVariable = containsVariable(normalizedBenchmark);
+  const isBenchmarkUnknown =
+    metadataReady &&
+    normalizedBenchmark.length > 0 &&
+    TICKER_REGEX.test(normalizedBenchmark) &&
+    !benchmarkIsVariable &&
+    !tickerMetadata.has(normalizedBenchmark);
 
   // Memoize chart data to prevent constant re-renders
   const chartData = useMemo(() => {
@@ -1491,9 +1550,16 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                       width: '60px',
                       padding: '4px 6px',
                       fontSize: '12px',
-                      border: '1px solid #d1d5db',
+                      border: isBenchmarkUnknown ? '2px solid #ef4444' : '1px solid #d1d5db',
                       borderRadius: '4px',
+                      background: isBenchmarkUnknown ? '#fee2e2' : '#fff',
+                      color: isBenchmarkUnknown ? '#b91c1c' : '#111827',
                     }}
+                    title={
+                      isBenchmarkUnknown
+                        ? `${normalizedBenchmark} not found in Alpaca asset list`
+                        : undefined
+                    }
                   />
                 </div>
 
@@ -2166,6 +2232,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
                 tickerMetadata={tickerMetadata}
+                metadataLoading={tickerMetadataLoading}
+                metadataError={tickerMetadataError}
               />
             );
           } else if (el.type === "ticker") {
@@ -2180,6 +2248,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
                 tickerMetadata={tickerMetadata}
+                metadataLoading={tickerMetadataLoading}
+                metadataError={tickerMetadataError}
               />
             );
           } else if (el.type === "weight") {
@@ -2197,6 +2267,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
                 tickerMetadata={tickerMetadata}
+                metadataLoading={tickerMetadataLoading}
+                metadataError={tickerMetadataError}
               />
             );
           } else if (el.type === "scale") {
@@ -2214,6 +2286,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
                 tickerMetadata={tickerMetadata}
+                metadataLoading={tickerMetadataLoading}
+                metadataError={tickerMetadataError}
               />
             );
           }
