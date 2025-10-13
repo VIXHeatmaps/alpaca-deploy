@@ -12,10 +12,10 @@
 - **Environment:** Production, Paper Trading credentials configured
 
 ### Performance Metrics
-- **Batch Concurrency:** 16x (optimized after testing 4x/16x/32x/64x)
-- **Backtest Speed:** 8.6 backtests/second
-- **200k Batch Estimate:** ~6.5 hours
-- **Memory Usage:** ~475MB peak at 16x concurrency
+- **Batch Concurrency:** 32x (currently deployed on Railway)
+- **Backtest Speed:** ~8.6 backtests/second (needs re-testing at 32x)
+- **200k Batch Estimate:** ~6.5 hours (needs verification at 32x)
+- **Memory Usage:** ~475MB peak (measured at 16x, needs verification at 32x)
 - **CPU Usage:** <1.0 vCPU (not CPU-bound)
 - **Cache Hit Rate:** 98%+ (Redis working excellently)
 
@@ -35,7 +35,7 @@
 2. Removed gate execution logs for batch runs (debug flag)
 3. Added milestone logging (every 100 backtests)
 4. Added trade window summary logs ([TRADE WINDOW START/END])
-5. Optimized concurrency (16x proven optimal through testing)
+5. Increased concurrency to 32x (currently deployed)
 
 ### Known Limitations
 - Railway log retention limited (older logs get truncated)
