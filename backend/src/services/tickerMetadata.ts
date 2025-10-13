@@ -2,7 +2,7 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
 
-const ALPACA_BASE_URL = 'https://data.alpaca.markets';
+const ALPACA_BASE_URL = (process.env.ALPACA_TRADING_URL || 'https://paper-api.alpaca.markets').trim();
 const CACHE_FILENAME = 'ticker-metadata.json';
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
