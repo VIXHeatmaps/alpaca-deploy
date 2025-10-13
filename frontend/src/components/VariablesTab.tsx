@@ -412,12 +412,17 @@ export function VariablesTab() {
               }}
             >
               <input
-                value={`$${selected.name}`}
-                onChange={(e) => {
-                  const raw = e.target.value.startsWith("$")
-                    ? e.target.value.slice(1)
-                    : e.target.value;
-                  commitName(sel, raw);
+                key={selected.id || selected.name}
+                defaultValue={`$${selected.name}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const raw = e.currentTarget.value.startsWith("$")
+                      ? e.currentTarget.value.slice(1)
+                      : e.currentTarget.value;
+                    commitName(sel, raw);
+                    e.currentTarget.blur();
+                  }
                 }}
                 style={{
                   fontSize: 18,
@@ -439,6 +444,10 @@ export function VariablesTab() {
                 onBlur={(e) => {
                   e.target.style.background = "#f9fafb";
                   e.target.style.borderColor = "transparent";
+                  const raw = e.target.value.startsWith("$")
+                    ? e.target.value.slice(1)
+                    : e.target.value;
+                  commitName(sel, raw);
                 }}
                 placeholder="$variableName"
               />

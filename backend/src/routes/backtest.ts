@@ -1499,13 +1499,26 @@ backtestRouter.get('/batch_backtest_strategy/:id', requireAuth, async (req: Requ
   const startedAtIso = toIso(job.started_at);
   const completedAtIso = toIso(job.completed_at);
 
+  // Prefer the accurate duration from worker summary, fallback to calculation
   let durationMs: number | null = null;
-  if (startedAtIso) {
+  if (job.summary?.duration_ms !== undefined && job.summary.duration_ms !== null) {
+    const parsed = Number(job.summary.duration_ms);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      durationMs = parsed;
+      console.log(`[BATCH STATUS] Job ${job.id} using summary.duration_ms: ${durationMs}ms`);
+    }
+  }
+  // Fallback: calculate from timestamps for running jobs or if summary missing
+  if (durationMs === null && startedAtIso) {
     const startMs = new Date(startedAtIso).getTime();
     const endMs = completedAtIso ? new Date(completedAtIso).getTime() : Date.now();
     if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
       durationMs = Math.max(0, endMs - startMs);
+      console.log(`[BATCH STATUS] Job ${job.id} calculated duration: ${durationMs}ms (${job.status})`);
     }
+  }
+  if (durationMs === null) {
+    console.log(`[BATCH STATUS] Job ${job.id} no duration available (status: ${job.status}, summary: ${!!job.summary}, startedAt: ${!!startedAtIso})`);
   }
 
   return res.json({

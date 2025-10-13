@@ -20,15 +20,18 @@ export const runBatchStrategyJob = async (
   let combos = assignments.length ? assignments : generateAllAssignments(JSON.parse(JSON.stringify(job.variables)));
   const total = combos.length;
 
+  const startTime = Date.now();
+  const startedAt = new Date(startTime);
+
   await batchJobsDb.updateBatchJob(jobId, {
     status: 'running',
     total,
     completed: 0,
     error: null,
+    started_at: startedAt,
   });
 
-  const startTime = Date.now();
-  console.log(`[BATCH WORKER START] Job ${jobId} starting with ${total} backtests at ${new Date().toISOString()}`);
+  console.log(`[BATCH WORKER START] Job ${jobId} starting with ${total} backtests at ${startedAt.toISOString()}`);
 
   if (!job.strategy_elements) {
     await batchJobsDb.updateBatchJob(jobId, {
@@ -173,6 +176,11 @@ export const runBatchStrategyJob = async (
     duration_ms: durationMs,
   };
 
-  await batchJobsDb.updateBatchJobProgress(jobId, completedCount, 'finished');
-  await batchJobsDb.updateBatchJob(jobId, { summary });
+  // Update job status and summary in a single atomic operation to avoid race conditions
+  await batchJobsDb.updateBatchJob(jobId, {
+    status: 'finished',
+    completed: completedCount,
+    completed_at: new Date(),
+    summary,
+  });
 };
