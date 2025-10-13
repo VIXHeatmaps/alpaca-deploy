@@ -20,14 +20,11 @@ export const runBatchStrategyJob = async (
   let combos = assignments.length ? assignments : generateAllAssignments(JSON.parse(JSON.stringify(job.variables)));
   const total = combos.length;
 
-  const startedAt = job.started_at ?? new Date();
-
   await batchJobsDb.updateBatchJob(jobId, {
     status: 'running',
     total,
     completed: 0,
     error: null,
-    started_at: startedAt,
   });
 
   const startTime = Date.now();
