@@ -293,7 +293,7 @@ function executeElement(
         ? buildIndicatorKey(cfg.ticker, cfg.indicator, cfg.params)
         : `${cfg.ticker}:${cfg.indicator}:${cfg.period || ""}`;
 
-      const indicatorRecord = indicatorData.get(indicatorKey);
+      const indicatorRecord = context.indicatorData.get(indicatorKey);
       if (!indicatorRecord) {
         throw new Error(
           `Missing indicator data for key "${indicatorKey}" (ticker=${cfg.ticker}, indicator=${cfg.indicator})`
