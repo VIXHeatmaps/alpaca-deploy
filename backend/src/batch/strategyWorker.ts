@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as batchJobsDb from '../db/batchJobsDb';
 import { getMarketDateToday } from '../utils/marketTime';
 import { BATCH_CONCURRENCY, INTERNAL_API_BASE } from '../config/constants';
-import { applyVariablesToElements, buildSummary, generateAllAssignments } from './helpers';
+import { applyVariablesToElements, generateAllAssignments } from './helpers';
 import { normalizeMetrics } from './metrics';
 
 export const runBatchStrategyJob = async (
@@ -38,8 +38,13 @@ export const runBatchStrategyJob = async (
     return;
   }
 
-  const runs: Array<{ variables: Record<string, string>; metrics: any }> = [];
   let completedCount = 0;
+  let successCount = 0;
+
+  // Track summary stats incrementally to avoid memory accumulation
+  let sumTotalReturn = 0;
+  let bestTotalReturn = -Infinity;
+  let worstTotalReturn = Infinity;
 
   const WRITE_BUFFER_SIZE = 200;
   const writeBuffer: Array<{ batch_job_id: string; run_index: number; variables: any; metrics: any }> = [];
@@ -124,10 +129,12 @@ export const runBatchStrategyJob = async (
 
     for (const result of chunkResults.sort((a, b) => a.idx - b.idx)) {
       if (!result.failed) {
-        runs.push({
-          variables: result.variables,
-          metrics: result.metrics,
-        });
+        successCount++;
+        // Update summary stats incrementally
+        const totalReturn = (result.metrics as any)?.totalReturn ?? 0;
+        sumTotalReturn += totalReturn;
+        if (totalReturn > bestTotalReturn) bestTotalReturn = totalReturn;
+        if (totalReturn < worstTotalReturn) worstTotalReturn = totalReturn;
       }
       completedCount++;
     }
@@ -152,16 +159,20 @@ export const runBatchStrategyJob = async (
   const durationMs = endTime - startTime;
   const durationSec = (durationMs / 1000).toFixed(1);
   console.log(
-    `[BATCH WORKER] ✓ Batch completed in ${durationSec}s (${(runs.length / (durationMs / 1000)).toFixed(
+    `[BATCH WORKER] ✓ Batch completed in ${durationSec}s (${(successCount / (durationMs / 1000)).toFixed(
       1
     )} backtests/sec)`
   );
 
+  // Build summary from incremental stats
   const summary = {
-    ...buildSummary(runs, runs.length),
+    totalRuns: completedCount,
+    avgTotalReturn: successCount > 0 ? Number((sumTotalReturn / successCount).toFixed(4)) : 0,
+    bestTotalReturn: successCount > 0 ? bestTotalReturn : 0,
+    worstTotalReturn: successCount > 0 ? worstTotalReturn : 0,
     duration_ms: durationMs,
   };
 
-  await batchJobsDb.updateBatchJobProgress(jobId, runs.length, 'finished');
+  await batchJobsDb.updateBatchJobProgress(jobId, completedCount, 'finished');
   await batchJobsDb.updateBatchJob(jobId, { summary });
 };
