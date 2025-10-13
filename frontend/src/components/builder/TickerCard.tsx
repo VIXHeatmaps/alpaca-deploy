@@ -1,5 +1,6 @@
 import { Copy } from "lucide-react";
 import type { TickerElement } from "../../types/builder";
+import type { TickerMetadata } from "../../api/tickers";
 import type { ValidationError } from "../../utils/validation";
 import { hasFieldError, hasUndefinedVariableInField } from "../../utils/builder";
 
@@ -13,6 +14,7 @@ export interface TickerCardProps {
   isWeightInvalid?: boolean;
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
+  tickerMetadata?: Map<string, TickerMetadata>;
 }
 
 export function TickerCard({
@@ -25,10 +27,17 @@ export function TickerCard({
   isWeightInvalid = false,
   validationErrors = [],
   definedVariables = new Set<string>(),
+  tickerMetadata,
 }: TickerCardProps) {
   const hasUndefinedVar = hasUndefinedVariableInField(element.ticker, definedVariables);
   const hasValidationError = hasFieldError(element.id, "ticker", validationErrors);
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
+  const symbol = element.ticker?.toUpperCase() ?? "";
+  const resolvedMetadata = symbol && tickerMetadata ? tickerMetadata.get(symbol) : undefined;
+  const resolvedName = resolvedMetadata?.name?.trim() ? resolvedMetadata.name.trim() : null;
+  const tickerTooltip = hasUndefinedVar
+    ? `Variable ${element.ticker} is not defined in Variables tab`
+    : resolvedName || undefined;
 
   return (
     <div
@@ -121,7 +130,7 @@ export function TickerCard({
         }}
         className="focus:ring-2 focus:ring-blue-500"
         placeholder="TICKER"
-        title={hasUndefinedVar ? `Variable ${element.ticker} is not defined in Variables tab` : undefined}
+        title={tickerTooltip}
       />
 
       <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>

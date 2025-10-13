@@ -43,12 +43,8 @@ import {
 import { useBuilderState } from "../hooks/useBuilderState";
 import { useBatchJobs } from "../hooks/useBatchJobs";
 import { useVariableLists } from "../hooks/useVariableLists";
-import type {
-  Element,
-  GateElement,
-  TickerElement,
-  WeightElement,
-} from "../types/builder";
+import { useTickerMetadata } from "../hooks/useTickerMetadata";
+import type { Element, GateElement, TickerElement, WeightElement, ScaleElement } from "../types/builder";
 import {
   countGatesInTree,
   countScalesInTree,
@@ -56,6 +52,7 @@ import {
 } from "../utils/builder";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
+const TICKER_REGEX = /^[A-Z0-9.\-]+$/;
 
 // ========== MAIN COMPONENT ==========
 
@@ -173,6 +170,111 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   const undefinedVariables = useMemo(() => {
     return strategyVariables.filter(varName => !definedVariables.has(varName));
   }, [strategyVariables, definedVariables]);
+
+  const referencedTickers = useMemo(() => {
+    const tickers = new Set<string>();
+
+    const addTicker = (value: unknown) => {
+      if (typeof value !== "string") return;
+      const trimmed = value.trim();
+      if (!trimmed || containsVariable(trimmed)) return;
+      const normalized = trimmed.toUpperCase();
+      if (!TICKER_REGEX.test(normalized)) return;
+      tickers.add(normalized);
+    };
+
+    const walkElement = (element: Element | null | undefined) => {
+      if (!element) return;
+
+      if (element.type === "ticker") {
+        addTicker((element as TickerElement).ticker);
+        return;
+      }
+
+      if (element.type === "gate") {
+        const gate = element as GateElement;
+        if (Array.isArray(gate.conditions)) {
+          gate.conditions.forEach((cond) => {
+            addTicker(cond.ticker);
+            addTicker(cond.rightTicker);
+          });
+        } else if (gate.condition) {
+          addTicker(gate.condition.ticker);
+          addTicker(gate.condition.rightTicker);
+        }
+        gate.thenChildren?.forEach(walkElement);
+        gate.elseChildren?.forEach(walkElement);
+        return;
+      }
+
+      if (element.type === "weight") {
+        element.children?.forEach(walkElement);
+        return;
+      }
+
+      if (element.type === "scale") {
+        const scale = element as ScaleElement;
+        addTicker(scale.config?.ticker);
+        scale.fromChildren?.forEach(walkElement);
+        scale.toChildren?.forEach(walkElement);
+        return;
+      }
+    };
+
+    elements.forEach(walkElement);
+    addTicker(benchmarkSymbol);
+
+    if (backtestResults) {
+      const {
+        dailyPositions,
+        debugDays,
+        holdings,
+        positions,
+        soldPositions,
+        pendingOrders,
+        allocation,
+        benchmarkSymbol: resultBenchmarkSymbol,
+        benchmark,
+      } = backtestResults as any;
+
+      if (Array.isArray(dailyPositions)) {
+        dailyPositions.forEach((day: Record<string, unknown>) => {
+          Object.entries(day || {}).forEach(([key, value]) => {
+            if (key === "date" || key === "heldDate") return;
+            if (typeof value !== "number") return;
+            const upperKey = key.toUpperCase();
+            if (key !== upperKey) return;
+            if (!TICKER_REGEX.test(upperKey)) return;
+            addTicker(upperKey);
+          });
+        });
+      }
+
+      if (Array.isArray(debugDays)) {
+        debugDays.forEach((day: any) => {
+          Object.keys(day?.allocation || {}).forEach(addTicker);
+        });
+      }
+
+      const arraysWithSymbol = [holdings, positions, soldPositions, pendingOrders];
+      arraysWithSymbol.forEach((arr) => {
+        if (Array.isArray(arr)) {
+          arr.forEach((item) => addTicker(item?.symbol));
+        }
+      });
+
+      if (allocation && typeof allocation === "object") {
+        Object.keys(allocation).forEach(addTicker);
+      }
+
+      addTicker(resultBenchmarkSymbol);
+      addTicker(benchmark?.symbol);
+    }
+
+    return Array.from(tickers);
+  }, [elements, benchmarkSymbol, backtestResults]);
+
+  const { metadata: tickerMetadata } = useTickerMetadata(referencedTickers);
 
   // Memoize chart data to prevent constant re-renders
   const chartData = useMemo(() => {
@@ -1611,16 +1713,23 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                                     }}>
                                       Date
                                     </th>
-                                    {tickers.map((ticker) => (
-                                      <th key={ticker} style={{
-                                        padding: '6px 12px',
-                                        textAlign: 'left',
-                                        fontWeight: '600',
-                                        whiteSpace: 'nowrap',
-                                      }}>
-                                        {ticker}
-                                      </th>
-                                    ))}
+                                    {tickers.map((ticker) => {
+                                      const meta = tickerMetadata.get(ticker.toUpperCase());
+                                      return (
+                                        <th
+                                          key={ticker}
+                                          style={{
+                                            padding: '6px 12px',
+                                            textAlign: 'left',
+                                            fontWeight: '600',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                          title={meta?.name?.trim() || undefined}
+                                        >
+                                          {ticker}
+                                        </th>
+                                      );
+                                    })}
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1642,14 +1751,19 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                                       </td>
                                       {tickers.map((ticker) => {
                                         const value = day[ticker];
+                                        const meta = tickerMetadata.get(ticker.toUpperCase());
                                         return (
-                                          <td key={ticker} style={{
-                                            padding: '4px 12px',
-                                            textAlign: 'left',
-                                            color: value > 0 ? '#059669' : '#6b7280',
-                                            fontWeight: value > 0 ? '600' : '400',
-                                            whiteSpace: 'nowrap',
-                                          }}>
+                                          <td
+                                            key={ticker}
+                                            style={{
+                                              padding: '4px 12px',
+                                              textAlign: 'left',
+                                              color: value > 0 ? '#059669' : '#6b7280',
+                                              fontWeight: value > 0 ? '600' : '400',
+                                              whiteSpace: 'nowrap',
+                                            }}
+                                            title={meta?.name?.trim() || undefined}
+                                          >
                                             {value !== undefined && value > 0
                                               ? `${(value * 100).toFixed(1)}%`
                                               : '-'}
@@ -1721,11 +1835,18 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                                   <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#fff', zIndex: 1, whiteSpace: 'nowrap' }}>
                                     DATE
                                   </th>
-                                  {tickers.map((ticker) => (
-                                    <th key={ticker} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#fff', zIndex: 1, whiteSpace: 'nowrap' }}>
-                                      {ticker}
-                                    </th>
-                                  ))}
+                                  {tickers.map((ticker) => {
+                                    const meta = tickerMetadata.get(ticker.toUpperCase());
+                                    return (
+                                      <th
+                                        key={ticker}
+                                        style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#fff', zIndex: 1, whiteSpace: 'nowrap' }}
+                                        title={meta?.name?.trim() || undefined}
+                                      >
+                                        {ticker}
+                                      </th>
+                                    );
+                                  })}
                                   {gates.map((gate) => (
                                     <th key={gate} style={{ padding: '6px 8px', textAlign: 'left', fontWeight: '600', position: 'sticky', top: 0, background: '#fff', zIndex: 1, whiteSpace: 'nowrap' }} title={gate}>
                                       {gate.slice(0, 5)}
@@ -1744,8 +1865,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                                     </td>
                                     {tickers.map((ticker) => {
                                       const allocation = day.allocation?.[ticker];
+                                      const meta = tickerMetadata.get(ticker.toUpperCase());
                                       return (
-                                        <td key={ticker} style={{ padding: '4px 8px', textAlign: 'left', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                                        <td
+                                          key={ticker}
+                                          style={{ padding: '4px 8px', textAlign: 'left', fontFamily: 'monospace', whiteSpace: 'nowrap' }}
+                                          title={meta?.name?.trim() || undefined}
+                                        >
                                           {allocation ? (allocation * 100).toFixed(1) : '-'}
                                         </td>
                                       );
@@ -2039,6 +2165,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 allElements={elements}
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
+                tickerMetadata={tickerMetadata}
               />
             );
           } else if (el.type === "ticker") {
@@ -2052,6 +2179,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 depth={0}
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
+                tickerMetadata={tickerMetadata}
               />
             );
           } else if (el.type === "weight") {
@@ -2068,6 +2196,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 allElements={elements}
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
+                tickerMetadata={tickerMetadata}
               />
             );
           } else if (el.type === "scale") {
@@ -2084,6 +2213,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 allElements={elements}
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
+                tickerMetadata={tickerMetadata}
               />
             );
           }

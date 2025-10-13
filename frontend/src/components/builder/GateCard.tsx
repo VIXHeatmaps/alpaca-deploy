@@ -28,6 +28,7 @@ import {
   hasFieldError,
   hasUndefinedVariableInField,
 } from "../../utils/builder";
+import type { TickerMetadata } from "../../api/tickers";
 import { TickerCard } from "./TickerCard";
 
 // ========== WEIGHT CARD ==========
@@ -44,6 +45,7 @@ export interface WeightCardProps {
   allElements?: Element[]; // For counting gates
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
+  tickerMetadata?: Map<string, TickerMetadata>;
 }
 
 export const createDefaultGateElement = (allElements: Element[] = []): GateElement => {
@@ -102,7 +104,7 @@ export const createDefaultScaleElement = (weight: number, allElements: Element[]
   };
 };
 
-export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>() }: WeightCardProps & { initiallyOpen?: boolean }) {
+export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata }: WeightCardProps & { initiallyOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [showDropdown, setShowDropdown] = useState(false);
   const [tickerInput, setTickerInput] = useState("");
@@ -426,6 +428,7 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           allElements={allElements}
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
                         />
                       );
                     } else if (child.type === "ticker") {
@@ -441,6 +444,7 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           isWeightInvalid={areChildWeightsInvalid}
                           validationErrors={validationErrors}
                           definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
                         />
                       );
                   } else if (child.type === "weight") {
@@ -457,28 +461,30 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           isWeightInvalid={areChildWeightsInvalid}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                        definedVariables={definedVariables}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
                       />
                     );
-                  } else if (child.type === "scale") {
-                    return (
-                      <ScaleCard
-                        key={child.id}
-                        element={child}
+                    } else if (child.type === "scale") {
+                      return (
+                        <ScaleCard
+                          key={child.id}
+                          element={child}
                         onUpdate={(updated) => updateChild(child.id, updated)}
                         onDelete={() => deleteChild(child.id)}
                         onCopy={onCopy}
                         clipboard={clipboard}
-                        depth={depth + 1}
-                        showWeight={element.weightMode === "defined"}
-                        allElements={allElements}
-                        validationErrors={validationErrors}
-                        definedVariables={definedVariables}
-                      />
-                    );
-                  }
-                  return null;
-                })}
+                          depth={depth + 1}
+                          showWeight={element.weightMode === "defined"}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
 
                   {/* + button */}
                   <div style={{
@@ -662,9 +668,10 @@ export interface ScaleCardProps {
   allElements?: Element[];
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
+  tickerMetadata?: Map<string, TickerMetadata>;
 }
 
-export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>() }: ScaleCardProps) {
+export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata }: ScaleCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
@@ -693,6 +700,11 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const rangeMaxHasError = hasFieldError(element.id, "rangeMax", validationErrors) || hasFieldError(element.id, "range", validationErrors);
   const fromBranchHasError = hasFieldError(element.id, "fromChildren", validationErrors);
   const toBranchHasError = hasFieldError(element.id, "toChildren", validationErrors);
+  const configTickerSymbol = config.ticker?.toUpperCase() ?? "";
+  const configTickerMetadata = configTickerSymbol && tickerMetadata ? tickerMetadata.get(configTickerSymbol) : undefined;
+  const configTickerTooltip = tickerHasUndefinedVar
+    ? `Variable ${config.ticker} is not defined in Variables tab`
+    : (configTickerMetadata?.name?.trim() || undefined);
 
   const indicatorLabel = (config.indicator || "").replace(/_/g, " ");
   const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
@@ -989,7 +1001,7 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
             }}
             className="focus:ring-2 focus:ring-blue-500"
             placeholder="Ticker"
-            title={tickerHasUndefinedVar ? `Variable ${config.ticker} is not defined in Variables tab` : undefined}
+            title={configTickerTooltip}
           />
 
           <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>from</span>
@@ -1127,38 +1139,40 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                     <div style={{ position: "relative", paddingLeft: "24px" }}>
                       {element.fromChildren.map((child) => {
                         if (child.type === "gate") {
-                          return (
-                            <GateCard
-                              key={child.id}
-                              element={child}
-                              onUpdate={(updated) => updateFromChild(child.id, updated)}
+                      return (
+                        <GateCard
+                          key={child.id}
+                          element={child}
+                          onUpdate={(updated) => updateFromChild(child.id, updated)}
                               onDelete={() => deleteFromChild(child.id)}
                               onCopy={onCopy}
                               clipboard={clipboard}
-                              depth={depth + 1}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        }
-                        if (child.type === "ticker") {
-                          return (
+                          depth={depth + 1}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    }
+                    if (child.type === "ticker") {
+                      return (
                             <TickerCard
                               key={child.id}
                               element={child}
                               onUpdate={(updated) => updateFromChild(child.id, updated)}
                               onDelete={() => deleteFromChild(child.id)}
                               onCopy={onCopy}
-                              depth={depth + 1}
-                              showWeight={false}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        }
-                        if (child.type === "weight") {
-                          return (
+                          depth={depth + 1}
+                          showWeight={false}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    }
+                    if (child.type === "weight") {
+                      return (
                             <WeightCard
                               key={child.id}
                               element={child}
@@ -1166,13 +1180,14 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               onDelete={() => deleteFromChild(child.id)}
                               onCopy={onCopy}
                               clipboard={clipboard}
-                              depth={depth + 1}
-                              showWeight={false}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
+                          depth={depth + 1}
+                          showWeight={false}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
                         }
                         if (child.type === "scale") {
                           return (
@@ -1188,6 +1203,7 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               allElements={allElements}
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
+                              tickerMetadata={tickerMetadata}
                             />
                           );
                         }
@@ -1388,38 +1404,40 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                     <div style={{ position: "relative", paddingLeft: "24px" }}>
                       {element.toChildren.map((child) => {
                         if (child.type === "gate") {
-                          return (
-                            <GateCard
-                              key={child.id}
-                              element={child}
-                              onUpdate={(updated) => updateToChild(child.id, updated)}
+                      return (
+                        <GateCard
+                          key={child.id}
+                          element={child}
+                          onUpdate={(updated) => updateToChild(child.id, updated)}
                               onDelete={() => deleteToChild(child.id)}
                               onCopy={onCopy}
                               clipboard={clipboard}
-                              depth={depth + 1}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        }
-                        if (child.type === "ticker") {
-                          return (
+                          depth={depth + 1}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    }
+                    if (child.type === "ticker") {
+                      return (
                             <TickerCard
                               key={child.id}
                               element={child}
                               onUpdate={(updated) => updateToChild(child.id, updated)}
                               onDelete={() => deleteToChild(child.id)}
                               onCopy={onCopy}
-                              depth={depth + 1}
-                              showWeight={false}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        }
-                        if (child.type === "weight") {
-                          return (
+                          depth={depth + 1}
+                          showWeight={false}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    }
+                    if (child.type === "weight") {
+                      return (
                             <WeightCard
                               key={child.id}
                               element={child}
@@ -1427,13 +1445,14 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               onDelete={() => deleteToChild(child.id)}
                               onCopy={onCopy}
                               clipboard={clipboard}
-                              depth={depth + 1}
-                              showWeight={false}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
+                          depth={depth + 1}
+                          showWeight={false}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
                         }
                         if (child.type === "scale") {
                           return (
@@ -1449,6 +1468,7 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               allElements={allElements}
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
+                              tickerMetadata={tickerMetadata}
                             />
                           );
                         }
@@ -1749,6 +1769,7 @@ interface ConditionRowProps {
   validationErrors: ValidationError[];
   definedVariables: Set<string>;
   inline?: boolean; // If true, render without background (for single-line IF mode)
+  tickerMetadata?: Map<string, TickerMetadata>;
 }
 
 function ConditionRow({
@@ -1761,6 +1782,7 @@ function ConditionRow({
   validationErrors,
   definedVariables,
   inline = false,
+  tickerMetadata,
 }: ConditionRowProps) {
   // Check for undefined variables in this condition's fields
   const tickerHasUndefinedVar = hasUndefinedVariableInField(condition.ticker, definedVariables);
@@ -1772,6 +1794,16 @@ function ConditionRow({
   const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
   const rightIndicatorLabel = ((condition.rightIndicator || "RSI") as string).replace(/_/g, " ");
   const rightIndicatorSelectWidth = `${Math.max(rightIndicatorLabel.length + 3, 10)}ch`;
+  const conditionTickerSymbol = condition.ticker?.toUpperCase() ?? "";
+  const conditionTickerMetadata = conditionTickerSymbol && tickerMetadata ? tickerMetadata.get(conditionTickerSymbol) : undefined;
+  const conditionTickerTooltip = tickerHasUndefinedVar
+    ? `Variable ${condition.ticker} is not defined in Variables tab`
+    : (conditionTickerMetadata?.name?.trim() || undefined);
+  const rightTickerSymbol = condition.rightTicker?.toUpperCase() ?? "";
+  const rightTickerMetadata = rightTickerSymbol && tickerMetadata ? tickerMetadata.get(rightTickerSymbol) : undefined;
+  const rightTickerTooltip = rightTickerHasUndefinedVar
+    ? `Variable ${condition.rightTicker} is not defined in Variables tab`
+    : (rightTickerMetadata?.name?.trim() || undefined);
 
   return (
     <div style={{
@@ -1851,7 +1883,7 @@ function ConditionRow({
         }}
         className="focus:ring-2 focus:ring-blue-500"
         placeholder="Ticker"
-        title={tickerHasUndefinedVar ? `Variable ${condition.ticker} is not defined in Variables tab` : undefined}
+        title={conditionTickerTooltip}
       />
 
       {/* Operator */}
@@ -1994,11 +2026,11 @@ function ConditionRow({
               maxWidth: '300px',
               flexShrink: 0,
               borderRadius: '4px',
-            }}
-            className="focus:ring-2 focus:ring-blue-500"
-            placeholder="Ticker"
-            title={rightTickerHasUndefinedVar ? `Variable ${condition.rightTicker} is not defined in Variables tab` : undefined}
-          />
+        }}
+        className="focus:ring-2 focus:ring-blue-500"
+        placeholder="Ticker"
+        title={rightTickerTooltip}
+      />
         </>
       )}
 
@@ -2044,9 +2076,10 @@ export interface GateCardProps {
   allElements?: Element[]; // For counting gates
   validationErrors?: ValidationError[];
   definedVariables?: Set<string>;
+  tickerMetadata?: Map<string, TickerMetadata>;
 }
 
-export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>() }: GateCardProps) {
+export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata }: GateCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showThenDropdown, setShowThenDropdown] = useState(false);
   const [showElseDropdown, setShowElseDropdown] = useState(false);
@@ -2436,6 +2469,7 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
             validationErrors={validationErrors}
             definedVariables={definedVariables}
             inline={true}
+            tickerMetadata={tickerMetadata}
           />
 
           {/* Copy and Delete buttons - inline on same row */}
@@ -2539,6 +2573,7 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}
                 inline={true}
+                tickerMetadata={tickerMetadata}
               />
             </div>
           ))}
@@ -2635,50 +2670,53 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                     <div style={{ position: 'relative', paddingLeft: '24px' }}>
                       {element.thenChildren.map((child) => {
                         if (child.type === "gate") {
-                          return (
-                            <GateCard
+                      return (
+                        <GateCard
+                          key={child.id}
+                          element={child}
+                          onUpdate={(updated) => updateThenChild(child.id, updated)}
+                              onDelete={() => deleteThenChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                          depth={depth + 1}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    } else if (child.type === "ticker") {
+                      return (
+                        <TickerCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateThenChild(child.id, updated)}
+                              onDelete={() => deleteThenChild(child.id)}
+                              onCopy={onCopy}
+                          depth={depth + 1}
+                          showWeight={false}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    } else if (child.type === "weight") {
+                      return (
+                        <WeightCard
                               key={child.id}
                               element={child}
                               onUpdate={(updated) => updateThenChild(child.id, updated)}
                               onDelete={() => deleteThenChild(child.id)}
                               onCopy={onCopy}
                               clipboard={clipboard}
-                              depth={depth + 1}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        } else if (child.type === "ticker") {
-                          return (
-                            <TickerCard
-                              key={child.id}
-                              element={child}
-                              onUpdate={(updated) => updateThenChild(child.id, updated)}
-                              onDelete={() => deleteThenChild(child.id)}
-                              onCopy={onCopy}
-                              depth={depth + 1}
-                              showWeight={false}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        } else if (child.type === "weight") {
-                          return (
-                            <WeightCard
-                              key={child.id}
-                              element={child}
-                              onUpdate={(updated) => updateThenChild(child.id, updated)}
-                              onDelete={() => deleteThenChild(child.id)}
-                              onCopy={onCopy}
-                              clipboard={clipboard}
-                              depth={depth + 1}
-                              showWeight={false}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
+                          depth={depth + 1}
+                          showWeight={false}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
                         } else if (child.type === "scale") {
                           return (
                             <ScaleCard
@@ -2693,6 +2731,7 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               allElements={allElements}
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
+                              tickerMetadata={tickerMetadata}
                             />
                           );
                         }
@@ -2872,50 +2911,53 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                     <div style={{ position: 'relative', paddingLeft: '24px' }}>
                       {element.elseChildren.map((child) => {
                         if (child.type === "gate") {
-                          return (
-                            <GateCard
+                      return (
+                        <GateCard
+                          key={child.id}
+                          element={child}
+                          onUpdate={(updated) => updateElseChild(child.id, updated)}
+                              onDelete={() => deleteElseChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                          depth={depth + 1}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    } else if (child.type === "ticker") {
+                      return (
+                        <TickerCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateElseChild(child.id, updated)}
+                              onDelete={() => deleteElseChild(child.id)}
+                              onCopy={onCopy}
+                          depth={depth + 1}
+                          showWeight={false}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
+                    } else if (child.type === "weight") {
+                      return (
+                        <WeightCard
                               key={child.id}
                               element={child}
                               onUpdate={(updated) => updateElseChild(child.id, updated)}
                               onDelete={() => deleteElseChild(child.id)}
                               onCopy={onCopy}
                               clipboard={clipboard}
-                              depth={depth + 1}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        } else if (child.type === "ticker") {
-                          return (
-                            <TickerCard
-                              key={child.id}
-                              element={child}
-                              onUpdate={(updated) => updateElseChild(child.id, updated)}
-                              onDelete={() => deleteElseChild(child.id)}
-                              onCopy={onCopy}
-                              depth={depth + 1}
-                              showWeight={false}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
-                        } else if (child.type === "weight") {
-                          return (
-                            <WeightCard
-                              key={child.id}
-                              element={child}
-                              onUpdate={(updated) => updateElseChild(child.id, updated)}
-                              onDelete={() => deleteElseChild(child.id)}
-                              onCopy={onCopy}
-                              clipboard={clipboard}
-                              depth={depth + 1}
-                              showWeight={false}
-                              allElements={allElements}
-                              validationErrors={validationErrors}
-                              definedVariables={definedVariables}
-                            />
-                          );
+                          depth={depth + 1}
+                          showWeight={false}
+                          allElements={allElements}
+                          validationErrors={validationErrors}
+                          definedVariables={definedVariables}
+                          tickerMetadata={tickerMetadata}
+                        />
+                      );
                         } else if (child.type === "scale") {
                           return (
                             <ScaleCard
@@ -2930,6 +2972,7 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               allElements={allElements}
                               validationErrors={validationErrors}
                               definedVariables={definedVariables}
+                              tickerMetadata={tickerMetadata}
                             />
                           );
                         }

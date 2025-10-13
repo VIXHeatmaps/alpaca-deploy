@@ -40,6 +40,7 @@
 - [ ] Scale logic
 - [ ] Sort logic
 - [ ] Filter logic
+- [ ] Extend ticker hover metadata with historical coverage (first/last bar tracking)
 
 ### Strategy Management
 - [x] Strategy library

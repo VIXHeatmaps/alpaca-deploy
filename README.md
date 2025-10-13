@@ -119,6 +119,10 @@ npx knex migrate:latest
 - `POST /api/strategy/:id/liquidate` - Liquidate specific strategy
 - `POST /api/strategy/:id/sync-holdings` - Sync holdings from Alpaca
 
+*Metadata:*
+- `GET /api/tickers/meta?symbols=SPY,QQQ` - Retrieve cached Alpaca asset metadata (name, exchange, tradeability)
+- `POST /api/tickers/meta/refresh` - Force-refresh the ticker metadata cache (requires Alpaca API keys)
+
 *Backtesting:*
 - `POST /api/backtest/v2` - Run backtest (V2 engine with cached data)
 - `POST /api/batch_backtest_strategy` - Start batch backtest
