@@ -694,6 +694,9 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const fromBranchHasError = hasFieldError(element.id, "fromChildren", validationErrors);
   const toBranchHasError = hasFieldError(element.id, "toChildren", validationErrors);
 
+  const indicatorLabel = (config.indicator || "").replace(/_/g, " ");
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 8 + 32, 120)}px`;
+
   const updateConfig = (updates: Partial<ScaleElement["config"]>) => {
     onUpdate({ ...element, config: { ...config, ...updates } });
   };
@@ -944,6 +947,7 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
               color: "#111827",
               borderRadius: "4px",
               cursor: "pointer",
+              width: indicatorSelectWidth,
             }}
             className="focus:ring-2 focus:ring-blue-500"
           >
@@ -1764,6 +1768,10 @@ function ConditionRow({
   const thresholdHasUndefinedVar = hasUndefinedVariableInField(condition.threshold, definedVariables);
   const rightTickerHasUndefinedVar = hasUndefinedVariableInField(condition.rightTicker, definedVariables);
   const rightPeriodHasUndefinedVar = hasUndefinedVariableInField(condition.rightPeriod, definedVariables);
+  const indicatorLabel = (condition.indicator || "").replace(/_/g, " ");
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 8 + 32, 120)}px`;
+  const rightIndicatorLabel = ((condition.rightIndicator || "RSI") as string).replace(/_/g, " ");
+  const rightIndicatorSelectWidth = `${Math.max(rightIndicatorLabel.length * 8 + 32, 120)}px`;
 
   return (
     <div style={{
@@ -1798,8 +1806,7 @@ function ConditionRow({
           color: '#111827',
           cursor: 'pointer',
           borderRadius: '4px',
-          width: 'fit-content',
-          minWidth: '0',
+          width: indicatorSelectWidth,
         }}
         className="focus:ring-2 focus:ring-blue-500"
       >
@@ -1945,8 +1952,7 @@ function ConditionRow({
               color: '#111827',
               cursor: 'pointer',
               borderRadius: '4px',
-              width: 'fit-content',
-              minWidth: '0',
+              width: rightIndicatorSelectWidth,
             }}
             className="focus:ring-2 focus:ring-blue-500"
           >
