@@ -72,7 +72,7 @@ export const runBatchStrategyJob = async (
           benchmarkSymbol: job.benchmark_symbol || 'SPY',
           startDate: job.start_date || 'max',
           endDate: job.end_date || getMarketDateToday(),
-          debug: true,
+          debug: false,
         };
 
         const response = await axios.post(`${INTERNAL_API_BASE}/api/backtest_strategy`, payload, {
