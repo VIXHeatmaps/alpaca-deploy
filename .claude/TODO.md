@@ -42,13 +42,11 @@
 - [ ] Filter logic
 
 ### Strategy Management
-- [ ] Strategy templates/library
+- [x] Strategy library
 - [ ] Share strategies between users
 - [ ] Clone/fork existing strategies
 
 ### Backtesting
-- [ ] Save backtest history to DB
-- [ ] Compare multiple backtests
 
 ### QuantStats Integration
 - [ ] make QS metrics available in all locations

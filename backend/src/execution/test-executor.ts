@@ -410,9 +410,146 @@ function testNestedRedistribution() {
   console.log(`Total weight: ${totalWeight.toFixed(2)}%`);
 }
 
+/**
+ * Test Case 6: Linear SCALE blending between two tickers
+ */
+function testScaleStrategy() {
+  console.log("\n=== Test 6: SCALE Linear Blend ===");
+
+  const scaleElement: Element = {
+    id: "scale1",
+    type: "scale",
+    name: "RSI Scale",
+    weight: 100,
+    config: {
+      ticker: "XLK",
+      indicator: "RSI",
+      params: { period: "14" },
+      period: "14",
+      rangeMin: "30",
+      rangeMax: "70",
+    },
+    fromChildren: [
+      {
+        id: "ticker-from",
+        type: "ticker",
+        ticker: "SPY",
+        weight: 100,
+      },
+    ],
+    toChildren: [
+      {
+        id: "ticker-to",
+        type: "ticker",
+        ticker: "UVXY",
+        weight: 100,
+      },
+    ],
+  };
+
+  const strategy: Element[] = [scaleElement];
+
+  const belowRangeData = buildIndicatorMap([
+    { ticker: "XLK", indicator: "RSI", period: "14", value: 20 },
+  ]);
+  const midRangeData = buildIndicatorMap([
+    { ticker: "XLK", indicator: "RSI", period: "14", value: 50 },
+  ]);
+  const aboveRangeData = buildIndicatorMap([
+    { ticker: "XLK", indicator: "RSI", period: "14", value: 80 },
+  ]);
+
+  console.log("\n--- RSI = 20 (below min -> SPY 100%) ---");
+  const belowResult = executeStrategy(strategy, belowRangeData);
+  console.log("Positions:", belowResult.positions);
+
+  console.log("\n--- RSI = 50 (midpoint -> SPY 50%, UVXY 50%) ---");
+  const midResult = executeStrategy(strategy, midRangeData);
+  console.log("Positions:", midResult.positions);
+
+  console.log("\n--- RSI = 80 (above max -> UVXY 100%) ---");
+  const aboveResult = executeStrategy(strategy, aboveRangeData);
+  console.log("Positions:", aboveResult.positions);
+}
+
+/**
+ * Test Case 7: Nested SCALE blending (Scale of Scale)
+ */
+function testNestedScaleStrategy() {
+  console.log("\n=== Test 7: Nested SCALE Blending ===");
+
+  const innerScale: Element = {
+    id: "scale-inner",
+    type: "scale",
+    name: "Inner Scale",
+    weight: 100,
+    config: {
+      ticker: "Z",
+      indicator: "RSI",
+      params: { period: "10" },
+      period: "10",
+      rangeMin: "0",
+      rangeMax: "100",
+    },
+    fromChildren: [
+      {
+        id: "ticker-x",
+        type: "ticker",
+        ticker: "X",
+        weight: 100,
+      },
+    ],
+    toChildren: [
+      {
+        id: "ticker-y",
+        type: "ticker",
+        ticker: "Y",
+        weight: 100,
+      },
+    ],
+  };
+
+  const outerScale: Element = {
+    id: "scale-outer",
+    type: "scale",
+    name: "Outer Scale",
+    weight: 100,
+    config: {
+      ticker: "C",
+      indicator: "RSI",
+      params: { period: "14" },
+      period: "14",
+      rangeMin: "1",
+      rangeMax: "10",
+    },
+    fromChildren: [
+      {
+        id: "ticker-a",
+        type: "ticker",
+        ticker: "A",
+        weight: 100,
+      },
+    ],
+    toChildren: [innerScale],
+  };
+
+  const strategy: Element[] = [outerScale];
+
+  const indicatorData = buildIndicatorMap([
+    { ticker: "C", indicator: "RSI", period: "14", value: 5 },
+    { ticker: "Z", indicator: "RSI", period: "10", value: 33 },
+  ]);
+
+  const result = executeStrategy(strategy, indicatorData);
+  console.log("Positions:", result.positions);
+  console.log("Expected approx: A 50%, X ≈ 33.5%, Y ≈ 16.5%");
+}
+
 // Run all tests
 testSimpleStrategy();
 testGateStrategy();
 testComplexStrategy();
 testRedistribution();
 testNestedRedistribution();
+testScaleStrategy();
+testNestedScaleStrategy();

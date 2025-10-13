@@ -200,6 +200,39 @@ export const FACTORY_DEFAULTS: Record<IndicatorName, Record<string, number>> = {
   STOCH_K: { fastk_period: 14, slowk_period: 3, slowk_matype: 0, slowd_period: 3, slowd_matype: 0 },
 };
 
+export type IndicatorValueUnit = "percent" | "number";
+
+const INDICATOR_UNIT_MAP: Record<IndicatorName, IndicatorValueUnit> = {
+  CURRENT_PRICE: "number",
+  RSI: "percent",
+  SMA: "number",
+  EMA: "number",
+  MACD: "number",
+  MACD_LINE: "number",
+  MACD_SIGNAL: "number",
+  MACD_HIST: "number",
+  PPO_LINE: "percent",
+  PPO_SIGNAL: "percent",
+  PPO_HIST: "percent",
+  BBANDS_UPPER: "number",
+  BBANDS_MIDDLE: "number",
+  BBANDS_LOWER: "number",
+  ATR: "number",
+  OBV: "number",
+  ADX: "percent",
+  STOCH_K: "percent",
+  MFI: "percent",
+  AROON_UP: "percent",
+  AROON_DOWN: "percent",
+  AROONOSC: "percent",
+  CUMULATIVE_RETURN: "percent",
+  VOLATILITY: "percent",
+};
+
+export function getIndicatorUnit(indicator: IndicatorName): IndicatorValueUnit {
+  return INDICATOR_UNIT_MAP[indicator] || "number";
+}
+
 // ——— Param UI labels (plain-English, no code hints in labels) ———
 export const PARAM_LABELS: Record<string, string> = {
   period: "Days",

@@ -16,6 +16,25 @@ export interface WeightElement {
   children: Element[];
 }
 
+export interface ScaleConfig {
+  ticker: string;
+  indicator: string;
+  params?: Record<string, string>;
+  period?: string; // DEPRECATED: computed from params when available
+  rangeMin: string;
+  rangeMax: string;
+}
+
+export interface ScaleElement {
+  id: string;
+  type: "scale";
+  name: string;
+  weight: number;
+  config: ScaleConfig;
+  fromChildren: Element[];
+  toChildren: Element[];
+}
+
 export interface GateCondition {
   ticker: string;
   indicator: string;
@@ -42,7 +61,7 @@ export interface GateElement {
   elseChildren: Element[];
 }
 
-export type Element = TickerElement | WeightElement | GateElement;
+export type Element = TickerElement | WeightElement | GateElement | ScaleElement;
 
 export interface Position {
   ticker: string;

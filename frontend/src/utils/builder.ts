@@ -12,6 +12,29 @@ export const countGatesInTree = (elements: Element[]): number => {
     if (el.type === "weight") {
       count += countGatesInTree(el.children);
     }
+    if (el.type === "scale") {
+      count += countGatesInTree(el.fromChildren);
+      count += countGatesInTree(el.toChildren);
+    }
+  }
+  return count;
+};
+
+export const countScalesInTree = (elements: Element[]): number => {
+  let count = 0;
+  for (const el of elements) {
+    if (el.type === "scale") {
+      count++;
+      count += countScalesInTree(el.fromChildren);
+      count += countScalesInTree(el.toChildren);
+    }
+    if (el.type === "gate") {
+      count += countScalesInTree(el.thenChildren);
+      count += countScalesInTree(el.elseChildren);
+    }
+    if (el.type === "weight") {
+      count += countScalesInTree(el.children);
+    }
   }
   return count;
 };
@@ -62,6 +85,14 @@ export const deepCloneElement = (element: Element): Element => {
     };
   }
 
+  if (element.type === "scale") {
+    return {
+      ...element,
+      id: newId,
+      fromChildren: element.fromChildren.map((child) => deepCloneElement(child)),
+      toChildren: element.toChildren.map((child) => deepCloneElement(child)),
+    };
+  }
+
   return element;
 };
-

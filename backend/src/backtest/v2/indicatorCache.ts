@@ -589,6 +589,23 @@ export function collectRequiredIndicators(elements: any[]): IndicatorRequest[] {
         }
       }
 
+      if (el.type === 'scale' && el.config) {
+        const cfg = el.config;
+        if (cfg.ticker && cfg.indicator) {
+          const ticker = cfg.ticker.toUpperCase();
+          const indicator = cfg.indicator.toUpperCase();
+          const params = cfg.params && Object.keys(cfg.params).length > 0
+            ? cfg.params
+            : getDefaultParams(indicator);
+
+          const key = createCacheKey(ticker, indicator, params);
+          if (!indicators.has(key)) {
+            indicators.add(key);
+            result.push({ ticker, indicator, period: 0, params });
+          }
+        }
+      }
+
       // Check for old-style condition with field string (legacy support)
       if (el.type === 'condition' && el.field) {
         const field = el.field;
@@ -611,6 +628,8 @@ export function collectRequiredIndicators(elements: any[]): IndicatorRequest[] {
       if (el.children) traverse(el.children);
       if (el.thenChildren) traverse(el.thenChildren);
       if (el.elseChildren) traverse(el.elseChildren);
+      if (el.fromChildren) traverse(el.fromChildren);
+      if (el.toChildren) traverse(el.toChildren);
     }
   }
 

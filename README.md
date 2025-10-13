@@ -6,6 +6,7 @@ Clean production deployment of the Alpaca trading strategy app with multi-strate
 
 - **Dashboard**: View Alpaca account info, active strategies, and performance snapshots
 - **Strategy Builder**: Build and backtest trading strategies with visual flow-based UI
+- **SCALE Nodes**: Smoothly rebalance between branches as indicators traverse configurable ranges
 - **Multi-Strategy Support**: Run multiple strategies simultaneously with position attribution
 - **Live Trading**: Deploy strategies with automatic rebalancing (T-10, 3:50pm ET)
 - **Daily Snapshots**: Track daily performance at 4:05pm ET using actual trade prices

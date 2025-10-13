@@ -91,6 +91,30 @@ export const extractStringsFromElement = (element: any): string[] => {
         values.push(...extractStringsFromElement(child));
       }
     }
+  } else if (element.type === "scale") {
+    push(element.name);
+    if (element.config) {
+      push(element.config.ticker);
+      push(element.config.period);
+      push(element.config.rangeMin);
+      push(element.config.rangeMax);
+      if (element.config.params) {
+        for (const paramValue of Object.values(element.config.params)) {
+          push(paramValue);
+        }
+      }
+    }
+
+    if (Array.isArray(element.fromChildren)) {
+      for (const child of element.fromChildren) {
+        values.push(...extractStringsFromElement(child));
+      }
+    }
+    if (Array.isArray(element.toChildren)) {
+      for (const child of element.toChildren) {
+        values.push(...extractStringsFromElement(child));
+      }
+    }
   }
 
   return values;

@@ -93,9 +93,19 @@ function buildIndicatorLookupMap(elements: any[]): Map<string, string> {
           }
         }
       }
+      if (el.type === 'scale' && el.config) {
+        const cfg = el.config;
+        if (cfg.ticker && cfg.indicator) {
+          const key = `${cfg.ticker.toUpperCase()}:${cfg.indicator.toUpperCase()}`;
+          const periodStr = paramsToPeriodString(cfg.indicator, cfg.params) || cfg.period || '';
+          map.set(key, periodStr);
+        }
+      }
       if (el.children) traverse(el.children);
       if (el.thenChildren) traverse(el.thenChildren);
       if (el.elseChildren) traverse(el.elseChildren);
+      if (el.fromChildren) traverse(el.fromChildren);
+      if (el.toChildren) traverse(el.toChildren);
     }
   }
 

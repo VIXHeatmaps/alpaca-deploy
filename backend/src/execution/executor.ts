@@ -9,6 +9,7 @@ import type {
   ExecutionContext,
   ExecutionResult,
   GateEvaluation,
+  ScaleElement,
 } from "./types";
 import { buildIndicatorKey } from "../utils/indicatorKeys";
 
@@ -280,6 +281,103 @@ function executeElement(
           unallocatedWeight = totalUnallocated;
         }
       }
+    } else if (element.type === "scale") {
+      const scale = element as ScaleElement;
+      const cfg = scale.config;
+
+      if (!cfg || !cfg.ticker || !cfg.indicator) {
+        throw new Error(`Scale "${scale.name}" is missing indicator configuration`);
+      }
+
+      const indicatorKey = cfg.params && Object.keys(cfg.params).length > 0
+        ? buildIndicatorKey(cfg.ticker, cfg.indicator, cfg.params)
+        : `${cfg.ticker}:${cfg.indicator}:${cfg.period || ""}`;
+
+      const indicatorRecord = indicatorData.get(indicatorKey);
+      if (!indicatorRecord) {
+        throw new Error(
+          `Missing indicator data for key "${indicatorKey}" (ticker=${cfg.ticker}, indicator=${cfg.indicator})`
+        );
+      }
+
+      const minRaw = parseFloat(cfg.rangeMin ?? "");
+      const maxRaw = parseFloat(cfg.rangeMax ?? "");
+      if (!Number.isFinite(minRaw) || !Number.isFinite(maxRaw)) {
+        throw new Error(`Scale "${scale.name}" has invalid range configuration`);
+      }
+      if (minRaw === maxRaw) {
+        throw new Error(`Scale "${scale.name}" has identical min and max values`);
+      }
+
+      const indicatorValue = indicatorRecord.value;
+      const rawFraction = (indicatorValue - minRaw) / (maxRaw - minRaw);
+      const fraction = Math.min(1, Math.max(0, rawFraction));
+
+      executionPath.push(
+        `Scale: ${scale.name} (${scale.weight}%, ${cfg.ticker}:${cfg.indicator}=${indicatorValue.toFixed(4)}, fraction=${fraction.toFixed(4)})`
+      );
+
+      const fromWeight = context.baseWeight * (1 - fraction);
+      const toWeight = context.baseWeight * fraction;
+
+      const processBranch = (children: Element[], allocatedWeight: number, label: string) => {
+        const branchPositions: Position[] = [];
+        let branchUnallocated = 0;
+
+        if (children.length === 0) {
+          branchUnallocated = allocatedWeight;
+          executionPath.push(
+            `Empty ${label} branch - returning ${allocatedWeight.toFixed(2)}% unallocated`
+          );
+          return { branchPositions, branchUnallocated };
+        }
+
+        let totalUnallocated = 0;
+        for (const child of children) {
+          let childWeightPct: number;
+
+          if (children.length === 1) {
+            childWeightPct = 100;
+          } else {
+            childWeightPct = child.weight;
+          }
+
+          const childContext: ExecutionContext = {
+            baseWeight: allocatedWeight * (childWeightPct / 100),
+            indicatorData: context.indicatorData,
+          };
+
+          const childResult = executeElement(child, childContext, executionPath, errors, gateEvaluations, debug);
+          branchPositions.push(...childResult.positions);
+          gateEvaluations.push(...childResult.gateEvaluations);
+          totalUnallocated += childResult.unallocatedWeight;
+        }
+
+        if (totalUnallocated > 0 && branchPositions.length > 0) {
+          const totalAllocated = branchPositions.reduce((sum, pos) => sum + pos.weight, 0);
+          if (totalAllocated > 0) {
+            const redistributionFactor = (totalAllocated + totalUnallocated) / totalAllocated;
+            for (const pos of branchPositions) {
+              pos.weight *= redistributionFactor;
+            }
+            executionPath.push(
+              `Redistributed ${totalUnallocated.toFixed(2)}% from empty siblings in ${label} branch`
+            );
+          } else {
+            branchUnallocated += totalUnallocated;
+          }
+        } else if (totalUnallocated > 0) {
+          branchUnallocated += totalUnallocated;
+        }
+
+        return { branchPositions, branchUnallocated };
+      };
+
+      const fromResult = processBranch(scale.fromChildren || [], fromWeight, "FROM");
+      const toResult = processBranch(scale.toChildren || [], toWeight, "TO");
+
+      positions.push(...fromResult.branchPositions, ...toResult.branchPositions);
+      unallocatedWeight += fromResult.branchUnallocated + toResult.branchUnallocated;
     }
   } catch (error) {
     const errorMsg = `Error executing ${element.type} element: ${(error as Error).message}`;

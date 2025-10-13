@@ -37,6 +37,8 @@ import {
   TickerCard,
   UndefinedVariablesModal,
   WeightCard,
+  ScaleCard,
+  createDefaultScaleElement,
 } from "./builder";
 import { useBuilderState } from "../hooks/useBuilderState";
 import { useBatchJobs } from "../hooks/useBatchJobs";
@@ -49,6 +51,7 @@ import type {
 } from "../types/builder";
 import {
   countGatesInTree,
+  countScalesInTree,
   deepCloneElement,
 } from "../utils/builder";
 
@@ -183,7 +186,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     }));
   }, [backtestResults?.dates, backtestResults?.equityCurve, backtestResults?.benchmark?.equityCurve]);
 
-  const handleSelectType = (type: "weight" | "gate") => {
+  const handleSelectType = (type: "weight" | "gate" | "scale") => {
     setShowDropdown(false);
     setTickerInput("");
 
@@ -226,6 +229,11 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         children: [],
       };
       saveToHistory([...elements, newWeight]);
+    } else if (type === "scale") {
+      const scaleCount = countScalesInTree(elements);
+      const newScale = createDefaultScaleElement(100, elements);
+      newScale.name = `Scale${scaleCount + 1}`;
+      saveToHistory([...elements, newScale]);
     }
   };
 
@@ -1973,6 +1981,22 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                   >
                     Gate
                   </button>
+                  <button
+                    onClick={() => handleSelectType("scale")}
+                    style={{
+                      fontSize: '13px',
+                      padding: '4px 8px',
+                      background: 'transparent',
+                      border: 'none',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      borderRadius: '4px',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Scale
+                  </button>
                   {clipboard && (
                     <button
                       onClick={() => {
@@ -2041,6 +2065,22 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 clipboard={clipboard}
                 initiallyOpen={idx === 0}
                 depth={0}
+                allElements={elements}
+                validationErrors={validationErrors}
+                definedVariables={definedVariables}
+              />
+            );
+          } else if (el.type === "scale") {
+            return (
+              <ScaleCard
+                key={el.id}
+                element={el}
+                onUpdate={(updated) => updateElement(el.id, updated)}
+                onDelete={() => deleteElement(el.id)}
+                onCopy={() => setClipboard(el)}
+                clipboard={clipboard}
+                depth={0}
+                showWeight={true}
                 allElements={elements}
                 validationErrors={validationErrors}
                 definedVariables={definedVariables}

@@ -10,6 +10,7 @@ import {
   getEffectiveParams,
   defaultParams,
   paramsToPeriodString,
+  getIndicatorUnit,
 } from "../../types/indicators";
 import type {
   Element,
@@ -17,10 +18,12 @@ import type {
   GateElement,
   TickerElement,
   WeightElement,
+  ScaleElement,
 } from "../../types/builder";
 import type { ValidationError } from "../../utils/validation";
 import {
   countGatesInTree,
+  countScalesInTree,
   deepCloneElement,
   hasFieldError,
   hasUndefinedVariableInField,
@@ -43,6 +46,62 @@ export interface WeightCardProps {
   definedVariables?: Set<string>;
 }
 
+export const createDefaultGateElement = (allElements: Element[] = []): GateElement => {
+  const gateCount = allElements ? countGatesInTree(allElements) : 0;
+  const gateName = `Gate${gateCount + 1}`;
+  const defaultIndicator: IndicatorName = "RSI";
+  const baseParams = { ...defaultParams(defaultIndicator) };
+
+  return {
+    id: `gate-${Date.now()}`,
+    type: "gate",
+    name: gateName,
+    weight: 100,
+    conditionMode: "if",
+    conditions: [
+      {
+        ticker: "",
+        indicator: defaultIndicator,
+        period: paramsToPeriodString(defaultIndicator, baseParams),
+        params: baseParams,
+        operator: "gt",
+        compareTo: "indicator",
+        threshold: "",
+        rightTicker: "",
+        rightIndicator: defaultIndicator,
+        rightPeriod: paramsToPeriodString(defaultIndicator, baseParams),
+        rightParams: baseParams,
+      },
+    ],
+    thenChildren: [],
+    elseChildren: [],
+  };
+};
+
+export const createDefaultScaleElement = (weight: number, allElements: Element[] = []): ScaleElement => {
+  const scaleCount = countScalesInTree(allElements);
+  const defaultIndicator: IndicatorName = "CUMULATIVE_RETURN";
+  const baseParams = { ...defaultParams(defaultIndicator) };
+  const period = paramsToPeriodString(defaultIndicator, baseParams);
+
+  return {
+    id: `scale-${Date.now()}`,
+    type: "scale",
+    name: `Scale${scaleCount + 1}`,
+    weight,
+    config: {
+      ticker: "",
+      indicator: defaultIndicator,
+      params: baseParams,
+      period,
+      rangeMin: "0",
+      rangeMax: "0",
+    },
+    fromChildren: [],
+    toChildren: [],
+  };
+};
+
 export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>() }: WeightCardProps & { initiallyOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -52,7 +111,7 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
   const childrenWeightSum = element.children.reduce((sum, child) => sum + child.weight, 0);
   const areChildWeightsInvalid = element.weightMode === "defined" && element.children.length > 0 && childrenWeightSum !== 100;
 
-  const handleSelectType = (type: "weight" | "gate") => {
+  const handleSelectType = (type: "weight" | "gate" | "scale") => {
     setShowDropdown(false);
     setTickerInput("");
 
@@ -95,6 +154,9 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
         children: [],
       };
       onUpdate({ ...element, children: [...element.children, newWeight] });
+    } else if (type === "scale") {
+      const newScale = createDefaultScaleElement(defaultWeight, allElements);
+      onUpdate({ ...element, children: [...element.children, newScale] });
     }
   };
 
@@ -381,12 +443,12 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           definedVariables={definedVariables}
                         />
                       );
-                    } else if (child.type === "weight") {
-                      return (
-                        <WeightCard
-                          key={child.id}
-                          element={child}
-                          onUpdate={(updated) => updateChild(child.id, updated)}
+                  } else if (child.type === "weight") {
+                    return (
+                      <WeightCard
+                        key={child.id}
+                        element={child}
+                        onUpdate={(updated) => updateChild(child.id, updated)}
                           onDelete={() => deleteChild(child.id)}
                           onCopy={onCopy}
                           clipboard={clipboard}
@@ -395,12 +457,28 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           isWeightInvalid={areChildWeightsInvalid}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
-                        />
-                      );
-                    }
-                    return null;
-                  })}
+                        definedVariables={definedVariables}
+                      />
+                    );
+                  } else if (child.type === "scale") {
+                    return (
+                      <ScaleCard
+                        key={child.id}
+                        element={child}
+                        onUpdate={(updated) => updateChild(child.id, updated)}
+                        onDelete={() => deleteChild(child.id)}
+                        onCopy={onCopy}
+                        clipboard={clipboard}
+                        depth={depth + 1}
+                        showWeight={element.weightMode === "defined"}
+                        allElements={allElements}
+                        validationErrors={validationErrors}
+                        definedVariables={definedVariables}
+                      />
+                    );
+                  }
+                  return null;
+                })}
 
                   {/* + button */}
                   <div style={{
@@ -516,6 +594,22 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                         >
                           Gate
                         </button>
+                        <button
+                          onClick={() => handleSelectType("scale")}
+                          style={{
+                            fontSize: '13px',
+                            padding: '4px 8px',
+                            background: 'transparent',
+                            border: 'none',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                          Scale
+                        </button>
                         {clipboard && (
                           <button
                             onClick={() => {
@@ -544,6 +638,983 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                         )}
                       </div>
                     )}
+                  </div>
+                </div>
+              </motion.div>
+            </Collapsible.Content>
+          )}
+        </AnimatePresence>
+      </div>
+    </Collapsible.Root>
+  );
+}
+
+// ========== SCALE CARD ==========
+
+export interface ScaleCardProps {
+  element: ScaleElement;
+  onUpdate: (updated: ScaleElement) => void;
+  onDelete: () => void;
+  onCopy?: () => void;
+  clipboard?: Element | null;
+  depth?: number;
+  showWeight?: boolean;
+  allElements?: Element[];
+  validationErrors?: ValidationError[];
+  definedVariables?: Set<string>;
+}
+
+export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>() }: ScaleCardProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [showFromDropdown, setShowFromDropdown] = useState(false);
+  const [showToDropdown, setShowToDropdown] = useState(false);
+  const [fromTickerInput, setFromTickerInput] = useState("");
+  const [toTickerInput, setToTickerInput] = useState("");
+
+  const config = element.config ?? {
+    ticker: "",
+    indicator: "CUMULATIVE_RETURN" as IndicatorName,
+    params: { ...defaultParams("CUMULATIVE_RETURN") },
+    period: paramsToPeriodString("CUMULATIVE_RETURN", defaultParams("CUMULATIVE_RETURN")),
+    rangeMin: "0",
+    rangeMax: "0",
+  };
+
+  const valueUnit = getIndicatorUnit(config.indicator as IndicatorName);
+  const unitSuffix = valueUnit === "percent" ? "%" : "";
+
+  const tickerHasUndefinedVar = hasUndefinedVariableInField(config.ticker, definedVariables);
+  const rangeMinHasUndefinedVar = hasUndefinedVariableInField(config.rangeMin, definedVariables);
+  const rangeMaxHasUndefinedVar = hasUndefinedVariableInField(config.rangeMax, definedVariables);
+
+  const tickerHasError = hasFieldError(element.id, "ticker", validationErrors);
+  const indicatorHasError = hasFieldError(element.id, "indicator", validationErrors);
+  const rangeMinHasError = hasFieldError(element.id, "rangeMin", validationErrors) || hasFieldError(element.id, "range", validationErrors);
+  const rangeMaxHasError = hasFieldError(element.id, "rangeMax", validationErrors) || hasFieldError(element.id, "range", validationErrors);
+  const fromBranchHasError = hasFieldError(element.id, "fromChildren", validationErrors);
+  const toBranchHasError = hasFieldError(element.id, "toChildren", validationErrors);
+
+  const updateConfig = (updates: Partial<ScaleElement["config"]>) => {
+    onUpdate({ ...element, config: { ...config, ...updates } });
+  };
+
+  const handleIndicatorChange = (newIndicator: IndicatorName) => {
+    const params = { ...defaultParams(newIndicator) };
+    updateConfig({
+      indicator: newIndicator,
+      params,
+      period: paramsToPeriodString(newIndicator, params),
+    });
+  };
+
+  const handleParamsChange = (params: Record<string, string>) => {
+    updateConfig({
+      params,
+      period: paramsToPeriodString(config.indicator as IndicatorName, params),
+    });
+  };
+
+  const addChildToBranch = (branch: "from" | "to", child: Element) => {
+    if (branch === "from") {
+      onUpdate({ ...element, fromChildren: [...element.fromChildren, child] });
+    } else {
+      onUpdate({ ...element, toChildren: [...element.toChildren, child] });
+    }
+  };
+
+  const handleBranchSelectType = (branch: "from" | "to", type: "weight" | "gate" | "scale") => {
+    if (branch === "from") {
+      setShowFromDropdown(false);
+      setFromTickerInput("");
+    } else {
+      setShowToDropdown(false);
+      setToTickerInput("");
+    }
+
+    if (type === "weight") {
+      const newWeight: WeightElement = {
+        id: `weight-${Date.now()}`,
+        type: "weight",
+        name: "",
+        weight: 100,
+        weightMode: "equal",
+        children: [],
+      };
+      addChildToBranch(branch, newWeight);
+    } else if (type === "gate") {
+      const newGate = createDefaultGateElement(allElements);
+      addChildToBranch(branch, newGate);
+    } else if (type === "scale") {
+      const newScale = createDefaultScaleElement(100, allElements);
+      addChildToBranch(branch, newScale);
+    }
+  };
+
+  const handleTickerSubmit = (branch: "from" | "to") => {
+    const inputValue = branch === "from" ? fromTickerInput : toTickerInput;
+    if (!inputValue.trim()) return;
+
+    const newTicker: TickerElement = {
+      id: `ticker-${Date.now()}`,
+      type: "ticker",
+      ticker: inputValue.trim().toUpperCase(),
+      weight: 100,
+    };
+    addChildToBranch(branch, newTicker);
+
+    if (branch === "from") {
+      setShowFromDropdown(false);
+      setFromTickerInput("");
+    } else {
+      setShowToDropdown(false);
+      setToTickerInput("");
+    }
+  };
+
+  const updateFromChild = (id: string, updated: Element) => {
+    onUpdate({
+      ...element,
+      fromChildren: element.fromChildren.map((child) => (child.id === id ? updated : child)),
+    });
+  };
+
+  const deleteFromChild = (id: string) => {
+    onUpdate({
+      ...element,
+      fromChildren: element.fromChildren.filter((child) => child.id !== id),
+    });
+  };
+
+  const updateToChild = (id: string, updated: Element) => {
+    onUpdate({
+      ...element,
+      toChildren: element.toChildren.map((child) => (child.id === id ? updated : child)),
+    });
+  };
+
+  const deleteToChild = (id: string) => {
+    onUpdate({
+      ...element,
+      toChildren: element.toChildren.filter((child) => child.id !== id),
+    });
+  };
+
+  const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
+
+  return (
+    <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
+      <div
+        onClick={() => {
+          if (showFromDropdown) {
+            setShowFromDropdown(false);
+            setFromTickerInput("");
+          }
+          if (showToDropdown) {
+            setShowToDropdown(false);
+            setToTickerInput("");
+          }
+        }}
+        style={{
+          position: "relative",
+          backgroundColor: bgColor,
+          marginBottom: "8px",
+          paddingLeft: depth > 0 ? "24px" : "0px",
+          overflow: "visible",
+        }}
+      >
+        <div
+          className="w-full hover:bg-gray-50 transition-colors"
+          style={{
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            padding: "8px",
+            paddingLeft: showWeight ? "80px" : "8px",
+            minHeight: "auto",
+            lineHeight: "1.3",
+            gap: "8px",
+            overflow: "visible",
+          }}
+        >
+          {depth > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                left: "-24px",
+                top: "50%",
+                width: "24px",
+                height: "1px",
+                backgroundColor: "#d1d5db",
+              }}
+            />
+          )}
+          {depth > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                left: "-24px",
+                top: "-8px",
+                bottom: "50%",
+                width: "1px",
+                backgroundColor: "#d1d5db",
+              }}
+            />
+          )}
+
+          {showWeight && (
+            <div
+              style={{
+                position: "absolute",
+                left: "0",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                paddingLeft: "8px",
+              }}
+            >
+              <input
+                type="number"
+                value={element.weight}
+                onChange={(e) => onUpdate({ ...element, weight: Number(e.target.value) })}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                  padding: "4px 6px",
+                  background: "#fff",
+                  fontSize: "13px",
+                  color: "#111827",
+                  width: "50px",
+                  flexShrink: 0,
+                  borderRadius: "4px",
+                  MozAppearance: "textfield",
+                  WebkitAppearance: "none",
+                  appearance: "textfield",
+                }}
+                className="focus:ring-2 focus:ring-blue-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>%</span>
+            </div>
+          )}
+
+          <motion.div
+            onClick={() => setIsOpen(!isOpen)}
+            animate={{ rotate: isOpen ? 90 : 0 }}
+            transition={{ duration: 0.15 }}
+            className="text-gray-600 flex-shrink-0 cursor-pointer"
+            style={{ fontSize: "12px" }}
+          >
+            ▶
+          </motion.div>
+
+          <input
+            type="text"
+            value={element.name}
+            onChange={(e) => onUpdate({ ...element, name: e.target.value })}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              border: "1px solid #d1d5db",
+              outline: "none",
+              padding: "4px 8px",
+              background: "#fff",
+              fontSize: "13px",
+              fontWeight: "500",
+              color: element.name ? "#111827" : "#9ca3af",
+              width: `${Math.max((element.name.length || 5) * 8 + 20, 80)}px`,
+              minWidth: "80px",
+              flexShrink: 0,
+              borderRadius: "4px",
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+            placeholder="Scale name"
+          />
+
+          <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>Blend</span>
+
+          <select
+            value={config.indicator}
+            onChange={(e) => handleIndicatorChange(e.target.value as IndicatorName)}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              border: indicatorHasError ? "2px solid #ef4444" : "1px solid #d1d5db",
+              outline: "none",
+              padding: "4px 8px",
+              background: indicatorHasError ? "#fee2e2" : "#fff",
+              fontSize: "13px",
+              color: "#111827",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+          >
+            {indicatorOptions.map((option) => (
+              <option key={option} value={option}>
+                {option.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+
+          <IndicatorParams
+            indicator={config.indicator as IndicatorName}
+            params={config.params || {}}
+            onUpdate={handleParamsChange}
+            conditionIndex={0}
+            elementId={element.id}
+            validationErrors={validationErrors}
+            definedVariables={definedVariables}
+          />
+
+          <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>of</span>
+
+          <input
+            type="text"
+            value={config.ticker}
+            onChange={(e) => updateConfig({ ticker: e.target.value.toUpperCase() })}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              border: (tickerHasError || tickerHasUndefinedVar) ? "2px solid #ef4444" : "1px solid #d1d5db",
+              outline: "none",
+              padding: "4px 8px",
+              background: (tickerHasError || tickerHasUndefinedVar) ? "#fee2e2" : "#fff",
+              fontSize: "13px",
+              color: config.ticker ? "#111827" : "#9ca3af",
+              width: `${Math.max((config.ticker || "Ticker").length * 9 + 20, 80)}px`,
+              maxWidth: "300px",
+              flexShrink: 0,
+              borderRadius: "4px",
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+            placeholder="Ticker"
+            title={tickerHasUndefinedVar ? `Variable ${config.ticker} is not defined in Variables tab` : undefined}
+          />
+
+          <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>from</span>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <input
+              type="text"
+              value={config.rangeMin}
+              onChange={(e) => updateConfig({ rangeMin: e.target.value })}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                border: (rangeMinHasError || rangeMinHasUndefinedVar) ? "2px solid #ef4444" : "1px solid #d1d5db",
+                outline: "none",
+                padding: "4px 6px",
+                background: (rangeMinHasError || rangeMinHasUndefinedVar) ? "#fee2e2" : "#fff",
+                fontSize: "13px",
+                color: config.rangeMin ? "#111827" : "#9ca3af",
+                width: "80px",
+                borderRadius: "4px",
+              }}
+              className="focus:ring-2 focus:ring-blue-500"
+              placeholder={unitSuffix ? `0${unitSuffix}` : "0"}
+              title={rangeMinHasUndefinedVar ? `Variable ${config.rangeMin} is not defined` : undefined}
+            />
+            {unitSuffix && <span style={{ fontSize: "13px", color: "#6b7280" }}>{unitSuffix}</span>}
+          </div>
+
+          <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>to</span>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <input
+              type="text"
+              value={config.rangeMax}
+              onChange={(e) => updateConfig({ rangeMax: e.target.value })}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                border: (rangeMaxHasError || rangeMaxHasUndefinedVar) ? "2px solid #ef4444" : "1px solid #d1d5db",
+                outline: "none",
+                padding: "4px 6px",
+                background: (rangeMaxHasError || rangeMaxHasUndefinedVar) ? "#fee2e2" : "#fff",
+                fontSize: "13px",
+                color: config.rangeMax ? "#111827" : "#9ca3af",
+                width: "80px",
+                borderRadius: "4px",
+              }}
+              className="focus:ring-2 focus:ring-blue-500"
+              placeholder={unitSuffix ? `0${unitSuffix}` : "0"}
+              title={rangeMaxHasUndefinedVar ? `Variable ${config.rangeMax} is not defined` : undefined}
+            />
+            {unitSuffix && <span style={{ fontSize: "13px", color: "#6b7280" }}>{unitSuffix}</span>}
+          </div>
+
+          <div style={{ marginLeft: "auto", display: "flex", gap: "4px", flexShrink: 0 }}>
+            {onCopy && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopy();
+                }}
+                style={{
+                  padding: "4px 8px",
+                  fontSize: "12px",
+                  color: "#3b82f6",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                title="Copy"
+              >
+                <Copy size={14} />
+              </button>
+            )}
+            <button
+              onClick={onDelete}
+              style={{
+                padding: "4px 8px",
+                fontSize: "12px",
+                color: "#dc2626",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                borderRadius: "4px",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#fee2e2")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              title="Delete"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {isOpen && (
+            <Collapsible.Content forceMount asChild>
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div style={{ paddingTop: "8px", paddingBottom: "8px" }}>
+                  {/* FROM branch */}
+                  <div style={{ marginBottom: "12px" }}>
+                    <div
+                      style={{
+                        marginBottom: "8px",
+                        paddingLeft: "56px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: fromBranchHasError ? "#dc2626" : "#2563eb",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          flexShrink: 0,
+                        }}
+                      >
+                        From
+                      </span>
+                      {fromBranchHasError && (
+                        <span style={{ fontSize: "12px", color: "#dc2626" }}>Add at least one element</span>
+                      )}
+                    </div>
+                    <div style={{ position: "relative", paddingLeft: "24px" }}>
+                      {element.fromChildren.map((child) => {
+                        if (child.type === "gate") {
+                          return (
+                            <GateCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateFromChild(child.id, updated)}
+                              onDelete={() => deleteFromChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        if (child.type === "ticker") {
+                          return (
+                            <TickerCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateFromChild(child.id, updated)}
+                              onDelete={() => deleteFromChild(child.id)}
+                              onCopy={onCopy}
+                              depth={depth + 1}
+                              showWeight={false}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        if (child.type === "weight") {
+                          return (
+                            <WeightCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateFromChild(child.id, updated)}
+                              onDelete={() => deleteFromChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        if (child.type === "scale") {
+                          return (
+                            <ScaleCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateFromChild(child.id, updated)}
+                              onDelete={() => deleteFromChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        return null;
+                      })}
+
+                      {element.fromChildren.length === 0 && (
+                        <div
+                          style={{
+                            position: "relative",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginTop: "8px",
+                            marginBottom: "8px",
+                            padding: "8px",
+                            paddingLeft: "32px",
+                            backgroundColor: "transparent",
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: "0",
+                              top: "50%",
+                              width: "24px",
+                              height: "1px",
+                              backgroundColor: "#d1d5db",
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: "0",
+                              top: "0",
+                              bottom: "50%",
+                              width: "1px",
+                              backgroundColor: "#d1d5db",
+                            }}
+                          />
+                          {!showFromDropdown ? (
+                            <button
+                              onClick={() => setShowFromDropdown(true)}
+                              style={{
+                                fontSize: "14px",
+                                color: fromBranchHasError ? "#dc2626" : "#2563eb",
+                                background: fromBranchHasError ? "#fee2e2" : "#eff6ff",
+                                border: `1px dashed ${fromBranchHasError ? "#dc2626" : "#2563eb"}`,
+                                cursor: "pointer",
+                                padding: "4px 12px",
+                                borderRadius: "4px",
+                                fontWeight: "500",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = fromBranchHasError ? "#fecaca" : "#dbeafe")}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = fromBranchHasError ? "#fee2e2" : "#eff6ff")}
+                            >
+                              + Add
+                            </button>
+                          ) : (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "4px",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "4px",
+                                padding: "8px",
+                                background: "#fff",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                              }}
+                            >
+                              <input
+                                type="text"
+                                autoFocus
+                                value={fromTickerInput}
+                                onChange={(e) => setFromTickerInput(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleTickerSubmit("from");
+                                  } else if (e.key === "Escape") {
+                                    setShowFromDropdown(false);
+                                    setFromTickerInput("");
+                                  }
+                                }}
+                                placeholder="Enter ticker..."
+                                style={{
+                                  fontSize: "13px",
+                                  border: "1px solid #d1d5db",
+                                  borderRadius: "4px",
+                                  padding: "4px 8px",
+                                  outline: "none",
+                                }}
+                              />
+                              <button
+                                onClick={() => handleBranchSelectType("from", "weight")}
+                                style={{
+                                  fontSize: "13px",
+                                  padding: "4px 8px",
+                                  background: "transparent",
+                                  border: "none",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  borderRadius: "4px",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                Weight
+                              </button>
+                              <button
+                                onClick={() => handleBranchSelectType("from", "gate")}
+                                style={{
+                                  fontSize: "13px",
+                                  padding: "4px 8px",
+                                  background: "transparent",
+                                  border: "none",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  borderRadius: "4px",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                Gate
+                              </button>
+                              <button
+                                onClick={() => handleBranchSelectType("from", "scale")}
+                                style={{
+                                  fontSize: "13px",
+                                  padding: "4px 8px",
+                                  background: "transparent",
+                                  border: "none",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  borderRadius: "4px",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                Scale
+                              </button>
+                              {clipboard && (
+                                <button
+                                  onClick={() => {
+                                    const cloned = deepCloneElement(clipboard);
+                                    cloned.weight = 100;
+                                    addChildToBranch("from", cloned);
+                                    setShowFromDropdown(false);
+                                    setFromTickerInput("");
+                                  }}
+                                  style={{
+                                    fontSize: "13px",
+                                    padding: "4px 8px",
+                                    background: "transparent",
+                                    border: "none",
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                    borderRadius: "4px",
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                                >
+                                  <Copy size={14} /> Paste
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* TO branch */}
+                  <div>
+                    <div
+                      style={{
+                        marginBottom: "8px",
+                        paddingLeft: "56px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: toBranchHasError ? "#dc2626" : "#c026d3",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          flexShrink: 0,
+                        }}
+                      >
+                        To
+                      </span>
+                      {toBranchHasError && (
+                        <span style={{ fontSize: "12px", color: "#dc2626" }}>Add at least one element</span>
+                      )}
+                    </div>
+                    <div style={{ position: "relative", paddingLeft: "24px" }}>
+                      {element.toChildren.map((child) => {
+                        if (child.type === "gate") {
+                          return (
+                            <GateCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateToChild(child.id, updated)}
+                              onDelete={() => deleteToChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        if (child.type === "ticker") {
+                          return (
+                            <TickerCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateToChild(child.id, updated)}
+                              onDelete={() => deleteToChild(child.id)}
+                              onCopy={onCopy}
+                              depth={depth + 1}
+                              showWeight={false}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        if (child.type === "weight") {
+                          return (
+                            <WeightCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateToChild(child.id, updated)}
+                              onDelete={() => deleteToChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        if (child.type === "scale") {
+                          return (
+                            <ScaleCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateToChild(child.id, updated)}
+                              onDelete={() => deleteToChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        }
+                        return null;
+                      })}
+
+                      {element.toChildren.length === 0 && (
+                        <div
+                          style={{
+                            position: "relative",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginTop: "8px",
+                            marginBottom: "8px",
+                            padding: "8px",
+                            paddingLeft: "32px",
+                            backgroundColor: "transparent",
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: "0",
+                              top: "50%",
+                              width: "24px",
+                              height: "1px",
+                              backgroundColor: "#d1d5db",
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: "0",
+                              top: "0",
+                              bottom: "50%",
+                              width: "1px",
+                              backgroundColor: "#d1d5db",
+                            }}
+                          />
+                          {!showToDropdown ? (
+                            <button
+                              onClick={() => setShowToDropdown(true)}
+                              style={{
+                                fontSize: "14px",
+                                color: toBranchHasError ? "#dc2626" : "#c026d3",
+                                background: toBranchHasError ? "#fee2e2" : "#f5f3ff",
+                                border: `1px dashed ${toBranchHasError ? "#dc2626" : "#c026d3"}`,
+                                cursor: "pointer",
+                                padding: "4px 12px",
+                                borderRadius: "4px",
+                                fontWeight: "500",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = toBranchHasError ? "#fecaca" : "#ede9fe")}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = toBranchHasError ? "#fee2e2" : "#f5f3ff")}
+                            >
+                              + Add
+                            </button>
+                          ) : (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "4px",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "4px",
+                                padding: "8px",
+                                background: "#fff",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                              }}
+                            >
+                              <input
+                                type="text"
+                                autoFocus
+                                value={toTickerInput}
+                                onChange={(e) => setToTickerInput(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleTickerSubmit("to");
+                                  } else if (e.key === "Escape") {
+                                    setShowToDropdown(false);
+                                    setToTickerInput("");
+                                  }
+                                }}
+                                placeholder="Enter ticker..."
+                                style={{
+                                  fontSize: "13px",
+                                  border: "1px solid #d1d5db",
+                                  borderRadius: "4px",
+                                  padding: "4px 8px",
+                                  outline: "none",
+                                }}
+                              />
+                              <button
+                                onClick={() => handleBranchSelectType("to", "weight")}
+                                style={{
+                                  fontSize: "13px",
+                                  padding: "4px 8px",
+                                  background: "transparent",
+                                  border: "none",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  borderRadius: "4px",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                Weight
+                              </button>
+                              <button
+                                onClick={() => handleBranchSelectType("to", "gate")}
+                                style={{
+                                  fontSize: "13px",
+                                  padding: "4px 8px",
+                                  background: "transparent",
+                                  border: "none",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  borderRadius: "4px",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                Gate
+                              </button>
+                              <button
+                                onClick={() => handleBranchSelectType("to", "scale")}
+                                style={{
+                                  fontSize: "13px",
+                                  padding: "4px 8px",
+                                  background: "transparent",
+                                  border: "none",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  borderRadius: "4px",
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                Scale
+                              </button>
+                              {clipboard && (
+                                <button
+                                  onClick={() => {
+                                    const cloned = deepCloneElement(clipboard);
+                                    cloned.weight = 100;
+                                    addChildToBranch("to", cloned);
+                                    setShowToDropdown(false);
+                                    setToTickerInput("");
+                                  }}
+                                  style={{
+                                    fontSize: "13px",
+                                    padding: "4px 8px",
+                                    background: "transparent",
+                                    border: "none",
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                    borderRadius: "4px",
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                                >
+                                  <Copy size={14} /> Paste
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -1040,7 +2111,7 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
     onUpdate({ ...rest, conditionMode: mode });
   };
 
-  const handleThenSelectType = (type: "weight" | "gate") => {
+  const handleThenSelectType = (type: "weight" | "gate" | "scale") => {
     setShowThenDropdown(false);
     setThenTickerInput("");
 
@@ -1083,6 +2154,9 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
         children: [],
       };
       onUpdate({ ...element, thenChildren: [...element.thenChildren, newWeight] });
+    } else if (type === "scale") {
+      const newScale = createDefaultScaleElement(100, allElements);
+      onUpdate({ ...element, thenChildren: [...element.thenChildren, newScale] });
     }
   };
 
@@ -1100,7 +2174,7 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
     }
   };
 
-  const handleElseSelectType = (type: "weight" | "gate") => {
+  const handleElseSelectType = (type: "weight" | "gate" | "scale") => {
     setShowElseDropdown(false);
     setElseTickerInput("");
 
@@ -1143,6 +2217,9 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
         children: [],
       };
       onUpdate({ ...element, elseChildren: [...element.elseChildren, newWeight] });
+    } else if (type === "scale") {
+      const newScale = createDefaultScaleElement(100, allElements);
+      onUpdate({ ...element, elseChildren: [...element.elseChildren, newScale] });
     }
   };
 
@@ -1596,6 +2673,22 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               definedVariables={definedVariables}
                             />
                           );
+                        } else if (child.type === "scale") {
+                          return (
+                            <ScaleCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateThenChild(child.id, updated)}
+                              onDelete={() => deleteThenChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
                         }
                         return null;
                       })}
@@ -1713,6 +2806,22 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                             >
                               Gate
                             </button>
+                            <button
+                              onClick={() => handleThenSelectType("scale")}
+                              style={{
+                                fontSize: '13px',
+                                padding: '4px 8px',
+                                background: 'transparent',
+                                border: 'none',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                borderRadius: '4px',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            >
+                              Scale
+                            </button>
                             {clipboard && (
                               <button
                                 onClick={() => {
@@ -1788,6 +2897,22 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                         } else if (child.type === "weight") {
                           return (
                             <WeightCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateElseChild(child.id, updated)}
+                              onDelete={() => deleteElseChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                            />
+                          );
+                        } else if (child.type === "scale") {
+                          return (
+                            <ScaleCard
                               key={child.id}
                               element={child}
                               onUpdate={(updated) => updateElseChild(child.id, updated)}
@@ -1918,6 +3043,22 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                             >
                               Gate
                             </button>
+                            <button
+                              onClick={() => handleElseSelectType("scale")}
+                              style={{
+                                fontSize: '13px',
+                                padding: '4px 8px',
+                                background: 'transparent',
+                                border: 'none',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                borderRadius: '4px',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            >
+                              Scale
+                            </button>
                             {clipboard && (
                               <button
                                 onClick={() => {
@@ -1957,4 +3098,3 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
     </Collapsible.Root>
   );
 }
-

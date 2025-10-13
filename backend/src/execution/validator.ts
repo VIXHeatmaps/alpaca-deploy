@@ -1,4 +1,4 @@
-import type { Element, TickerElement, WeightElement, GateElement } from "./types";
+import type { Element, TickerElement, WeightElement, GateElement, ScaleElement } from "./types";
 
 export interface ValidationError {
   elementId: string;
@@ -125,6 +125,8 @@ function validateElement(
     validateWeight(element as WeightElement, errors, warnings);
   } else if (element.type === "gate") {
     validateGate(element as GateElement, errors, warnings);
+  } else if (element.type === "scale") {
+    validateScale(element as ScaleElement, errors, warnings);
   }
 }
 
@@ -454,5 +456,109 @@ function validateGate(
     for (const child of gate.elseChildren) {
       validateElement(child, errors, warnings);
     }
+  }
+}
+
+function validateScale(
+  scale: ScaleElement,
+  errors: ValidationError[],
+  warnings: ValidationError[]
+): void {
+  if (!scale.name || scale.name.trim() === "") {
+    warnings.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "name",
+      message: "Scale element should have a name",
+      severity: "warning",
+    });
+  }
+
+  if (!scale.config) {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "config",
+      message: "Scale element is missing configuration",
+      severity: "error",
+    });
+    return;
+  }
+
+  const { ticker, indicator, rangeMin, rangeMax } = scale.config;
+  if (!ticker || ticker.trim() === "") {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "ticker",
+      message: "Scale indicator ticker cannot be empty",
+      severity: "error",
+    });
+  }
+
+  if (!indicator || indicator.trim() === "") {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "indicator",
+      message: "Scale indicator type is required",
+      severity: "error",
+    });
+  }
+
+  const minVal = parseFloat(rangeMin ?? "");
+  const maxVal = parseFloat(rangeMax ?? "");
+  if (!Number.isFinite(minVal)) {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "rangeMin",
+      message: "Scale minimum must be a valid number",
+      severity: "error",
+    });
+  }
+
+  if (!Number.isFinite(maxVal)) {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "rangeMax",
+      message: "Scale maximum must be a valid number",
+      severity: "error",
+    });
+  }
+
+  if (Number.isFinite(minVal) && Number.isFinite(maxVal) && minVal === maxVal) {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "range",
+      message: "Scale minimum and maximum cannot be equal",
+      severity: "error",
+    });
+  }
+
+  if (!scale.fromChildren || scale.fromChildren.length === 0) {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "fromChildren",
+      message: "Scale must have at least one child in the 'From' branch",
+      severity: "error",
+    });
+  } else {
+    scale.fromChildren.forEach(child => validateElement(child, errors, warnings));
+  }
+
+  if (!scale.toChildren || scale.toChildren.length === 0) {
+    errors.push({
+      elementId: scale.id,
+      elementType: "scale",
+      field: "toChildren",
+      message: "Scale must have at least one child in the 'To' branch",
+      severity: "error",
+    });
+  } else {
+    scale.toChildren.forEach(child => validateElement(child, errors, warnings));
   }
 }

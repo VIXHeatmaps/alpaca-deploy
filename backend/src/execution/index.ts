@@ -12,6 +12,8 @@ export type {
   WeightElement,
   GateElement,
   GateCondition,
+  ScaleElement,
+  ScaleConfig,
   Position,
   IndicatorValue,
   ExecutionContext,

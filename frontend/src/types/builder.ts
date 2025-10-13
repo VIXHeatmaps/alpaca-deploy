@@ -42,7 +42,26 @@ export interface WeightElement {
   children: Element[];
 }
 
-export type Element = GateElement | TickerElement | WeightElement;
+export interface ScaleConfig {
+  ticker: string;
+  indicator: IndicatorName;
+  params?: Record<string, string>;
+  period?: string;
+  rangeMin: string;
+  rangeMax: string;
+}
+
+export interface ScaleElement {
+  id: string;
+  type: "scale";
+  name: string;
+  weight: number;
+  config: ScaleConfig;
+  fromChildren: Element[];
+  toChildren: Element[];
+}
+
+export type Element = GateElement | TickerElement | WeightElement | ScaleElement;
 
 export interface StrategyVersion {
   major: number;
