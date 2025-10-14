@@ -15,7 +15,6 @@ export function VariablePopover({
   onClose,
 }: VariablePopoverProps) {
   const [values, setValues] = useState("");
-  const [type, setType] = useState<VarType>("ticker");
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Position popover next to anchor element
@@ -44,7 +43,7 @@ export function VariablePopover({
 
     document.addEventListener("mousedown", handleClickAway);
     return () => document.removeEventListener("mousedown", handleClickAway);
-  }, [values, type, anchorEl]);
+  }, [values, anchorEl]);
 
   const handleSave = () => {
     if (values.trim()) {
@@ -54,7 +53,7 @@ export function VariablePopover({
         .filter((v) => v.length > 0);
 
       if (valuesList.length > 0) {
-        onSave(valuesList, type);
+        onSave(valuesList, "ticker");
       }
     }
     onClose();
@@ -75,34 +74,6 @@ export function VariablePopover({
         maxWidth: "320px",
       }}
     >
-      <div style={{ marginBottom: "8px" }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: "12px",
-            color: "#6b7280",
-            marginBottom: "4px",
-          }}
-        >
-          Type
-        </label>
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as VarType)}
-          style={{
-            width: "100%",
-            padding: "4px 8px",
-            border: "1px solid #d1d5db",
-            borderRadius: "4px",
-            fontSize: "13px",
-          }}
-        >
-          <option value="ticker">Ticker</option>
-          <option value="number">Number</option>
-          <option value="date">Date</option>
-        </select>
-      </div>
-
       <div>
         <label
           style={{
