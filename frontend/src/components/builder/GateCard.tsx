@@ -1,3 +1,19 @@
+/**
+ * PATTERN: Dynamic Field Sizing
+ *
+ * For consistent field width behavior across all cards:
+ *
+ * Text inputs (Name, Ticker):
+ *   width: `${Math.max((value.length || 0) * 8 + 30, minWidth)}px`
+ *
+ * Indicator dropdowns:
+ *   const indicatorLabel = (indicator || "").replace(/_/g, " ");
+ *   const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
+ *   width: indicatorSelectWidth
+ *
+ * This ensures fields resize to fit content without truncation.
+ */
+
 import { useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { motion, AnimatePresence } from "framer-motion";
@@ -768,6 +784,9 @@ export function SortCard({
 
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
 
+  const indicatorLabel = (element.indicator || "").replace(/_/g, " ");
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
+
   const indicatorHasError = hasFieldError(element.id, "indicator", validationErrors);
   const countHasError = hasFieldError(element.id, "count", validationErrors);
   const childrenHaveError = hasFieldError(element.id, "children", validationErrors);
@@ -1055,8 +1074,7 @@ export function SortCard({
               color: "#111827",
               borderRadius: "4px",
               cursor: "pointer",
-              minWidth: "120px",
-              width: "auto",
+              width: indicatorSelectWidth,
               flexShrink: 0,
             }}
             className="focus:ring-2 focus:ring-blue-500"
