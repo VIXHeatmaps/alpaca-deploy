@@ -135,6 +135,23 @@ const collectTickersFromElements = (elements: any[]): Set<string> => {
   return tickers;
 };
 
+const firstAvailableDateForTicker = (priceData: Record<string, any>): string | null => {
+  const dates = Object.keys(priceData || {}).sort();
+  return dates.length > 0 ? dates[0] : null;
+};
+
+const findLatestTickerStartDate = (priceData: Record<string, Record<string, any>>): string | null => {
+  let latest: string | null = null;
+  for (const data of Object.values(priceData)) {
+    const first = firstAvailableDateForTicker(data);
+    if (!first) continue;
+    if (!latest || first > latest) {
+      latest = first;
+    }
+  }
+  return latest;
+};
+
 async function prepareStrategyEvaluation(
   elements: StrategyElement[],
   apiKey: string,
@@ -157,12 +174,17 @@ async function prepareStrategyEvaluation(
 
   const priceData = await fetchPriceData(Array.from(tickers), startDate, endDate, apiKey, apiSecret);
 
+  const latestTickerStart = findLatestTickerStartDate(priceData);
+
   const referenceTicker = tickers.has('SPY') ? 'SPY' : Array.from(tickers)[0];
   const referenceData = priceData[referenceTicker];
   if (!referenceData) {
     throw new Error(`Unable to fetch price data for reference ticker ${referenceTicker}`);
   }
-  const dateGrid = Object.keys(referenceData).sort();
+  let dateGrid = Object.keys(referenceData).sort();
+  if (latestTickerStart) {
+    dateGrid = dateGrid.filter((date) => date >= latestTickerStart);
+  }
   if (dateGrid.length < 2) {
     throw new Error('Insufficient price data to evaluate strategy');
   }

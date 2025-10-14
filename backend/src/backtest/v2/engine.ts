@@ -86,6 +86,23 @@ function collectSortIndicatorRequests(elements: any[]): Array<{ indicator: strin
   return result;
 }
 
+function firstAvailableDateForTicker(priceData: Record<string, any>): string | null {
+  const dates = Object.keys(priceData || {}).sort();
+  return dates.length > 0 ? dates[0] : null;
+}
+
+function findLatestTickerStartDate(priceData: Record<string, Record<string, any>>): string | null {
+  let latest: string | null = null;
+  for (const [ticker, data] of Object.entries(priceData)) {
+    const first = firstAvailableDateForTicker(data);
+    if (!first) continue;
+    if (!latest || first > latest) {
+      latest = first;
+    }
+  }
+  return latest;
+}
+
 /**
  * Subtract trading days from a date (approximate - uses calendar days * 1.4)
  */
@@ -222,11 +239,18 @@ export async function runV2Backtest(req: Request, res: Response) {
 
     // Phase 4: Run simulation with pre-fetched data
     console.log('\n[V2] === PHASE 4: SIMULATION ===');
+    const latestTickerStart = findLatestTickerStartDate(priceData);
+    let effectiveStartDate = reqStartDate;
+    if (latestTickerStart && latestTickerStart > effectiveStartDate) {
+      console.log(`[V2] Adjusting start date to ${latestTickerStart} (latest ticker availability)`);
+      effectiveStartDate = latestTickerStart;
+    }
+
     const simulationResult = await runSimulation(
       elements,
       priceData,
       indicatorData,
-      reqStartDate,
+      effectiveStartDate,
       reqEndDate,
       debug
     );
