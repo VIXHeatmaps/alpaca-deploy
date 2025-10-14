@@ -1068,6 +1068,17 @@ export function SortCard({
             ))}
           </select>
 
+          <IndicatorParams
+            indicator={element.indicator as IndicatorName}
+            params={element.params || {}}
+            onUpdate={handleParamsChange}
+            conditionIndex={0}
+            elementId={element.id}
+            validationErrors={validationErrors}
+            definedVariables={definedVariables}
+            inline
+          />
+
           <div style={{ flexGrow: 1 }} />
 
           <div style={{ display: "flex", gap: "4px" }}>
@@ -1111,17 +1122,6 @@ export function SortCard({
               ✕
             </button>
           </div>
-
-          <IndicatorParams
-            indicator={element.indicator as IndicatorName}
-            params={element.params || {}}
-            onUpdate={handleParamsChange}
-            conditionIndex={0}
-            elementId={element.id}
-            validationErrors={validationErrors}
-            definedVariables={definedVariables}
-            inline
-          />
         </div>
 
         <AnimatePresence>
