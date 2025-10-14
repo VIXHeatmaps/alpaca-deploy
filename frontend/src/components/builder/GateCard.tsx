@@ -2708,9 +2708,9 @@ function ConditionRow({
   const rightTickerHasUndefinedVar = hasUndefinedVariableInField(condition.rightTicker, definedVariables);
   const rightPeriodHasUndefinedVar = hasUndefinedVariableInField(condition.rightPeriod, definedVariables);
   const indicatorLabel = (condition.indicator || "").replace(/_/g, " ");
-  const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 5, 13)}ch`;
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 9 + 30, 120)}px`;
   const rightIndicatorLabel = ((condition.rightIndicator || "RSI") as string).replace(/_/g, " ");
-  const rightIndicatorSelectWidth = `${Math.max(rightIndicatorLabel.length + 5, 13)}ch`;
+  const rightIndicatorSelectWidth = `${Math.max(rightIndicatorLabel.length * 9 + 30, 120)}px`;
   const conditionTickerSymbol = condition.ticker?.toUpperCase() ?? "";
   const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
   const conditionTickerMetadata = conditionTickerSymbol && tickerMetadata ? tickerMetadata.get(conditionTickerSymbol) : undefined;
