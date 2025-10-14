@@ -18,7 +18,6 @@ export interface BatchJobDb {
   user_id: string | null;
   created_at: Date;
   updated_at: Date;
-  started_at: Date | null;
   completed_at: Date | null;
   error: string | null;
   truncated: boolean;
@@ -43,7 +42,7 @@ export interface BatchJobRunDb {
 /**
  * Create a new batch job
  */
-export async function createBatchJob(job: Omit<BatchJobDb, 'created_at' | 'updated_at' | 'started_at'> & { started_at?: Date | null }): Promise<BatchJobDb> {
+export async function createBatchJob(job: Omit<BatchJobDb, 'created_at' | 'updated_at'>): Promise<BatchJobDb> {
   // Manually stringify JSONB fields for pg driver
   const jobData: any = { ...job };
   jobData.variables = JSON.stringify(job.variables);

@@ -1459,8 +1459,6 @@ backtestRouter.post('/batch_backtest_strategy', requireAuth, async (req: Request
     dbJob.created_at instanceof Date ? dbJob.created_at.toISOString() : new Date().toISOString();
   const updatedAtIso =
     dbJob.updated_at instanceof Date ? dbJob.updated_at.toISOString() : createdAtIso;
-  const startedAtIso =
-    dbJob.started_at instanceof Date ? dbJob.started_at.toISOString() : null;
 
   return res.status(202).json({
     jobId: id,
@@ -1470,7 +1468,7 @@ backtestRouter.post('/batch_backtest_strategy', requireAuth, async (req: Request
     truncated: dbJob.truncated,
     createdAt: createdAtIso,
     updatedAt: updatedAtIso,
-    startedAt: startedAtIso,
+    startedAt: null,
     durationMs: null,
   });
 });
@@ -1496,7 +1494,6 @@ backtestRouter.get('/batch_backtest_strategy/:id', requireAuth, async (req: Requ
 
   const createdAtIso = toIso(job.created_at);
   const updatedAtIso = toIso(job.updated_at);
-  const startedAtIso = toIso(job.started_at);
   const completedAtIso = toIso(job.completed_at);
 
   // Prefer the accurate duration from worker summary, fallback to calculation
@@ -1508,9 +1505,9 @@ backtestRouter.get('/batch_backtest_strategy/:id', requireAuth, async (req: Requ
       console.log(`[BATCH STATUS] Job ${job.id} using summary.duration_ms: ${durationMs}ms`);
     }
   }
-  // Fallback: calculate from timestamps for running jobs or if summary missing
-  if (durationMs === null && startedAtIso) {
-    const startMs = new Date(startedAtIso).getTime();
+  // Fallback: calculate from timestamps using created_at as start
+  if (durationMs === null && createdAtIso) {
+    const startMs = new Date(createdAtIso).getTime();
     const endMs = completedAtIso ? new Date(completedAtIso).getTime() : Date.now();
     if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
       durationMs = Math.max(0, endMs - startMs);
@@ -1518,7 +1515,7 @@ backtestRouter.get('/batch_backtest_strategy/:id', requireAuth, async (req: Requ
     }
   }
   if (durationMs === null) {
-    console.log(`[BATCH STATUS] Job ${job.id} no duration available (status: ${job.status}, summary: ${!!job.summary}, startedAt: ${!!startedAtIso})`);
+    console.log(`[BATCH STATUS] Job ${job.id} no duration available (status: ${job.status}, summary: ${!!job.summary})`);
   }
 
   return res.json({
@@ -1529,7 +1526,7 @@ backtestRouter.get('/batch_backtest_strategy/:id', requireAuth, async (req: Requ
     completed: job.completed,
     createdAt: createdAtIso,
     updatedAt: updatedAtIso,
-    startedAt: startedAtIso,
+    startedAt: null,
     completedAt: completedAtIso,
     durationMs,
     truncated: job.truncated || false,

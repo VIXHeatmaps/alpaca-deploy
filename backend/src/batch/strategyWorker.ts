@@ -21,17 +21,15 @@ export const runBatchStrategyJob = async (
   const total = combos.length;
 
   const startTime = Date.now();
-  const startedAt = new Date(startTime);
 
   await batchJobsDb.updateBatchJob(jobId, {
     status: 'running',
     total,
     completed: 0,
     error: null,
-    started_at: startedAt,
   });
 
-  console.log(`[BATCH WORKER START] Job ${jobId} starting with ${total} backtests at ${startedAt.toISOString()}`);
+  console.log(`[BATCH WORKER START] Job ${jobId} starting with ${total} backtests at ${new Date(startTime).toISOString()}`);
 
   if (!job.strategy_elements) {
     await batchJobsDb.updateBatchJob(jobId, {
