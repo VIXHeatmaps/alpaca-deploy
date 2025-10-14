@@ -3,12 +3,15 @@
  *
  * For consistent field width behavior across all cards:
  *
- * Text inputs (Name, Ticker):
+ * Text inputs (Name):
  *   width: `${Math.max((value.length || 0) * 8 + 30, minWidth)}px`
+ *
+ * Ticker inputs:
+ *   width: `${Math.max((ticker.length || 0) * 9 + 20, 80)}px`
  *
  * Indicator dropdowns:
  *   const indicatorLabel = (indicator || "").replace(/_/g, " ");
- *   const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
+ *   const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 9 + 30, 120)}px`;
  *   width: indicatorSelectWidth
  *
  * This ensures fields resize to fit content without truncation.
@@ -785,7 +788,7 @@ export function SortCard({
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
 
   const indicatorLabel = (element.indicator || "").replace(/_/g, " ");
-  const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 9 + 30, 120)}px`;
 
   const indicatorHasError = hasFieldError(element.id, "indicator", validationErrors);
   const countHasError = hasFieldError(element.id, "count", validationErrors);
@@ -1517,7 +1520,7 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const tickerHasVisualError = tickerHasError || tickerHasUndefinedVar || configTickerUnknown;
 
   const indicatorLabel = (config.indicator || "").replace(/_/g, " ");
-  const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
+  const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 9 + 30, 120)}px`;
 
   const updateConfig = (updates: Partial<ScaleElement["config"]>) => {
     onUpdate({ ...element, config: { ...config, ...updates } });
