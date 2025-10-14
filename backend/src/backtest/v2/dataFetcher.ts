@@ -148,8 +148,9 @@ export async function fetchPriceData(
 }
 
 /**
- * Fetch bars from Alpaca using multi-symbol endpoint
+ * Fetch bars from Alpaca using multi-symbol endpoint with pagination
  * Uses /v2/stocks/bars with symbols parameter for batch fetching
+ * Handles pagination via next_page_token to get all data
  */
 async function fetchBarsFromAlpaca(
   symbols: string[],
@@ -173,7 +174,7 @@ async function fetchBarsFromAlpaca(
     const startDate = typeof start === 'string' ? start.split('T')[0] : start;
     const endDate = typeof end === 'string' ? end.split('T')[0] : end;
 
-    const params = {
+    const baseParams = {
       symbols: symbols.join(','),
       start: startDate,
       end: endDate,
@@ -185,37 +186,61 @@ async function fetchBarsFromAlpaca(
 
     console.log(`[ALPACA API] Calling multi-symbol endpoint: ${symbols.length} symbols`);
 
-    const response = await axios.get(url, {
-      headers: {
-        'APCA-API-KEY-ID': apiKey,
-        'APCA-API-SECRET-KEY': apiSecret,
-      },
-      params,
-      timeout: 30000,
-    });
+    let pageToken: string | null = null;
+    let pageCount = 0;
+    let totalBars = 0;
 
-    const bars = response.data.bars || {};
+    // Paginate through all results
+    do {
+      pageCount++;
 
-    // Parse response
-    for (const [symbol, symbolBars] of Object.entries(bars)) {
-      if (!Array.isArray(symbolBars)) continue;
-
-      for (const bar of symbolBars as any[]) {
-        const date = bar.t.slice(0, 10); // Extract YYYY-MM-DD
-        result[symbol][date] = {
-          t: bar.t,
-          o: bar.o,
-          h: bar.h,
-          l: bar.l,
-          c: bar.c,
-          v: bar.v,
-        };
+      const params: any = { ...baseParams };
+      if (pageToken) {
+        params.page_token = pageToken;
       }
 
-      console.log(`[ALPACA API] Fetched ${symbolBars.length} bars for ${symbol}`);
+      const response = await axios.get(url, {
+        headers: {
+          'APCA-API-KEY-ID': apiKey,
+          'APCA-API-SECRET-KEY': apiSecret,
+        },
+        params,
+        timeout: 30000,
+      });
+
+      const bars = response.data.bars || {};
+      pageToken = response.data.next_page_token || null;
+
+      // Parse response and accumulate bars
+      for (const [symbol, symbolBars] of Object.entries(bars)) {
+        if (!Array.isArray(symbolBars)) continue;
+
+        for (const bar of symbolBars as any[]) {
+          const date = bar.t.slice(0, 10); // Extract YYYY-MM-DD
+          result[symbol][date] = {
+            t: bar.t,
+            o: bar.o,
+            h: bar.h,
+            l: bar.l,
+            c: bar.c,
+            v: bar.v,
+          };
+          totalBars++;
+        }
+      }
+
+      if (pageToken) {
+        console.log(`[ALPACA API] Page ${pageCount}: ${totalBars} bars fetched so far, fetching next page...`);
+      }
+    } while (pageToken);
+
+    // Log final counts per symbol
+    for (const symbol of symbols) {
+      const barCount = Object.keys(result[symbol]).length;
+      console.log(`[ALPACA API] Fetched ${barCount} bars for ${symbol}`);
     }
 
-    console.log(`[ALPACA API] ✓ Batch fetch complete (1 API call for ${symbols.length} symbols)`);
+    console.log(`[ALPACA API] ✓ Batch fetch complete (${pageCount} API call${pageCount > 1 ? 's' : ''} for ${symbols.length} symbols, ${totalBars} total bars)`);
   } catch (err: any) {
     console.error('[ALPACA API] Error fetching bars:', err.message);
     if (err.response) {
