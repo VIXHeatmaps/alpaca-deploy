@@ -3095,6 +3095,25 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               metadataError={metadataError}
                             />
                           );
+                        } else if (child.type === "sort") {
+                          return (
+                            <SortCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateThenChild(child.id, updated)}
+                              onDelete={() => deleteThenChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                              tickerMetadata={tickerMetadata}
+                              metadataLoading={metadataLoading}
+                              metadataError={metadataError}
+                            />
+                          );
                         }
                         return null;
                       })}
@@ -3228,6 +3247,25 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                         } else if (child.type === "scale") {
                           return (
                             <ScaleCard
+                              key={child.id}
+                              element={child}
+                              onUpdate={(updated) => updateElseChild(child.id, updated)}
+                              onDelete={() => deleteElseChild(child.id)}
+                              onCopy={onCopy}
+                              clipboard={clipboard}
+                              depth={depth + 1}
+                              showWeight={false}
+                              allElements={allElements}
+                              validationErrors={validationErrors}
+                              definedVariables={definedVariables}
+                              tickerMetadata={tickerMetadata}
+                              metadataLoading={metadataLoading}
+                              metadataError={metadataError}
+                            />
+                          );
+                        } else if (child.type === "sort") {
+                          return (
+                            <SortCard
                               key={child.id}
                               element={child}
                               onUpdate={(updated) => updateElseChild(child.id, updated)}
