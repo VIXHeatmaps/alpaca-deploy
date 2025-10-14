@@ -147,83 +147,216 @@ export const createDefaultSortElement = (weight: number, allElements: Element[] 
   };
 };
 
+// ========== ADD ELEMENT DROPDOWN ==========
+
+interface AddElementDropdownProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAddElement: (element: Element) => void;
+  allElements?: Element[];
+  clipboard?: Element | null;
+  backgroundColor?: string;
+  hoverColor?: string;
+}
+
+function AddElementDropdown({
+  isOpen,
+  onClose,
+  onAddElement,
+  allElements = [],
+  clipboard,
+  backgroundColor = "#eff6ff",
+  hoverColor = "#dbeafe",
+}: AddElementDropdownProps) {
+  const [tickerInput, setTickerInput] = useState("");
+
+  if (!isOpen) return null;
+
+  const handleTickerSubmit = () => {
+    if (tickerInput.trim()) {
+      const newTicker: TickerElement = {
+        id: `ticker-${Date.now()}`,
+        type: "ticker",
+        ticker: tickerInput.trim().toUpperCase(),
+        weight: 100,
+      };
+      onAddElement(newTicker);
+      setTickerInput("");
+      onClose();
+    }
+  };
+
+  const handleSelectType = (type: "weight" | "gate" | "scale" | "sort") => {
+    if (type === "weight") {
+      const newWeight: WeightElement = {
+        id: `weight-${Date.now()}`,
+        type: "weight",
+        name: "",
+        weight: 100,
+        weightMode: "equal",
+        children: [],
+      };
+      onAddElement(newWeight);
+    } else if (type === "gate") {
+      const newGate = createDefaultGateElement(allElements);
+      newGate.weight = 100;
+      onAddElement(newGate);
+    } else if (type === "scale") {
+      const newScale = createDefaultScaleElement(100, allElements);
+      onAddElement(newScale);
+    } else if (type === "sort") {
+      const newSort = createDefaultSortElement(100, allElements);
+      onAddElement(newSort);
+    }
+    onClose();
+  };
+
+  const handlePaste = () => {
+    if (clipboard) {
+      const cloned = deepCloneElement(clipboard);
+      cloned.weight = 100;
+      onAddElement(cloned);
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        border: "1px solid #d1d5db",
+        borderRadius: "4px",
+        padding: "8px",
+        background: "#fff",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+      }}
+    >
+      <input
+        type="text"
+        autoFocus
+        value={tickerInput}
+        onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            handleTickerSubmit();
+          } else if (e.key === "Escape") {
+            onClose();
+            setTickerInput("");
+          }
+        }}
+        placeholder="Enter ticker..."
+        style={{
+          fontSize: "13px",
+          border: "1px solid #d1d5db",
+          borderRadius: "4px",
+          padding: "4px 8px",
+          outline: "none",
+        }}
+      />
+      <button
+        onClick={() => handleSelectType("weight")}
+        style={{
+          fontSize: "13px",
+          padding: "4px 8px",
+          background: "transparent",
+          border: "none",
+          textAlign: "left",
+          cursor: "pointer",
+          borderRadius: "4px",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        Weight
+      </button>
+      <button
+        onClick={() => handleSelectType("gate")}
+        style={{
+          fontSize: "13px",
+          padding: "4px 8px",
+          background: "transparent",
+          border: "none",
+          textAlign: "left",
+          cursor: "pointer",
+          borderRadius: "4px",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        Gate
+      </button>
+      <button
+        onClick={() => handleSelectType("scale")}
+        style={{
+          fontSize: "13px",
+          padding: "4px 8px",
+          background: "transparent",
+          border: "none",
+          textAlign: "left",
+          cursor: "pointer",
+          borderRadius: "4px",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        Scale
+      </button>
+      <button
+        onClick={() => handleSelectType("sort")}
+        style={{
+          fontSize: "13px",
+          padding: "4px 8px",
+          background: "transparent",
+          border: "none",
+          textAlign: "left",
+          cursor: "pointer",
+          borderRadius: "4px",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        Sort
+      </button>
+      {clipboard && (
+        <button
+          onClick={handlePaste}
+          style={{
+            fontSize: "13px",
+            padding: "4px 8px",
+            background: "transparent",
+            border: "none",
+            textAlign: "left",
+            cursor: "pointer",
+            borderRadius: "4px",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          Paste
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ========== WEIGHT CARD ==========
+
 export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError }: WeightCardProps & { initiallyOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [tickerInput, setTickerInput] = useState("");
 
   // Calculate if children weights add up to 100%
   const childrenWeightSum = element.children.reduce((sum, child) => sum + child.weight, 0);
   const areChildWeightsInvalid = element.weightMode === "defined" && element.children.length > 0 && childrenWeightSum !== 100;
 
-  const handleSelectType = (type: "weight" | "gate" | "scale" | "sort") => {
-    setShowDropdown(false);
-    setTickerInput("");
-
+  const handleAddElement = (newElement: Element) => {
     // Calculate default weight for new child
     const currentSum = element.children.reduce((sum, child) => sum + child.weight, 0);
     const defaultWeight = element.weightMode === "defined" ? Math.max(0, 100 - currentSum) : 100;
-
-    if (type === "gate") {
-      const gateCount = allElements ? countGatesInTree(allElements) : 0;
-      const gateName = `Gate${gateCount + 1}`;
-
-      const newGate: GateElement = {
-        id: `gate-${Date.now()}`,
-        type: "gate",
-        name: gateName,
-        weight: defaultWeight,
-        conditionMode: "if",
-        conditions: [{
-          ticker: "",
-          indicator: "RSI",
-          period: "",
-          operator: "gt",
-          compareTo: "indicator",
-          threshold: "",
-          rightTicker: "",
-          rightIndicator: "RSI",
-          rightPeriod: "",
-        }],
-        thenChildren: [],
-        elseChildren: [],
-      };
-      onUpdate({ ...element, children: [...element.children, newGate] });
-    } else if (type === "weight") {
-      const newWeight: WeightElement = {
-        id: `weight-${Date.now()}`,
-        type: "weight",
-        name: "",
-        weight: defaultWeight,
-        weightMode: "equal",
-        children: [],
-      };
-      onUpdate({ ...element, children: [...element.children, newWeight] });
-    } else if (type === "scale") {
-      const newScale = createDefaultScaleElement(defaultWeight, allElements);
-      onUpdate({ ...element, children: [...element.children, newScale] });
-    } else if (type === "sort") {
-      const newSort = createDefaultSortElement(defaultWeight, allElements);
-      onUpdate({ ...element, children: [...element.children, newSort] });
-    }
-  };
-
-  const handleTickerSubmit = () => {
-    if (tickerInput.trim()) {
-      // Calculate default weight for new ticker
-      const currentSum = element.children.reduce((sum, child) => sum + child.weight, 0);
-      const defaultWeight = element.weightMode === "defined" ? Math.max(0, 100 - currentSum) : 100;
-
-      const newTicker: TickerElement = {
-        id: `ticker-${Date.now()}`,
-        type: "ticker",
-        ticker: tickerInput.trim().toUpperCase(),
-        weight: defaultWeight,
-      };
-      onUpdate({ ...element, children: [...element.children, newTicker] });
-      setShowDropdown(false);
-      setTickerInput("");
-    }
+    newElement.weight = defaultWeight;
+    onUpdate({ ...element, children: [...element.children, newElement] });
   };
 
   const updateChild = (id: string, updated: Element) => {
@@ -250,7 +383,6 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
           // Close dropdowns when clicking anywhere on the card
           if (showDropdown) {
             setShowDropdown(false);
-            setTickerInput("");
           }
         }}
         style={{
@@ -611,131 +743,13 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                         + Add
                       </button>
                     ) : (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '4px',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '4px',
-                          padding: '8px',
-                          background: '#fff',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        }}
-                      >
-                        <input
-                          type="text"
-                          autoFocus
-                          value={tickerInput}
-                          onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleTickerSubmit();
-                            } else if (e.key === 'Escape') {
-                              setShowDropdown(false);
-                              setTickerInput("");
-                            }
-                          }}
-                          placeholder="Enter ticker..."
-                          style={{
-                            fontSize: '13px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '4px',
-                            padding: '4px 8px',
-                            outline: 'none',
-                          }}
-                        />
-                        <button
-                          onClick={() => handleSelectType("weight")}
-                          style={{
-                            fontSize: '13px',
-                            padding: '4px 8px',
-                            background: 'transparent',
-                            border: 'none',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                          Weight
-                        </button>
-                        <button
-                          onClick={() => handleSelectType("sort")}
-                          style={{
-                            fontSize: '13px',
-                            padding: '4px 8px',
-                            background: 'transparent',
-                            border: 'none',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                          Sort
-                        </button>
-                        <button
-                          onClick={() => handleSelectType("gate")}
-                          style={{
-                            fontSize: '13px',
-                            padding: '4px 8px',
-                            background: 'transparent',
-                            border: 'none',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                          Gate
-                        </button>
-                        <button
-                          onClick={() => handleSelectType("scale")}
-                          style={{
-                            fontSize: '13px',
-                            padding: '4px 8px',
-                            background: 'transparent',
-                            border: 'none',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                          Scale
-                        </button>
-                        {clipboard && (
-                          <button
-                            onClick={() => {
-                              const cloned = deepCloneElement(clipboard);
-                              const currentSum = element.children.reduce((sum, child) => sum + child.weight, 0);
-                              const defaultWeight = element.weightMode === "defined" ? Math.max(0, 100 - currentSum) : 100;
-                              cloned.weight = defaultWeight;
-                              onUpdate({ ...element, children: [...element.children, cloned] });
-                              setShowDropdown(false);
-                              setTickerInput("");
-                            }}
-                            style={{
-                              fontSize: '13px',
-                              padding: '4px 8px',
-                              background: 'transparent',
-                              border: 'none',
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              borderRadius: '4px',
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#eff6ff'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                          >
-                            <Copy size={14} /> Paste
-                          </button>
-                        )}
-                      </div>
+                      <AddElementDropdown
+                        isOpen={showDropdown}
+                        onClose={() => setShowDropdown(false)}
+                        onAddElement={handleAddElement}
+                        allElements={allElements}
+                        clipboard={clipboard}
+                      />
                     )}
                   </div>
                 </div>
@@ -783,7 +797,6 @@ export function SortCard({
 }: SortCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [tickerInput, setTickerInput] = useState("");
 
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
 
@@ -812,90 +825,11 @@ export function SortCard({
     });
   };
 
-  const handleSelectType = (type: "ticker" | "weight" | "gate" | "scale" | "sort") => {
-    setShowDropdown(false);
-    setTickerInput("");
-
+  const handleAddElement = (newElement: Element) => {
     const currentSum = element.children.reduce((sum, child) => sum + (child.weight ?? 0), 0);
     const defaultWeight = element.children.length === 0 ? 100 : Math.max(0, 100 - currentSum);
-
-    if (type === "ticker") {
-      const newTicker: TickerElement = {
-        id: `ticker-${Date.now()}`,
-        type: "ticker",
-        ticker: "",
-        weight: defaultWeight || 100,
-      };
-      onUpdate({ ...element, children: [...element.children, newTicker] });
-      return;
-    }
-
-    if (type === "weight") {
-      const newWeight: WeightElement = {
-        id: `weight-${Date.now()}`,
-        type: "weight",
-        name: "",
-        weight: defaultWeight || 100,
-        weightMode: "equal",
-        children: [],
-      };
-      onUpdate({ ...element, children: [...element.children, newWeight] });
-      return;
-    }
-
-    if (type === "gate") {
-      const gateCount = allElements ? countGatesInTree(allElements) : 0;
-      const newGate: GateElement = {
-        id: `gate-${Date.now()}`,
-        type: "gate",
-        name: `Gate${gateCount + 1}`,
-        weight: defaultWeight || 100,
-        conditionMode: "if",
-        conditions: [
-          {
-            ticker: "",
-            indicator: "RSI",
-            period: "",
-            operator: "gt",
-            compareTo: "indicator",
-            threshold: "",
-            rightTicker: "",
-            rightIndicator: "RSI",
-            rightPeriod: "",
-          },
-        ],
-        thenChildren: [],
-        elseChildren: [],
-      };
-      onUpdate({ ...element, children: [...element.children, newGate] });
-      return;
-    }
-
-    if (type === "scale") {
-      const newScale = createDefaultScaleElement(defaultWeight || 100, allElements);
-      onUpdate({ ...element, children: [...element.children, newScale] });
-      return;
-    }
-
-    if (type === "sort") {
-      const newSort = createDefaultSortElement(defaultWeight || 100, allElements);
-      onUpdate({ ...element, children: [...element.children, newSort] });
-    }
-  };
-
-  const handleTickerSubmit = () => {
-    if (!tickerInput.trim()) return;
-    const currentSum = element.children.reduce((sum, child) => sum + (child.weight ?? 0), 0);
-    const defaultWeight = element.children.length === 0 ? 100 : Math.max(0, 100 - currentSum);
-    const newTicker: TickerElement = {
-      id: `ticker-${Date.now()}`,
-      type: "ticker",
-      ticker: tickerInput.trim().toUpperCase(),
-      weight: defaultWeight || 100,
-    };
-    onUpdate({ ...element, children: [...element.children, newTicker] });
-    setShowDropdown(false);
-    setTickerInput("");
+    newElement.weight = defaultWeight || 100;
+    onUpdate({ ...element, children: [...element.children, newElement] });
   };
 
   const updateChild = (id: string, updated: Element) => {
@@ -1317,134 +1251,13 @@ export function SortCard({
                         + Add
                       </button>
                     ) : (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "4px",
-                          border: "1px solid #d1d5db",
-                          borderRadius: "4px",
-                          padding: "8px",
-                          background: "#fff",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                        }}
-                      >
-                        <input
-                          type="text"
-                          autoFocus
-                          value={tickerInput}
-                          onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleTickerSubmit();
-                            } else if (e.key === "Escape") {
-                              setShowDropdown(false);
-                              setTickerInput("");
-                            }
-                          }}
-                          placeholder="Enter ticker..."
-                          style={{
-                            fontSize: "13px",
-                            border: "1px solid #d1d5db",
-                            borderRadius: "4px",
-                            padding: "4px 8px",
-                            outline: "none",
-                          }}
-                        />
-                        <button
-                          onClick={() => handleSelectType("weight")}
-                          style={{
-                            fontSize: "13px",
-                            padding: "4px 8px",
-                            background: "transparent",
-                            border: "none",
-                            textAlign: "left",
-                            cursor: "pointer",
-                            borderRadius: "4px",
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          Weight
-                        </button>
-                        <button
-                          onClick={() => handleSelectType("gate")}
-                          style={{
-                            fontSize: "13px",
-                            padding: "4px 8px",
-                            background: "transparent",
-                            border: "none",
-                            textAlign: "left",
-                            cursor: "pointer",
-                            borderRadius: "4px",
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          Gate
-                        </button>
-                        <button
-                          onClick={() => handleSelectType("scale")}
-                          style={{
-                            fontSize: "13px",
-                            padding: "4px 8px",
-                            background: "transparent",
-                            border: "none",
-                            textAlign: "left",
-                            cursor: "pointer",
-                            borderRadius: "4px",
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          Scale
-                        </button>
-                        <button
-                          onClick={() => handleSelectType("sort")}
-                          style={{
-                            fontSize: "13px",
-                            padding: "4px 8px",
-                            background: "transparent",
-                            border: "none",
-                            textAlign: "left",
-                            cursor: "pointer",
-                            borderRadius: "4px",
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          Sort
-                        </button>
-                        {clipboard && (
-                          <button
-                            onClick={() => {
-                              const cloned = deepCloneElement(clipboard);
-                              const currentSum = element.children.reduce((sum, child) => sum + (child.weight ?? 0), 0);
-                              const defaultWeight = element.children.length === 0 ? 100 : Math.max(0, 100 - currentSum);
-                              (cloned as any).weight = defaultWeight || 100;
-                              onUpdate({ ...element, children: [...element.children, cloned as Element] });
-                              setShowDropdown(false);
-                              setTickerInput("");
-                            }}
-                            style={{
-                              fontSize: "13px",
-                              padding: "4px 8px",
-                              background: "transparent",
-                              border: "none",
-                              textAlign: "left",
-                              cursor: "pointer",
-                              borderRadius: "4px",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                          >
-                            <Copy size={14} /> Paste
-                          </button>
-                        )}
-                      </div>
+                      <AddElementDropdown
+                        isOpen={showDropdown}
+                        onClose={() => setShowDropdown(false)}
+                        onAddElement={handleAddElement}
+                        allElements={allElements}
+                        clipboard={clipboard}
+                      />
                     )}
                   </div>
                 </div>
@@ -1479,8 +1292,6 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const [isOpen, setIsOpen] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
-  const [fromTickerInput, setFromTickerInput] = useState("");
-  const [toTickerInput, setToTickerInput] = useState("");
 
   const config = element.config ?? {
     ticker: "",
@@ -1542,64 +1353,14 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
     });
   };
 
-  const addChildToBranch = (branch: "from" | "to", child: Element) => {
-    if (branch === "from") {
-      onUpdate({ ...element, fromChildren: [...element.fromChildren, child] });
-    } else {
-      onUpdate({ ...element, toChildren: [...element.toChildren, child] });
-    }
+  const handleAddFromElement = (newElement: Element) => {
+    newElement.weight = 100;
+    onUpdate({ ...element, fromChildren: [...element.fromChildren, newElement] });
   };
 
-  const handleBranchSelectType = (branch: "from" | "to", type: "weight" | "gate" | "scale" | "sort") => {
-    if (branch === "from") {
-      setShowFromDropdown(false);
-      setFromTickerInput("");
-    } else {
-      setShowToDropdown(false);
-      setToTickerInput("");
-    }
-
-    if (type === "weight") {
-      const newWeight: WeightElement = {
-        id: `weight-${Date.now()}`,
-        type: "weight",
-        name: "",
-        weight: 100,
-        weightMode: "equal",
-        children: [],
-      };
-      addChildToBranch(branch, newWeight);
-    } else if (type === "gate") {
-      const newGate = createDefaultGateElement(allElements);
-      addChildToBranch(branch, newGate);
-    } else if (type === "scale") {
-      const newScale = createDefaultScaleElement(100, allElements);
-      addChildToBranch(branch, newScale);
-    } else if (type === "sort") {
-      const newSort = createDefaultSortElement(100, allElements);
-      addChildToBranch(branch, newSort);
-    }
-  };
-
-  const handleTickerSubmit = (branch: "from" | "to") => {
-    const inputValue = branch === "from" ? fromTickerInput : toTickerInput;
-    if (!inputValue.trim()) return;
-
-    const newTicker: TickerElement = {
-      id: `ticker-${Date.now()}`,
-      type: "ticker",
-      ticker: inputValue.trim().toUpperCase(),
-      weight: 100,
-    };
-    addChildToBranch(branch, newTicker);
-
-    if (branch === "from") {
-      setShowFromDropdown(false);
-      setFromTickerInput("");
-    } else {
-      setShowToDropdown(false);
-      setToTickerInput("");
-    }
+  const handleAddToElement = (newElement: Element) => {
+    newElement.weight = 100;
+    onUpdate({ ...element, toChildren: [...element.toChildren, newElement] });
   };
 
   const updateFromChild = (id: string, updated: Element) => {
@@ -1638,11 +1399,9 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
         onClick={() => {
           if (showFromDropdown) {
             setShowFromDropdown(false);
-            setFromTickerInput("");
           }
           if (showToDropdown) {
             setShowToDropdown(false);
-            setToTickerInput("");
           }
         }}
         style={{
@@ -2108,145 +1867,13 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               + Add
                             </button>
                           ) : (
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "4px",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "4px",
-                                padding: "8px",
-                                background: "#fff",
-                                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                              }}
-                            >
-                              <input
-                                type="text"
-                                autoFocus
-                                value={fromTickerInput}
-                                onChange={(e) => setFromTickerInput(e.target.value.toUpperCase())}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleTickerSubmit("from");
-                                  } else if (e.key === "Escape") {
-                                    setShowFromDropdown(false);
-                                    setFromTickerInput("");
-                                  }
-                                }}
-                                placeholder="Enter ticker..."
-                                style={{
-                                  fontSize: "13px",
-                                  border: "1px solid #d1d5db",
-                                  borderRadius: "4px",
-                                  padding: "4px 8px",
-                                  outline: "none",
-                                }}
-                              />
-                              <button
-                                onClick={() => handleBranchSelectType("from", "weight")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Weight
-                              </button>
-                              <button
-                                onClick={() => handleBranchSelectType("from", "gate")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Gate
-                              </button>
-                              <button
-                                onClick={() => handleBranchSelectType("from", "scale")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Scale
-                              </button>
-                              <button
-                                onClick={() => handleBranchSelectType("to", "sort")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Sort
-                              </button>
-                              <button
-                                onClick={() => handleBranchSelectType("from", "sort")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Sort
-                              </button>
-                              {clipboard && (
-                                <button
-                                  onClick={() => {
-                                    const cloned = deepCloneElement(clipboard);
-                                    cloned.weight = 100;
-                                    addChildToBranch("from", cloned);
-                                    setShowFromDropdown(false);
-                                    setFromTickerInput("");
-                                  }}
-                                  style={{
-                                    fontSize: "13px",
-                                    padding: "4px 8px",
-                                    background: "transparent",
-                                    border: "none",
-                                    textAlign: "left",
-                                    cursor: "pointer",
-                                    borderRadius: "4px",
-                                  }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                                >
-                                  <Copy size={14} /> Paste
-                                </button>
-                              )}
-                            </div>
+                            <AddElementDropdown
+                              isOpen={showFromDropdown}
+                              onClose={() => setShowFromDropdown(false)}
+                              onAddElement={handleAddFromElement}
+                              allElements={allElements}
+                              clipboard={clipboard}
+                            />
                           )}
                         </div>
                       )}
@@ -2434,113 +2061,13 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               + Add
                             </button>
                           ) : (
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "4px",
-                                border: "1px solid #d1d5db",
-                                borderRadius: "4px",
-                                padding: "8px",
-                                background: "#fff",
-                                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                              }}
-                            >
-                              <input
-                                type="text"
-                                autoFocus
-                                value={toTickerInput}
-                                onChange={(e) => setToTickerInput(e.target.value.toUpperCase())}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleTickerSubmit("to");
-                                  } else if (e.key === "Escape") {
-                                    setShowToDropdown(false);
-                                    setToTickerInput("");
-                                  }
-                                }}
-                                placeholder="Enter ticker..."
-                                style={{
-                                  fontSize: "13px",
-                                  border: "1px solid #d1d5db",
-                                  borderRadius: "4px",
-                                  padding: "4px 8px",
-                                  outline: "none",
-                                }}
-                              />
-                              <button
-                                onClick={() => handleBranchSelectType("to", "weight")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Weight
-                              </button>
-                              <button
-                                onClick={() => handleBranchSelectType("to", "gate")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Gate
-                              </button>
-                              <button
-                                onClick={() => handleBranchSelectType("to", "scale")}
-                                style={{
-                                  fontSize: "13px",
-                                  padding: "4px 8px",
-                                  background: "transparent",
-                                  border: "none",
-                                  textAlign: "left",
-                                  cursor: "pointer",
-                                  borderRadius: "4px",
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = "#f3f4f6")}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                Scale
-                              </button>
-                              {clipboard && (
-                                <button
-                                  onClick={() => {
-                                    const cloned = deepCloneElement(clipboard);
-                                    cloned.weight = 100;
-                                    addChildToBranch("to", cloned);
-                                    setShowToDropdown(false);
-                                    setToTickerInput("");
-                                  }}
-                                  style={{
-                                    fontSize: "13px",
-                                    padding: "4px 8px",
-                                    background: "transparent",
-                                    border: "none",
-                                    textAlign: "left",
-                                    cursor: "pointer",
-                                    borderRadius: "4px",
-                                  }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                                >
-                                  <Copy size={14} /> Paste
-                                </button>
-                              )}
-                            </div>
+                            <AddElementDropdown
+                              isOpen={showToDropdown}
+                              onClose={() => setShowToDropdown(false)}
+                              onAddElement={handleAddToElement}
+                              allElements={allElements}
+                              clipboard={clipboard}
+                            />
                           )}
                         </div>
                       )}
@@ -3024,8 +2551,6 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
   const [isOpen, setIsOpen] = useState(false);
   const [showThenDropdown, setShowThenDropdown] = useState(false);
   const [showElseDropdown, setShowElseDropdown] = useState(false);
-  const [thenTickerInput, setThenTickerInput] = useState("");
-  const [elseTickerInput, setElseTickerInput] = useState("");
 
   // Handle backward compatibility: migrate old single condition to new format
   const conditionMode = element.conditionMode || "if";
@@ -3091,131 +2616,16 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
     onUpdate({ ...rest, conditionMode: mode });
   };
 
-  const handleThenSelectType = (type: "weight" | "gate" | "scale") => {
-    setShowThenDropdown(false);
-    setThenTickerInput("");
-
-    if (type === "gate") {
-      const gateCount = allElements ? countGatesInTree(allElements) : 0;
-      const gateName = `Gate${gateCount + 1}`;
-
-      const defaultIndicator: IndicatorName = "RSI";
-      const defaultP = defaultParams(defaultIndicator);
-      const newGate: GateElement = {
-        id: `gate-${Date.now()}`,
-        type: "gate",
-        name: gateName,
-        weight: 100,
-        conditionMode: "if",
-        conditions: [{
-          ticker: "",
-          indicator: defaultIndicator,
-          period: paramsToPeriodString(defaultIndicator, defaultP),
-          params: defaultP,
-          operator: "gt",
-          compareTo: "indicator",
-          threshold: "",
-          rightTicker: "",
-          rightIndicator: defaultIndicator,
-          rightPeriod: paramsToPeriodString(defaultIndicator, defaultP),
-          rightParams: defaultP,
-        }],
-        thenChildren: [],
-        elseChildren: [],
-      };
-      onUpdate({ ...element, thenChildren: [...element.thenChildren, newGate] });
-    } else if (type === "weight") {
-      const newWeight: WeightElement = {
-        id: `weight-${Date.now()}`,
-        type: "weight",
-        name: "",
-        weight: 100,
-        weightMode: "equal",
-        children: [],
-      };
-      onUpdate({ ...element, thenChildren: [...element.thenChildren, newWeight] });
-    } else if (type === "scale") {
-      const newScale = createDefaultScaleElement(100, allElements);
-      onUpdate({ ...element, thenChildren: [...element.thenChildren, newScale] });
-    }
+  const handleAddThenElement = (newElement: Element) => {
+    newElement.weight = 100;
+    onUpdate({ ...element, thenChildren: [...element.thenChildren, newElement] });
   };
 
-  const handleThenTickerSubmit = () => {
-    if (thenTickerInput.trim()) {
-      const newTicker: TickerElement = {
-        id: `ticker-${Date.now()}`,
-        type: "ticker",
-        ticker: thenTickerInput.trim().toUpperCase(),
-        weight: 100,
-      };
-      onUpdate({ ...element, thenChildren: [...element.thenChildren, newTicker] });
-      setShowThenDropdown(false);
-      setThenTickerInput("");
-    }
+  const handleAddElseElement = (newElement: Element) => {
+    newElement.weight = 100;
+    onUpdate({ ...element, elseChildren: [...element.elseChildren, newElement] });
   };
 
-  const handleElseSelectType = (type: "weight" | "gate" | "scale") => {
-    setShowElseDropdown(false);
-    setElseTickerInput("");
-
-    if (type === "gate") {
-      const gateCount = allElements ? countGatesInTree(allElements) : 0;
-      const gateName = `Gate${gateCount + 1}`;
-
-      const defaultIndicator: IndicatorName = "RSI";
-      const defaultP = defaultParams(defaultIndicator);
-      const newGate: GateElement = {
-        id: `gate-${Date.now()}`,
-        type: "gate",
-        name: gateName,
-        weight: 100,
-        conditionMode: "if",
-        conditions: [{
-          ticker: "",
-          indicator: defaultIndicator,
-          period: paramsToPeriodString(defaultIndicator, defaultP),
-          params: defaultP,
-          operator: "gt",
-          compareTo: "indicator",
-          threshold: "",
-          rightTicker: "",
-          rightIndicator: defaultIndicator,
-          rightPeriod: paramsToPeriodString(defaultIndicator, defaultP),
-          rightParams: defaultP,
-        }],
-        thenChildren: [],
-        elseChildren: [],
-      };
-      onUpdate({ ...element, elseChildren: [...element.elseChildren, newGate] });
-    } else if (type === "weight") {
-      const newWeight: WeightElement = {
-        id: `weight-${Date.now()}`,
-        type: "weight",
-        name: "",
-        weight: 100,
-        weightMode: "equal",
-        children: [],
-      };
-      onUpdate({ ...element, elseChildren: [...element.elseChildren, newWeight] });
-    } else if (type === "scale") {
-      const newScale = createDefaultScaleElement(100, allElements);
-      onUpdate({ ...element, elseChildren: [...element.elseChildren, newScale] });
-    }
-  };
-
-  const handleElseTickerSubmit = () => {
-    if (elseTickerInput.trim()) {
-      const newTicker: TickerElement = {
-        id: `ticker-${Date.now()}`,
-        type: "ticker",
-        ticker: elseTickerInput.trim().toUpperCase(),
-        weight: 100,
-      };
-      onUpdate({ ...element, elseChildren: [...element.elseChildren, newTicker] });
-      setShowElseDropdown(false);
-      setElseTickerInput("");
-    }
-  };
 
   const updateThenChild = (id: string, updated: Element) => {
     onUpdate({
@@ -3255,11 +2665,9 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
           // Close dropdowns when clicking anywhere on the card
           if (showThenDropdown) {
             setShowThenDropdown(false);
-            setThenTickerInput("");
           }
           if (showElseDropdown) {
             setShowElseDropdown(false);
-            setElseTickerInput("");
           }
         }}
         style={{
@@ -3738,113 +3146,13 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                             + Add
                           </button>
                         ) : (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '4px',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '4px',
-                              padding: '8px',
-                              background: '#fff',
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              autoFocus
-                              value={thenTickerInput}
-                              onChange={(e) => setThenTickerInput(e.target.value.toUpperCase())}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleThenTickerSubmit();
-                                } else if (e.key === 'Escape') {
-                                  setShowThenDropdown(false);
-                                  setThenTickerInput("");
-                                }
-                              }}
-                              placeholder="Enter ticker..."
-                              style={{
-                                fontSize: '13px',
-                                border: '1px solid #d1d5db',
-                                borderRadius: '4px',
-                                padding: '4px 8px',
-                                outline: 'none',
-                              }}
-                            />
-                            <button
-                              onClick={() => handleThenSelectType("weight")}
-                              style={{
-                                fontSize: '13px',
-                                padding: '4px 8px',
-                                background: 'transparent',
-                                border: 'none',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                            >
-                              Weight
-                            </button>
-                            <button
-                              onClick={() => handleThenSelectType("gate")}
-                              style={{
-                                fontSize: '13px',
-                                padding: '4px 8px',
-                                background: 'transparent',
-                                border: 'none',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                            >
-                              Gate
-                            </button>
-                            <button
-                              onClick={() => handleThenSelectType("scale")}
-                              style={{
-                                fontSize: '13px',
-                                padding: '4px 8px',
-                                background: 'transparent',
-                                border: 'none',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                            >
-                              Scale
-                            </button>
-                            {clipboard && (
-                              <button
-                                onClick={() => {
-                                  const cloned = deepCloneElement(clipboard);
-                                  cloned.weight = 100;
-                                  onUpdate({ ...element, thenChildren: [...element.thenChildren, cloned] });
-                                  setShowThenDropdown(false);
-                                  setThenTickerInput("");
-                                }}
-                                style={{
-                                  fontSize: '13px',
-                                  padding: '4px 8px',
-                                  background: 'transparent',
-                                  border: 'none',
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                  borderRadius: '4px',
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = '#dcfce7'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                              >
-                                <Copy size={14} /> Paste
-                              </button>
-                            )}
-                          </div>
+                          <AddElementDropdown
+                            isOpen={showThenDropdown}
+                            onClose={() => setShowThenDropdown(false)}
+                            onAddElement={handleAddThenElement}
+                            allElements={allElements}
+                            clipboard={clipboard}
+                          />
                         )}
                         </div>
                       )}
@@ -3987,113 +3295,13 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                             + Add
                           </button>
                         ) : (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '4px',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '4px',
-                              padding: '8px',
-                              background: '#fff',
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                            }}
-                          >
-                            <input
-                              type="text"
-                              autoFocus
-                              value={elseTickerInput}
-                              onChange={(e) => setElseTickerInput(e.target.value.toUpperCase())}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleElseTickerSubmit();
-                                } else if (e.key === 'Escape') {
-                                  setShowElseDropdown(false);
-                                  setElseTickerInput("");
-                                }
-                              }}
-                              placeholder="Enter ticker..."
-                              style={{
-                                fontSize: '13px',
-                                border: '1px solid #d1d5db',
-                                borderRadius: '4px',
-                                padding: '4px 8px',
-                                outline: 'none',
-                              }}
-                            />
-                            <button
-                              onClick={() => handleElseSelectType("weight")}
-                              style={{
-                                fontSize: '13px',
-                                padding: '4px 8px',
-                                background: 'transparent',
-                                border: 'none',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                            >
-                              Weight
-                            </button>
-                            <button
-                              onClick={() => handleElseSelectType("gate")}
-                              style={{
-                                fontSize: '13px',
-                                padding: '4px 8px',
-                                background: 'transparent',
-                                border: 'none',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                            >
-                              Gate
-                            </button>
-                            <button
-                              onClick={() => handleElseSelectType("scale")}
-                              style={{
-                                fontSize: '13px',
-                                padding: '4px 8px',
-                                background: 'transparent',
-                                border: 'none',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                borderRadius: '4px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                            >
-                              Scale
-                            </button>
-                            {clipboard && (
-                              <button
-                                onClick={() => {
-                                  const cloned = deepCloneElement(clipboard);
-                                  cloned.weight = 100;
-                                  onUpdate({ ...element, elseChildren: [...element.elseChildren, cloned] });
-                                  setShowElseDropdown(false);
-                                  setElseTickerInput("");
-                                }}
-                                style={{
-                                  fontSize: '13px',
-                                  padding: '4px 8px',
-                                  background: 'transparent',
-                                  border: 'none',
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                  borderRadius: '4px',
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                              >
-                                <Copy size={14} /> Paste
-                              </button>
-                            )}
-                          </div>
+                          <AddElementDropdown
+                            isOpen={showElseDropdown}
+                            onClose={() => setShowElseDropdown(false)}
+                            onAddElement={handleAddElseElement}
+                            allElements={allElements}
+                            clipboard={clipboard}
+                          />
                         )}
                         </div>
                       )}
