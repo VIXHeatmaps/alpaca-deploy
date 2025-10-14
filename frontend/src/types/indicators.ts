@@ -26,6 +26,7 @@ export type IndicatorName =
   | "AROON_DOWN"
   | "AROONOSC"
   | "CUMULATIVE_RETURN"
+  | "RETURN"
   | "VOLATILITY";
 
 export const indicatorOptions: IndicatorName[] = [
@@ -52,6 +53,7 @@ export const indicatorOptions: IndicatorName[] = [
   "AROON_DOWN",
   "AROONOSC",
   "CUMULATIVE_RETURN",
+  "RETURN",
   "VOLATILITY",
 ];
 
@@ -61,6 +63,9 @@ export function defaultParams(t: IndicatorName): Record<string, string> {
     case "OBV":
     case "CUMULATIVE_RETURN":
       return {};
+
+    case "RETURN":
+      return { period: "200" };
 
     case "RSI":
       return { period: "14" };
@@ -177,6 +182,7 @@ export const FACTORY_DEFAULTS: Record<IndicatorName, Record<string, number>> = {
   CURRENT_PRICE: {},
   OBV: {},
   CUMULATIVE_RETURN: {},
+  RETURN: { period: 200 },
   RSI: { period: 14 },
   SMA: { period: 20 },
   EMA: { period: 20 },
@@ -226,6 +232,7 @@ const INDICATOR_UNIT_MAP: Record<IndicatorName, IndicatorValueUnit> = {
   AROON_DOWN: "percent",
   AROONOSC: "percent",
   CUMULATIVE_RETURN: "percent",
+  RETURN: "percent",
   VOLATILITY: "percent",
 };
 

@@ -338,6 +338,11 @@ function getIndicatorParams(indicator: string, period: number): any {
     return {};
   }
 
+  // RETURN indicator with period
+  if (ind === 'RETURN') {
+    return { period: period || 200 };
+  }
+
   // Default: single period parameter
   return { period: period || 14 };
 }
@@ -379,6 +384,9 @@ function getIndicatorPeriod(indicator: string, providedPeriod?: string): number 
   // No-parameter indicators
   if (ind === 'CURRENT_PRICE' || ind === 'OBV' || ind === 'CUMULATIVE_RETURN') return 0;
 
+  // RETURN indicator
+  if (ind === 'RETURN') return 200;
+
   // Default fallback
   return 14;
 }
@@ -416,6 +424,9 @@ function getDefaultParams(indicator: string): Record<string, string> {
   }
   if (ind === 'CURRENT_PRICE' || ind === 'OBV' || ind === 'CUMULATIVE_RETURN') {
     return {};
+  }
+  if (ind === 'RETURN') {
+    return { period: '200' };
   }
 
   // Default: single period parameter

@@ -19,7 +19,7 @@ For custom indicators (non-TA-Lib):
   - Example: result[1:] = calculated_values[:-1]
 
 TA-Lib indicators (RSI, SMA, EMA, etc.) are already point-in-time correct.
-Custom indicators (VOLATILITY, CUMULATIVE_RETURN) required manual lagging.
+Custom indicators (VOLATILITY, CUMULATIVE_RETURN, RETURN) require manual lagging.
 """
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -302,6 +302,29 @@ def indicator_router(payload: dict):
             if prices.size > 1:
                 result[1:] = (prices[:-1] / prices[0]) - 1.0
             result[0] = 0.0  # No return before first day
+
+            return {"values": _nan_to_none(result)}
+
+        if ind == "RETURN":
+            # Calculate rolling period return - LAGGED to avoid forward-looking bias
+            # Value at index i represents return over the specified period ending at day i-1
+            # Example: RETURN(200) at index i = (price[i-1] / price[i-201]) - 1
+            period = int(req.params.get("period", 200))
+
+            if prices.size < period + 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Need at least {period + 1} prices for {period}-day return calculation"
+                )
+
+            result = np.full(prices.size, np.nan)
+
+            # Calculate rolling returns, lagged by 1 day
+            for i in range(period + 1, prices.size + 1):
+                # result[i] uses prices[i-1] and prices[i-period-1]
+                # This ensures we only use data available BEFORE day i
+                if prices[i - period - 1] > 0:
+                    result[i - 1] = (prices[i - 1] / prices[i - period - 1]) - 1.0
 
             return {"values": _nan_to_none(result)}
 
