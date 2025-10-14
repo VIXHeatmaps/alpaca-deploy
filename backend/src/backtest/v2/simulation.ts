@@ -118,6 +118,27 @@ export async function runSimulation(
     throw new Error('Insufficient trading days in date range');
   }
 
+  const sortStartDate = await precomputeSortIndicators({
+    elements: elements as StrategyElement[],
+    priceData,
+    indicatorData,
+    dateGrid,
+    executeStrategy,
+    buildIndicatorMap,
+    debug,
+  });
+
+  if (sortStartDate) {
+    const filtered = dateGrid.filter(d => d >= sortStartDate);
+    if (filtered.length < 2) {
+      throw new Error(`Insufficient trading days after sort warmup (${sortStartDate})`);
+    }
+    if (filtered.length !== dateGrid.length) {
+      console.log(`[SIMULATION] Adjusted start date to ${sortStartDate} (sort warmup)`);
+    }
+    dateGrid = filtered;
+  }
+
   // Initialize portfolio (Decision #6: $100,000 starting capital)
   const STARTING_CAPITAL = 100000;
   let equity = 1.0;  // Normalized to 1.0 for easier comparison
@@ -137,16 +158,6 @@ export async function runSimulation(
   console.log(`[SIMULATION] Starting capital: $${STARTING_CAPITAL.toLocaleString()}`);
   console.log(`[SIMULATION] Initial date: ${dateGrid[0]}`);
   console.log(`[SIMULATION] SPY initial price: $${spyInitialPrice.toFixed(2)}`);
-
-  await precomputeSortIndicators({
-    elements: elements as StrategyElement[],
-    priceData,
-    indicatorData,
-    dateGrid,
-    executeStrategy,
-    buildIndicatorMap,
-    debug,
-  });
 
   // Day-by-day simulation (Decision #2: benchmark in same loop)
   let positionDays = 0; // Track days with positions

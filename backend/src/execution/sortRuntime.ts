@@ -250,7 +250,7 @@ async function computeSortIndicatorSeries(
   equitySeries: number[],
   dateGrid: string[],
   indicatorServiceUrl: string
-): Promise<Record<string, number>> {
+): Promise<{ valuesByDate: Record<string, number>; firstValidDate: string | null }> {
   const payload = buildSortIndicatorPayload(sort.indicator, sort.params || {}, equitySeries);
 
   const response = await axios.post(`${indicatorServiceUrl}/indicator`, payload, {
@@ -259,24 +259,28 @@ async function computeSortIndicatorSeries(
 
   const values: Array<number | null> = response.data?.values || [];
   const valuesByDate: Record<string, number> = {};
-  const invalidDates: string[] = [];
+  let firstValidDate: string | null = null;
 
   for (let idx = 0; idx < dateGrid.length; idx++) {
     const raw = values[idx];
+    const date = dateGrid[idx];
     if (typeof raw === 'number' && Number.isFinite(raw)) {
-      valuesByDate[dateGrid[idx]] = raw;
-    } else {
-      invalidDates.push(dateGrid[idx]);
+      valuesByDate[date] = raw;
+      if (!firstValidDate) {
+        firstValidDate = date;
+      }
+    } else if (firstValidDate) {
+      throw new Error(
+        `Sort "${sort.name}" branch ${describeNode(child)} missing computed indicator values on ${date}`
+      );
     }
   }
 
-  if (invalidDates.length > 0) {
-    throw new Error(
-      `Sort "${sort.name}" branch ${describeNode(child)} missing computed indicator values on ${invalidDates.slice(0, 5).join(', ')}`
-    );
+  if (!firstValidDate) {
+    throw new Error(`Sort "${sort.name}" branch ${describeNode(child)} produced no indicator values`);
   }
 
-  return valuesByDate;
+  return { valuesByDate, firstValidDate };
 }
 
 export function buildIndicatorLookupMap(elements: Element[]): Map<string, string> {
@@ -335,7 +339,7 @@ export async function precomputeSortIndicators(options: {
   buildIndicatorMap: (values: Array<{ ticker: string; indicator: string; period: string; value: number }>) => Map<string, any>;
   debug?: boolean;
   indicatorServiceUrl?: string;
-}): Promise<void> {
+}): Promise<string | null> {
   const {
     elements,
     priceData,
@@ -349,12 +353,14 @@ export async function precomputeSortIndicators(options: {
 
   const descriptors = collectSortDescriptors(elements).sort((a, b) => b.depth - a.depth);
   if (descriptors.length === 0) {
-    return;
+    return null;
   }
 
   if (debug) {
     console.log(`\n[SORT] Precomputing indicators for ${descriptors.length} sort node(s)`);
   }
+
+  let sortStartDate: string | null = null;
 
   for (const { sort } of descriptors) {
     const sortNode: any = sort;
@@ -380,15 +386,29 @@ export async function precomputeSortIndicators(options: {
         debug
       );
 
-      const indicatorSeries = await computeSortIndicatorSeries(sortNode, child, equitySeries, dateGrid, indicatorServiceUrl);
+      const { valuesByDate, firstValidDate } = await computeSortIndicatorSeries(
+        sortNode,
+        child,
+        equitySeries,
+        dateGrid,
+        indicatorServiceUrl
+      );
       const sortTicker = buildSortTicker(sortNode.id, child.id);
       const periodKey = getPeriodKey(sortNode.indicator, sortNode.params, sortNode.period);
       const key = `${sortTicker}|${sortNode.indicator}|${periodKey}`;
-      indicatorData[key] = indicatorSeries;
+      indicatorData[key] = valuesByDate;
+
+      if (firstValidDate) {
+        if (!sortStartDate || firstValidDate > sortStartDate) {
+          sortStartDate = firstValidDate;
+        }
+      }
 
       if (debug) {
         console.log(`[SORT]     Computed indicator for ${childLabel}: key=${key}`);
       }
     }
   }
+
+  return sortStartDate;
 }

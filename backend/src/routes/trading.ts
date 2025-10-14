@@ -87,9 +87,12 @@ const collectSortIndicatorRequests = (elements: any[]): Array<{ indicator: strin
       if (el.type === 'sort') {
         const indicator = (el.indicator || '').toUpperCase();
         const periodKey = paramsToPeriodString(el.indicator, el.params) || el.period || '';
-        const firstPart = periodKey.split('-')[0];
-        const parsed = parseInt(firstPart, 10);
-        result.push({ indicator, period: Number.isFinite(parsed) ? parsed : 0 });
+        const parts = periodKey
+          .split('-')
+          .map(part => parseInt(part, 10))
+          .filter(value => Number.isFinite(value));
+        const effectivePeriod = parts.length ? Math.max(...parts) : 0;
+        result.push({ indicator, period: effectivePeriod });
         traverse(el.children || []);
         continue;
       }
@@ -167,7 +170,7 @@ async function prepareStrategyEvaluation(
   const indicatorData = await fetchIndicators(requiredIndicators, priceData);
   const { executeStrategy, buildIndicatorMap } = await import('../execution');
 
-  await precomputeSortIndicators({
+  const sortStartDate = await precomputeSortIndicators({
     elements,
     priceData,
     indicatorData,
@@ -177,9 +180,18 @@ async function prepareStrategyEvaluation(
     debug,
   });
 
-  const decisionIndex = dateGrid.length - 2;
-  const decisionDate = dateGrid[decisionIndex];
-  const executionDate = dateGrid[decisionIndex + 1];
+  let effectiveDateGrid = dateGrid;
+  if (sortStartDate) {
+    const filtered = dateGrid.filter(d => d >= sortStartDate);
+    if (filtered.length < 2) {
+      throw new Error(`Insufficient price data after sort warmup (${sortStartDate})`);
+    }
+    effectiveDateGrid = filtered;
+  }
+
+  const decisionIndex = effectiveDateGrid.length - 2;
+  const decisionDate = effectiveDateGrid[decisionIndex];
+  const executionDate = effectiveDateGrid[decisionIndex + 1];
 
   const indicatorLookup = buildIndicatorLookupMap(elements);
   const { values: indicatorValuesForDate } = collectIndicatorValuesForDate(
@@ -197,7 +209,7 @@ async function prepareStrategyEvaluation(
     executionDate,
     priceData,
     indicatorData,
-    dateGrid,
+    dateGrid: effectiveDateGrid,
   };
 }
 

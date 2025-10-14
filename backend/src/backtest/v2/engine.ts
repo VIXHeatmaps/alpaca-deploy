@@ -65,9 +65,12 @@ function collectSortIndicatorRequests(elements: any[]): Array<{ indicator: strin
       if (el.type === 'sort') {
         const indicator = (el.indicator || '').toUpperCase();
         const periodKey = paramsToPeriodString(el.indicator, el.params) || el.period || '';
-        const firstPart = periodKey.split('-')[0];
-        const parsed = parseInt(firstPart, 10);
-        result.push({ indicator, period: Number.isFinite(parsed) ? parsed : 0 });
+        const parts = periodKey
+          .split('-')
+          .map(part => parseInt(part, 10))
+          .filter(value => Number.isFinite(value));
+        const effectivePeriod = parts.length ? Math.max(...parts) : 0;
+        result.push({ indicator, period: effectivePeriod });
         traverse(el.children || []);
         continue;
       }
@@ -139,6 +142,7 @@ export async function runV2Backtest(req: Request, res: Response) {
         if (el.elseChildren) collectTickers(el.elseChildren);
         if (el.fromChildren) collectTickers(el.fromChildren);
         if (el.toChildren) collectTickers(el.toChildren);
+        if (el.type === 'sort') collectTickers(el.children || []);
       }
     }
     collectTickers(elements);
