@@ -423,7 +423,7 @@ export function Dashboard({
   const [error, setError] = useState<string | null>(null);
   const [activeStrategies, setActiveStrategies] = useState<ActiveStrategy[]>([]);
   const [strategyLoading, setStrategyLoading] = useState(false);
-  const [liquidating, setLiquidating] = useState(false);
+  const [liquidatingStrategies, setLiquidatingStrategies] = useState<Set<string>>(new Set());
   const [snapshotsByStrategy, setSnapshotsByStrategy] = useState<Record<string, StrategySnapshot[]>>({});
   const [positions, setPositions] = useState<AccountPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
@@ -716,7 +716,7 @@ export function Dashboard({
 
     if (!confirmed) return;
 
-    setLiquidating(true);
+    setLiquidatingStrategies(prev => new Set(prev).add(strategy.id));
 
     try {
       const response = await axios.post(
@@ -746,7 +746,11 @@ export function Dashboard({
         `Failed to liquidate strategy:\n${err?.response?.data?.error || err?.message || "Unknown error"}`
       );
     } finally {
-      setLiquidating(false);
+      setLiquidatingStrategies(prev => {
+        const next = new Set(prev);
+        next.delete(strategy.id);
+        return next;
+      });
     }
   };
 
@@ -988,7 +992,7 @@ export function Dashboard({
                                     e.stopPropagation();
                                     handleLiquidate(strategy);
                                   }}
-                                  disabled={liquidating}
+                                  disabled={liquidatingStrategies.has(strategy.id)}
                                   style={{
                                     background: "#b00020",
                                     color: "#fff",
@@ -997,11 +1001,11 @@ export function Dashboard({
                                     padding: "6px 10px",
                                     fontSize: 11,
                                     fontWeight: 600,
-                                    cursor: liquidating ? "not-allowed" : "pointer",
-                                    opacity: liquidating ? 0.6 : 1,
+                                    cursor: liquidatingStrategies.has(strategy.id) ? "not-allowed" : "pointer",
+                                    opacity: liquidatingStrategies.has(strategy.id) ? 0.6 : 1,
                                   }}
                                 >
-                                  {liquidating ? "Liquidating..." : "Liquidate"}
+                                  {liquidatingStrategies.has(strategy.id) ? "Liquidating..." : "Liquidate"}
                                 </button>
                               </div>
                             </td>
