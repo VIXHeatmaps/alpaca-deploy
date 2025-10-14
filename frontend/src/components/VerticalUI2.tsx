@@ -12,6 +12,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Brush,
 } from "recharts";
 import { validateStrategy, type ValidationError } from "../utils/validation";
 import { VariablesTab } from "./VariablesTab";
@@ -343,14 +344,20 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     !tickerMetadata.has(normalizedBenchmark);
 
   // Memoize chart data to prevent constant re-renders
+  // Convert to percentage returns (starting at 0%)
   const chartData = useMemo(() => {
     if (!backtestResults?.dates || !backtestResults?.equityCurve) {
       return [];
     }
+    const initialStrategyValue = backtestResults.equityCurve[0] || 1;
+    const initialBenchmarkValue = backtestResults.benchmark?.equityCurve?.[0] || 1;
+
     return backtestResults.dates.map((date: string, i: number) => ({
       date,
-      strategy: backtestResults.equityCurve[i],
-      benchmark: backtestResults.benchmark?.equityCurve?.[i],
+      strategy: ((backtestResults.equityCurve[i] / initialStrategyValue - 1) * 100),
+      benchmark: backtestResults.benchmark?.equityCurve?.[i]
+        ? ((backtestResults.benchmark.equityCurve[i] / initialBenchmarkValue - 1) * 100)
+        : undefined,
     }));
   }, [backtestResults?.dates, backtestResults?.equityCurve, backtestResults?.benchmark?.equityCurve]);
 
@@ -1667,12 +1674,12 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                     <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Equity Curve</div>
                     <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '16px' }}>
                       {backtestResults.dates.length} days |
-                      Final Value: ${backtestResults.equityCurve[backtestResults.equityCurve.length - 1]?.toFixed(2) || '1.00'}
+                      Final Return: {chartData[chartData.length - 1]?.strategy?.toFixed(2) || '0.00'}%
                     </div>
                     <ResponsiveContainer width="100%" height={280} debounce={300}>
                       <LineChart
                         data={chartData}
-                        margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+                        margin={{ top: 8, right: 16, bottom: 0, left: 8 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis
@@ -1686,7 +1693,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                         />
                         <YAxis
                           tick={{ fontSize: 11 }}
-                          tickFormatter={(val) => `$${val.toFixed(2)}`}
+                          tickFormatter={(val) => `${val.toFixed(0)}%`}
                           domain={['auto', 'auto']}
                         />
                         <Tooltip
@@ -1696,7 +1703,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                             borderRadius: '6px',
                             fontSize: '12px',
                           }}
-                          formatter={(value: any) => `$${Number(value).toFixed(4)}`}
+                          formatter={(value: any) => `${Number(value).toFixed(2)}%`}
                           labelFormatter={(label) => `Date: ${label}`}
                         />
                         <Legend
@@ -1723,6 +1730,27 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                             isAnimationActive={false}
                           />
                         )}
+                        <Brush
+                          dataKey="date"
+                          height={60}
+                          stroke="#3b82f6"
+                          fill="#eff6ff"
+                          tickFormatter={(val) => {
+                            const d = new Date(val);
+                            return `${d.getFullYear()}`;
+                          }}
+                        >
+                          <LineChart>
+                            <Line
+                              type="monotone"
+                              dataKey="strategy"
+                              stroke="#3b82f6"
+                              strokeWidth={1}
+                              dot={false}
+                              isAnimationActive={false}
+                            />
+                          </LineChart>
+                        </Brush>
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
