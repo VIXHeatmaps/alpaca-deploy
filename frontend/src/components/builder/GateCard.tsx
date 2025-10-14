@@ -768,9 +768,6 @@ export function SortCard({
 
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
 
-  const indicatorLabel = (element.indicator || "").replace(/_/g, " ");
-  const indicatorSelectWidth = `${Math.max(indicatorLabel.length + 3, 10)}ch`;
-
   const indicatorHasError = hasFieldError(element.id, "indicator", validationErrors);
   const countHasError = hasFieldError(element.id, "count", validationErrors);
   const childrenHaveError = hasFieldError(element.id, "children", validationErrors);
@@ -967,154 +964,152 @@ export function SortCard({
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            gap: "6px",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              flexWrap: "wrap",
-            }}
+          <motion.div
+            onClick={() => setIsOpen(!isOpen)}
+            animate={{ rotate: isOpen ? 90 : 0 }}
+            transition={{ duration: 0.15 }}
+            className="text-gray-600 flex-shrink-0 cursor-pointer"
+            style={{ fontSize: "12px" }}
           >
-            <motion.div
-              onClick={() => setIsOpen(!isOpen)}
-              animate={{ rotate: isOpen ? 90 : 0 }}
-              transition={{ duration: 0.15 }}
-              className="text-gray-600 flex-shrink-0 cursor-pointer"
-              style={{ fontSize: "12px" }}
-            >
-              ▶
-            </motion.div>
+            ▶
+          </motion.div>
 
-            <input
-              type="text"
-              value={element.name}
-              onChange={(e) => onUpdate({ ...element, name: e.target.value })}
-              style={{
-                border: "1px solid #d1d5db",
-                outline: "none",
-                padding: "4px 8px",
-                background: "#fff",
-                fontSize: "13px",
-                fontWeight: 500,
-                color: element.name ? "#111827" : "#9ca3af",
-                minWidth: "80px",
-                borderRadius: "4px",
-              }}
-              className="focus:ring-2 focus:ring-blue-500"
-              placeholder="Sort name"
-            />
+          <input
+            type="text"
+            value={element.name}
+            onChange={(e) => onUpdate({ ...element, name: e.target.value })}
+            style={{
+              border: "1px solid #d1d5db",
+              outline: "none",
+              padding: "4px 8px",
+              background: "#fff",
+              fontSize: "13px",
+              fontWeight: 500,
+              color: element.name ? "#111827" : "#9ca3af",
+              width: `${Math.max((element.name?.length || 0) * 8 + 30, 80)}px`,
+              borderRadius: "4px",
+              flexShrink: 0,
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+            placeholder="Sort name"
+          />
 
-            <span style={{ fontSize: "13px", color: "#6b7280" }}>Select</span>
+          <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>Select</span>
 
-            <select
-              value={element.direction}
-              onChange={(e) => onUpdate({ ...element, direction: e.target.value as "top" | "bottom" })}
-              style={{
-                border: "1px solid #d1d5db",
-                outline: "none",
-                padding: "4px 8px",
-                background: "#fff",
-                fontSize: "13px",
-                color: "#111827",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-              className="focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="top">Top</option>
-              <option value="bottom">Bottom</option>
-            </select>
+          <select
+            value={element.direction}
+            onChange={(e) => onUpdate({ ...element, direction: e.target.value as "top" | "bottom" })}
+            style={{
+              border: "1px solid #d1d5db",
+              outline: "none",
+              padding: "4px 8px",
+              background: "#fff",
+              fontSize: "13px",
+              color: "#111827",
+              borderRadius: "4px",
+              cursor: "pointer",
+              width: "auto",
+              flexShrink: 0,
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="top">Top</option>
+            <option value="bottom">Bottom</option>
+          </select>
 
-            <input
-              type="number"
-              value={element.count}
-              onChange={(e) => onUpdate({ ...element, count: Number(e.target.value) })}
-              style={{
-                border: countHasError ? "2px solid #ef4444" : "1px solid #d1d5db",
-                outline: "none",
-                padding: "4px 8px",
-                background: countHasError ? "#fee2e2" : "#fff",
-                fontSize: "13px",
-                color: "#111827",
-                width: "64px",
-                borderRadius: "4px",
-              }}
-              className="focus:ring-2 focus:ring-blue-500"
-              min={1}
-            />
+          <input
+            type="number"
+            value={element.count}
+            onChange={(e) => onUpdate({ ...element, count: Number(e.target.value) })}
+            style={{
+              border: countHasError ? "2px solid #ef4444" : "1px solid #d1d5db",
+              outline: "none",
+              padding: "4px 8px",
+              background: countHasError ? "#fee2e2" : "#fff",
+              fontSize: "13px",
+              color: "#111827",
+              width: "50px",
+              borderRadius: "4px",
+              flexShrink: 0,
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+            min={1}
+          />
 
-            <span style={{ fontSize: "13px", color: "#6b7280" }}>by</span>
+          <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>by</span>
 
-            <select
-              value={element.indicator}
-              onChange={(e) => handleIndicatorChange(e.target.value as IndicatorName)}
-              style={{
-                border: indicatorHasError ? "2px solid #ef4444" : "1px solid #d1d5db",
-                outline: "none",
-                padding: "4px 8px",
-                background: indicatorHasError ? "#fee2e2" : "#fff",
-                fontSize: "13px",
-                color: "#111827",
-                borderRadius: "4px",
-                cursor: "pointer",
-                width: indicatorSelectWidth,
-              }}
-              className="focus:ring-2 focus:ring-blue-500"
-            >
-              {indicatorOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
+          <select
+            value={element.indicator}
+            onChange={(e) => handleIndicatorChange(e.target.value as IndicatorName)}
+            style={{
+              border: indicatorHasError ? "2px solid #ef4444" : "1px solid #d1d5db",
+              outline: "none",
+              padding: "4px 8px",
+              background: indicatorHasError ? "#fee2e2" : "#fff",
+              fontSize: "13px",
+              color: "#111827",
+              borderRadius: "4px",
+              cursor: "pointer",
+              minWidth: "120px",
+              width: "auto",
+              flexShrink: 0,
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+          >
+            {indicatorOptions.map((option) => (
+              <option key={option} value={option}>
+                {option.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
 
-            <div style={{ flexGrow: 1 }} />
+          <div style={{ flexGrow: 1 }} />
 
-            <div style={{ display: "flex", gap: "4px" }}>
-              {onCopy && (
-                <button
-                  onClick={onCopy}
-                  style={{
-                    padding: "4px 8px",
-                    fontSize: "12px",
-                    color: "#3b82f6",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    borderRadius: "4px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                  title="Copy"
-                >
-                  <Copy size={14} />
-                </button>
-              )}
+          <div style={{ display: "flex", gap: "4px" }}>
+            {onCopy && (
               <button
-                onClick={onDelete}
+                onClick={onCopy}
                 style={{
                   padding: "4px 8px",
                   fontSize: "12px",
-                  color: "#dc2626",
+                  color: "#3b82f6",
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
                   borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#fee2e2")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#eff6ff")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                title="Delete"
+                title="Copy"
               >
-                ✕
+                <Copy size={14} />
               </button>
-            </div>
+            )}
+            <button
+              onClick={onDelete}
+              style={{
+                padding: "4px 8px",
+                fontSize: "12px",
+                color: "#dc2626",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                borderRadius: "4px",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#fee2e2")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              title="Delete"
+            >
+              ✕
+            </button>
           </div>
 
           <IndicatorParams
