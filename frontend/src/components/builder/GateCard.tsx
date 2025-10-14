@@ -1412,7 +1412,10 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
 
   const handleSaveVariable = async (fieldValue: string, values: string[], type: VarType) => {
     try {
-      const varName = fieldValue.startsWith("$") ? fieldValue.slice(1) : fieldValue;
+      // Normalize variable name: remove $ prefix and lowercase
+      const varName = fieldValue.startsWith("$")
+        ? fieldValue.slice(1).toLowerCase()
+        : fieldValue.toLowerCase();
       await variablesApi.createVariableList({
         name: varName,
         type,
@@ -2370,7 +2373,10 @@ function ConditionRow({
 
   const handleSaveVariable = async (fieldValue: string, values: string[], type: VarType) => {
     try {
-      const varName = fieldValue.startsWith("$") ? fieldValue.slice(1) : fieldValue;
+      // Normalize variable name: remove $ prefix and lowercase
+      const varName = fieldValue.startsWith("$")
+        ? fieldValue.slice(1).toLowerCase()
+        : fieldValue.toLowerCase();
       await variablesApi.createVariableList({
         name: varName,
         type,

@@ -165,8 +165,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   const hasVariables = strategyVariables.length > 0;
 
   // Load defined variables and create lookup set
+  // Normalize to lowercase to match hasUndefinedVariableInField behavior
   const definedVariables = useMemo(() => {
-    return new Set(variableLists.map(v => v.name));
+    return new Set(variableLists.map(v => v.name.toLowerCase()));
   }, [variableLists]);
 
   // Check for undefined variables

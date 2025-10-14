@@ -69,10 +69,10 @@ export function TickerCard({
 
   const handleSaveVariable = async (values: string[], type: VarType) => {
     try {
-      // Get variable name without $ prefix
+      // Get variable name without $ prefix and normalize to lowercase
       const varName = element.ticker.startsWith("$")
-        ? element.ticker.slice(1)
-        : element.ticker;
+        ? element.ticker.slice(1).toLowerCase()
+        : element.ticker.toLowerCase();
 
       await variablesApi.createVariableList({
         name: varName,
