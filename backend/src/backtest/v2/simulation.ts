@@ -5,7 +5,12 @@
  * No API calls during simulation - all data is in memory.
  */
 
-import { paramsToPeriodString } from '../../utils/indicatorKeys';
+import {
+  buildIndicatorLookupMap,
+  collectIndicatorValuesForDate,
+  precomputeSortIndicators,
+} from '../../execution/sortRuntime';
+import type { Element as StrategyElement } from '../../execution';
 
 interface Bar {
   t: string;
@@ -36,6 +41,7 @@ interface Position {
 interface ExecutionResult {
   positions: Position[];
   gateEvaluations: Array<{ gateName: string; conditionMet: boolean }>;
+  errors: string[];
 }
 
 interface SimulationResult {
@@ -69,55 +75,6 @@ interface SimulationResult {
  * Build a lookup map of ticker:indicator -> period from strategy elements
  * This extracts the period values that conditions expect (e.g., "20" for single-param or "12-26-9" for MACD)
  * Now supports both old period field and new params object
- */
-function buildIndicatorLookupMap(elements: any[]): Map<string, string> {
-  const map = new Map<string, string>();
-
-  // Note: paramsToPeriodString is imported from ../utils/indicatorKeys
-
-  function traverse(els: any[]): void {
-    for (const el of els) {
-      if (el.type === 'gate' && el.conditions && Array.isArray(el.conditions)) {
-        for (const cond of el.conditions) {
-          if (cond.ticker && cond.indicator) {
-            const key = `${cond.ticker.toUpperCase()}:${cond.indicator.toUpperCase()}`;
-            // Always use params as single source of truth (ignore period field)
-            const periodStr = paramsToPeriodString(cond.indicator, cond.params);
-            map.set(key, periodStr);
-          }
-          if (cond.compareTo === 'indicator' && cond.rightTicker && cond.rightIndicator) {
-            const key = `${cond.rightTicker.toUpperCase()}:${cond.rightIndicator.toUpperCase()}`;
-            // Always use rightParams as single source of truth (ignore rightPeriod field)
-            const periodStr = paramsToPeriodString(cond.rightIndicator, cond.rightParams);
-            map.set(key, periodStr);
-          }
-        }
-      }
-      if (el.type === 'scale' && el.config) {
-        const cfg = el.config;
-        if (cfg.ticker && cfg.indicator) {
-          const key = `${cfg.ticker.toUpperCase()}:${cfg.indicator.toUpperCase()}`;
-          const periodStr = paramsToPeriodString(cfg.indicator, cfg.params) || cfg.period || '';
-          map.set(key, periodStr);
-        }
-      }
-      if (el.children) traverse(el.children);
-      if (el.thenChildren) traverse(el.thenChildren);
-      if (el.elseChildren) traverse(el.elseChildren);
-      if (el.fromChildren) traverse(el.fromChildren);
-      if (el.toChildren) traverse(el.toChildren);
-    }
-  }
-
-  traverse(elements);
-  return map;
-}
-
-/**
- * Run backtest simulation with pre-fetched data
- *
- * Decision #2: Benchmark calculation happens in this loop (Phase 5 removed)
- * Decision #6: Starting capital = $100,000
  */
 export async function runSimulation(
   elements: any[],
@@ -181,77 +138,35 @@ export async function runSimulation(
   console.log(`[SIMULATION] Initial date: ${dateGrid[0]}`);
   console.log(`[SIMULATION] SPY initial price: $${spyInitialPrice.toFixed(2)}`);
 
+  await precomputeSortIndicators({
+    elements: elements as StrategyElement[],
+    priceData,
+    indicatorData,
+    dateGrid,
+    executeStrategy,
+    buildIndicatorMap,
+    debug,
+  });
+
   // Day-by-day simulation (Decision #2: benchmark in same loop)
   let positionDays = 0; // Track days with positions
   for (let i = 1; i < dateGrid.length; i++) {
     const decisionDate = dateGrid[i - 1];
     const executionDate = dateGrid[i];
 
-    // Build indicator map for decision date
-    // Note: We need to create entries for ALL period values that conditions use
-    const indicatorValuesForDate: Array<any> = [];
     const indicatorLookup = buildIndicatorLookupMap(elements);
-
-    // DEBUG: Log what periods the lookup map has
     if (i === 1) {
       console.log('[SIM DEBUG] Indicator lookup map:');
       for (const [key, period] of indicatorLookup.entries()) {
         console.log(`  ${key} -> period: "${period}"`);
       }
     }
+    const { values: indicatorValuesForDate, missing: missingIndicators } = collectIndicatorValuesForDate(
+      indicatorLookup,
+      indicatorData,
+      decisionDate
+    );
 
-    const addedKeys = new Set<string>();
-    const missingIndicators: string[] = [];
-
-    for (const [cacheKey, values] of Object.entries(indicatorData)) {
-      const [ticker, indicator, periodStr] = cacheKey.split('|');
-      const value = values[decisionDate];
-
-      // Check if indicator value is missing/null for required indicators
-      if (value === undefined || value === null || !isFinite(value)) {
-        const lookupKey = `${ticker}:${indicator}`;
-        // Check if this indicator is actually used in conditions
-        const isUsed = indicatorLookup.has(lookupKey);
-        if (isUsed && i <= 10) {
-          // Only track missing indicators in first 10 days (after warmup should be available)
-          missingIndicators.push(`${ticker} ${indicator}(${periodStr}) on ${decisionDate}`);
-        }
-        continue; // Skip this indicator
-      }
-
-      if (value !== undefined) {
-        const lookupKey = `${ticker}:${indicator}`;
-
-        // Find ALL period strings that conditions use for this ticker:indicator
-        const periodsUsed: string[] = [];
-        for (const [k, v] of indicatorLookup.entries()) {
-          if (k === lookupKey) {
-            periodsUsed.push(v);
-          }
-        }
-
-        // If no conditions use this indicator, use cache period
-        if (periodsUsed.length === 0) {
-          periodsUsed.push(periodStr);
-        }
-
-        // Create indicator value entry for each unique period string
-        for (const period of periodsUsed) {
-          const entryKey = `${ticker}:${indicator}:${period}`;
-          if (!addedKeys.has(entryKey)) {
-            indicatorValuesForDate.push({
-              ticker,
-              indicator,
-              period, // Use exact period from condition (may be empty string)
-              value,
-            });
-            addedKeys.add(entryKey);
-          }
-        }
-      }
-    }
-
-    // If there are missing indicators early in the simulation, throw error
     if (missingIndicators.length > 0 && i === 1) {
       console.error('[SIMULATION] Missing indicator values on first day:', missingIndicators);
       throw new Error(`Missing indicator values: ${missingIndicators.join(', ')}. Check indicator parameters and warmup period.`);

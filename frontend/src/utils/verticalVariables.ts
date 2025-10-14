@@ -115,6 +115,23 @@ export const extractStringsFromElement = (element: any): string[] => {
         values.push(...extractStringsFromElement(child));
       }
     }
+  } else if (element.type === "sort") {
+    push(element.name);
+    push(element.weight);
+    push(element.direction);
+    push(element.count);
+    push(element.indicator);
+    push(element.period);
+    if (element.params) {
+      for (const paramValue of Object.values(element.params)) {
+        push(paramValue);
+      }
+    }
+    if (Array.isArray(element.children)) {
+      for (const child of element.children) {
+        values.push(...extractStringsFromElement(child));
+      }
+    }
   }
 
   return values;

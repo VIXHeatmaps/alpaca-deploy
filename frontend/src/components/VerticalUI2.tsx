@@ -39,12 +39,14 @@ import {
   WeightCard,
   ScaleCard,
   createDefaultScaleElement,
+  SortCard,
+  createDefaultSortElement,
 } from "./builder";
 import { useBuilderState } from "../hooks/useBuilderState";
 import { useBatchJobs } from "../hooks/useBatchJobs";
 import { useVariableLists } from "../hooks/useVariableLists";
 import { useTickerMetadata } from "../hooks/useTickerMetadata";
-import type { Element, GateElement, TickerElement, WeightElement, ScaleElement } from "../types/builder";
+import type { Element, GateElement, TickerElement, WeightElement, ScaleElement, SortElement } from "../types/builder";
 import {
   countGatesInTree,
   countScalesInTree,
@@ -230,6 +232,11 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         scale.toChildren?.forEach(walkElement);
         return;
       }
+
+      if (element.type === "sort") {
+        (element as SortElement).children?.forEach(walkElement);
+        return;
+      }
     };
 
     elements.forEach(walkElement);
@@ -347,7 +354,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
     }));
   }, [backtestResults?.dates, backtestResults?.equityCurve, backtestResults?.benchmark?.equityCurve]);
 
-  const handleSelectType = (type: "weight" | "gate" | "scale") => {
+  const handleSelectType = (type: "weight" | "gate" | "scale" | "sort") => {
     setShowDropdown(false);
     setTickerInput("");
 
@@ -395,6 +402,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       const newScale = createDefaultScaleElement(100, elements);
       newScale.name = `Scale${scaleCount + 1}`;
       saveToHistory([...elements, newScale]);
+    } else if (type === "sort") {
+      const newSort = createDefaultSortElement(100, elements);
+      saveToHistory([...elements, newSort]);
     }
   };
 
@@ -2189,6 +2199,22 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                   >
                     Scale
                   </button>
+                  <button
+                    onClick={() => handleSelectType("sort")}
+                    style={{
+                      fontSize: '13px',
+                      padding: '4px 8px',
+                      background: 'transparent',
+                      border: 'none',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      borderRadius: '4px',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    Sort
+                  </button>
                   {clipboard && (
                     <button
                       onClick={() => {
@@ -2288,6 +2314,25 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
+              />
+            );
+          } else if (el.type === "sort") {
+            return (
+              <SortCard
+                key={el.id}
+                element={el}
+                onUpdate={(updated) => updateElement(el.id, updated)}
+                onDelete={() => deleteElement(el.id)}
+                onCopy={() => setClipboard(el)}
+                clipboard={clipboard}
+                depth={0}
+                showWeight={elements.length > 1}
+                validationErrors={validationErrors}
+                definedVariables={definedVariables}
+                tickerMetadata={tickerMetadata}
+                metadataLoading={tickerMetadataLoading}
+                metadataError={tickerMetadataError}
+                allElements={elements}
               />
             );
           }

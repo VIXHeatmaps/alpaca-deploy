@@ -1,4 +1,4 @@
-import type { Element, GateElement } from "../types/builder";
+import type { Element, GateElement, SortElement } from "../types/builder";
 import type { ValidationError } from "./validation";
 
 export const countGatesInTree = (elements: Element[]): number => {
@@ -15,6 +15,9 @@ export const countGatesInTree = (elements: Element[]): number => {
     if (el.type === "scale") {
       count += countGatesInTree(el.fromChildren);
       count += countGatesInTree(el.toChildren);
+    }
+    if (el.type === "sort") {
+      count += countGatesInTree(el.children);
     }
   }
   return count;
@@ -34,6 +37,31 @@ export const countScalesInTree = (elements: Element[]): number => {
     }
     if (el.type === "weight") {
       count += countScalesInTree(el.children);
+    }
+    if (el.type === "sort") {
+      count += countScalesInTree(el.children);
+    }
+  }
+  return count;
+};
+
+export const countSortsInTree = (elements: Element[]): number => {
+  let count = 0;
+  for (const el of elements) {
+    if (el.type === "sort") {
+      count++;
+      count += countSortsInTree((el as SortElement).children);
+    }
+    if (el.type === "gate") {
+      count += countSortsInTree((el as GateElement).thenChildren);
+      count += countSortsInTree((el as GateElement).elseChildren);
+    }
+    if (el.type === "weight") {
+      count += countSortsInTree(el.children);
+    }
+    if (el.type === "scale") {
+      count += countSortsInTree(el.fromChildren);
+      count += countSortsInTree(el.toChildren);
     }
   }
   return count;
@@ -91,6 +119,14 @@ export const deepCloneElement = (element: Element): Element => {
       id: newId,
       fromChildren: element.fromChildren.map((child) => deepCloneElement(child)),
       toChildren: element.toChildren.map((child) => deepCloneElement(child)),
+    };
+  }
+
+  if (element.type === "sort") {
+    return {
+      ...element,
+      id: newId,
+      children: element.children.map((child) => deepCloneElement(child)),
     };
   }
 

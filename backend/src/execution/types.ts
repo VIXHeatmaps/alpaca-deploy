@@ -35,6 +35,19 @@ export interface ScaleElement {
   toChildren: Element[];
 }
 
+export interface SortElement {
+  id: string;
+  type: "sort";
+  name: string;
+  weight: number;
+  direction: "top" | "bottom";
+  count: number;
+  indicator: string;
+  params?: Record<string, string>;
+  period?: string;
+  children: Element[];
+}
+
 export interface GateCondition {
   ticker: string;
   indicator: string;
@@ -61,7 +74,7 @@ export interface GateElement {
   elseChildren: Element[];
 }
 
-export type Element = TickerElement | WeightElement | GateElement | ScaleElement;
+export type Element = TickerElement | WeightElement | GateElement | ScaleElement | SortElement;
 
 export interface Position {
   ticker: string;

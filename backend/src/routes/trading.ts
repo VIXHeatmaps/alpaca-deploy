@@ -1,10 +1,17 @@
 import { Router, Request, Response } from 'express';
-import axios from 'axios';
 
 import { requireAuth } from '../auth/jwt';
-import { FEED } from '../config/constants';
-import { todayYMD, toRFC3339End, toRFC3339Start } from '../utils/date';
 import { getMarketDateToday } from '../utils/marketTime';
+import { paramsToPeriodString } from '../utils/indicatorKeys';
+import { fetchPriceData } from '../backtest/v2/dataFetcher';
+import { collectRequiredIndicators } from '../execution';
+import { fetchIndicators } from '../backtest/v2/indicatorCache';
+import {
+  precomputeSortIndicators,
+  collectIndicatorValuesForDate,
+  buildIndicatorLookupMap,
+} from '../execution/sortRuntime';
+import type { Element as StrategyElement } from '../execution';
 import { getActiveStrategy, setActiveStrategy, clearActiveStrategy, hasActiveStrategy } from '../storage/activeStrategy';
 import {
   createActiveStrategy,
@@ -33,6 +40,166 @@ const normalizeHoldings = (raw: any[] | undefined | null) => {
     })
     .filter((holding) => holding.qty > 0);
 };
+
+const calculateWarmupDays = (indicators: Array<{ ticker: string; indicator: string; period: number }>): number => {
+  if (indicators.length === 0) return 0;
+
+  let maxWarmup = 0;
+
+  for (const ind of indicators) {
+    const indicator = ind.indicator.toUpperCase();
+    let warmup = 0;
+
+    if (indicator === 'MACD' || indicator === 'MACD_LINE' || indicator === 'MACD_SIGNAL' || indicator === 'MACD_HIST') {
+      warmup = 26 + 9;
+    } else if (indicator === 'PPO_LINE') {
+      warmup = 26;
+    } else if (indicator === 'PPO_SIGNAL' || indicator === 'PPO_HIST') {
+      warmup = 26 + 9;
+    } else if (indicator.startsWith('BBANDS')) {
+      warmup = 20 + 2;
+    } else if (indicator === 'STOCH_K') {
+      warmup = 14 + 3;
+    } else if (indicator === 'VOLATILITY') {
+      warmup = 20;
+    } else if (indicator === 'ATR' || indicator === 'ADX' || indicator === 'RSI' || indicator === 'MFI') {
+      warmup = ind.period || 14;
+    } else if (indicator === 'SMA' || indicator === 'EMA') {
+      warmup = ind.period || 14;
+    } else if (indicator.startsWith('AROON')) {
+      warmup = (ind.period || 14) * 2;
+    } else {
+      warmup = ind.period || 0;
+    }
+
+    if (warmup > maxWarmup) maxWarmup = warmup;
+  }
+
+  return maxWarmup + 10;
+};
+
+const collectSortIndicatorRequests = (elements: any[]): Array<{ indicator: string; period: number }> => {
+  const result: Array<{ indicator: string; period: number }> = [];
+
+  const traverse = (els: any[]) => {
+    for (const el of els || []) {
+      if (!el || typeof el !== 'object') continue;
+      if (el.type === 'sort') {
+        const indicator = (el.indicator || '').toUpperCase();
+        const periodKey = paramsToPeriodString(el.indicator, el.params) || el.period || '';
+        const firstPart = periodKey.split('-')[0];
+        const parsed = parseInt(firstPart, 10);
+        result.push({ indicator, period: Number.isFinite(parsed) ? parsed : 0 });
+        traverse(el.children || []);
+        continue;
+      }
+      if (el.children) traverse(el.children);
+      if (el.thenChildren) traverse(el.thenChildren);
+      if (el.elseChildren) traverse(el.elseChildren);
+      if (el.fromChildren) traverse(el.fromChildren);
+      if (el.toChildren) traverse(el.toChildren);
+    }
+  };
+
+  traverse(elements);
+  return result;
+};
+
+const subtractTradingDays = (dateStr: string, tradingDays: number): string => {
+  const date = new Date(dateStr);
+  const calendarDays = Math.ceil(tradingDays * 1.4);
+  date.setDate(date.getDate() - calendarDays);
+  return date.toISOString().slice(0, 10);
+};
+
+const collectTickersFromElements = (elements: any[]): Set<string> => {
+  const tickers = new Set<string>();
+
+  const traverse = (els: any[]) => {
+    for (const el of els || []) {
+      if (el.type === 'ticker' && el.ticker) {
+        tickers.add(String(el.ticker).toUpperCase());
+      }
+      if (el.children) traverse(el.children);
+      if (el.thenChildren) traverse(el.thenChildren);
+      if (el.elseChildren) traverse(el.elseChildren);
+      if (el.fromChildren) traverse(el.fromChildren);
+      if (el.toChildren) traverse(el.toChildren);
+    }
+  };
+
+  traverse(elements);
+  return tickers;
+};
+
+async function prepareStrategyEvaluation(
+  elements: StrategyElement[],
+  apiKey: string,
+  apiSecret: string,
+  debug = false
+) {
+  const tickers = collectTickersFromElements(elements);
+  tickers.add('SPY');
+
+  const requiredIndicators: any[] = collectRequiredIndicators(elements);
+  const sortIndicatorRequests = collectSortIndicatorRequests(elements).map((req) => ({
+    ticker: 'SORT',
+    indicator: req.indicator,
+    period: req.period,
+  }));
+
+  const warmupDays = calculateWarmupDays([...requiredIndicators, ...sortIndicatorRequests]);
+  const endDate = getMarketDateToday();
+  const startDate = subtractTradingDays(endDate, warmupDays + 10);
+
+  const priceData = await fetchPriceData(Array.from(tickers), startDate, endDate, apiKey, apiSecret);
+
+  const referenceTicker = tickers.has('SPY') ? 'SPY' : Array.from(tickers)[0];
+  const referenceData = priceData[referenceTicker];
+  if (!referenceData) {
+    throw new Error(`Unable to fetch price data for reference ticker ${referenceTicker}`);
+  }
+  const dateGrid = Object.keys(referenceData).sort();
+  if (dateGrid.length < 2) {
+    throw new Error('Insufficient price data to evaluate strategy');
+  }
+
+  const indicatorData = await fetchIndicators(requiredIndicators, priceData);
+  const { executeStrategy, buildIndicatorMap } = await import('../execution');
+
+  await precomputeSortIndicators({
+    elements,
+    priceData,
+    indicatorData,
+    dateGrid,
+    executeStrategy,
+    buildIndicatorMap,
+    debug,
+  });
+
+  const decisionIndex = dateGrid.length - 2;
+  const decisionDate = dateGrid[decisionIndex];
+  const executionDate = dateGrid[decisionIndex + 1];
+
+  const indicatorLookup = buildIndicatorLookupMap(elements);
+  const { values: indicatorValuesForDate } = collectIndicatorValuesForDate(
+    indicatorLookup,
+    indicatorData,
+    decisionDate
+  );
+
+  const indicatorMap = buildIndicatorMap(indicatorValuesForDate);
+  const evaluation = executeStrategy(elements, indicatorMap, debug);
+
+  return {
+    evaluation,
+    decisionDate,
+    executionDate,
+    priceData,
+    indicatorData,
+    dateGrid,
+  };
+}
 
 tradingRouter.get('/strategy', async (_req: Request, res: Response) => {
   try {
@@ -130,84 +297,8 @@ tradingRouter.post('/invest/preview', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing Alpaca API credentials' });
     }
 
-    const { executeStrategy, collectRequiredIndicators, buildIndicatorMap } = await import('../execution');
-
-    const requiredIndicators: any[] = collectRequiredIndicators(elements);
-
-    const indicatorValues: Array<any> = [];
-    for (const reqIndicator of requiredIndicators) {
-      try {
-        const barsUrl = `https://data.alpaca.markets/v2/stocks/${reqIndicator.ticker}/bars`;
-        const barsResponse = await axios.get(barsUrl, {
-          params: {
-            feed: FEED,
-            timeframe: '1Day',
-            start: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-            end: todayYMD(),
-            adjustment: 'split',
-            limit: 500,
-          },
-          headers: {
-            'APCA-API-KEY-ID': apiKey,
-            'APCA-API-SECRET-KEY': apiSecret,
-          },
-        });
-
-        const bars = barsResponse.data.bars || [];
-        if (!bars.length) continue;
-
-        let indicatorValue: number;
-        if (reqIndicator.indicator === 'PRICE' || reqIndicator.indicator === 'CURRENT_PRICE') {
-          indicatorValue = bars[bars.length - 1].c;
-        } else {
-          const closes = bars.map((b: any) => b.c);
-          const highs = bars.map((b: any) => b.h);
-          const lows = bars.map((b: any) => b.l);
-          const volumes = bars.map((b: any) => b.v);
-          const period = parseInt(reqIndicator.period) || 14;
-
-          const payload: any = {
-            indicator: reqIndicator.indicator,
-            params: (reqIndicator.params as Record<string, unknown>) || { period },
-          };
-
-          if (reqIndicator.indicator === 'RSI' || reqIndicator.indicator === 'SMA' || reqIndicator.indicator === 'EMA') {
-            payload.close = closes;
-            payload.prices = closes;
-          } else if (reqIndicator.indicator === 'ATR' || reqIndicator.indicator === 'ADX') {
-            payload.high = highs;
-            payload.low = lows;
-            payload.close = closes;
-          } else if (reqIndicator.indicator === 'MFI') {
-            payload.high = highs;
-            payload.low = lows;
-            payload.close = closes;
-            payload.volume = volumes;
-          } else {
-            payload.close = closes;
-            payload.prices = closes;
-          }
-
-          const indResponse = await axios.post(`${process.env.INDICATOR_SERVICE_URL || 'http://127.0.0.1:8001'}/indicator`, payload, {
-            timeout: 10000,
-          });
-          const values = indResponse.data.values || [];
-          indicatorValue = values[values.length - 1];
-        }
-
-        indicatorValues.push({
-          ticker: reqIndicator.ticker,
-          indicator: reqIndicator.indicator,
-          period: String(reqIndicator.period ?? ''),
-          value: indicatorValue,
-        });
-      } catch (err: any) {
-        console.error(`Error fetching indicator ${reqIndicator.ticker} ${reqIndicator.indicator}:`, err.message);
-      }
-    }
-
-    const indicatorData = buildIndicatorMap(indicatorValues);
-    const result = executeStrategy(elements, indicatorData);
+    const { evaluation } = await prepareStrategyEvaluation(elements as StrategyElement[], apiKey, apiSecret, false);
+    const result = evaluation;
 
     if (!result.positions || result.positions.length === 0) {
       return res.status(400).json({ error: 'Strategy did not produce any positions' });
@@ -260,91 +351,7 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
     console.log('\n=== STARTING LIVE DEPLOYMENT ===');
     console.log(`Name: ${name}, Amount: $${investAmount.toFixed(2)}`);
 
-    const { executeStrategy, collectRequiredIndicators, buildIndicatorMap } = await import('../execution');
-
-    const requiredIndicators: any[] = collectRequiredIndicators(elements);
-    console.log(`Found ${requiredIndicators.length} indicators required`);
-
-    console.log('Fetching latest indicator values...');
-
-    const indicatorPayloads: Array<{ indicator: any; payload: any }> = [];
-    const indicatorResponses: Array<any> = [];
-
-    for (const indicator of requiredIndicators) {
-      try {
-        const barsUrl = `https://data.alpaca.markets/v2/stocks/${indicator.ticker}/bars`;
-        const barsResponse = await axios.get(barsUrl, {
-          params: {
-            feed: FEED,
-            timeframe: '1Day',
-            start: toRFC3339Start('2000-01-01'),
-            end: toRFC3339End(todayYMD()),
-            adjustment: 'split',
-            limit: 500,
-          },
-          headers: {
-            'APCA-API-KEY-ID': apiKey,
-            'APCA-API-SECRET-KEY': apiSecret,
-          },
-          timeout: 10000,
-        });
-
-        const bars = barsResponse.data?.bars || [];
-
-        if (bars.length === 0) continue;
-
-        const payload: any = {
-          indicator: indicator.indicator,
-          params: indicator.params || {},
-          close: bars.map((bar: any) => bar.c),
-          high: bars.map((bar: any) => bar.h),
-          low: bars.map((bar: any) => bar.l),
-          volume: bars.map((bar: any) => bar.v),
-          prices: bars.map((bar: any) => bar.c),
-        };
-
-        indicatorPayloads.push({ indicator, payload });
-      } catch (err: any) {
-        console.error(`Failed to fetch bars for indicator ${indicator.ticker} ${indicator.indicator}:`, err.message);
-      }
-    }
-
-    for (const request of indicatorPayloads) {
-      try {
-        const response = await axios.post(`${process.env.INDICATOR_SERVICE_URL || 'http://127.0.0.1:8001'}/indicator`, request.payload, {
-          timeout: 10000,
-        });
-        indicatorResponses.push({
-          indicator: request.indicator,
-          response: response.data,
-        });
-      } catch (err: any) {
-        console.error(`Failed to calculate indicator ${request.indicator.ticker} ${request.indicator.indicator}:`, err.message);
-      }
-    }
-
-    console.log('Indicator values ready, executing strategy...');
-    const indicatorDataValues = indicatorResponses.flatMap((item: any) => {
-      const values = item.response?.values || [];
-      if (!values.length) return [];
-      const latest = values[values.length - 1];
-      if (latest === null || latest === undefined) return [];
-      const periodFromIndicator = item.indicator?.period ?? item.indicator?.params?.period ?? '';
-      const numericValue = Number(latest);
-      if (!Number.isFinite(numericValue)) return [];
-      return [
-        {
-          ticker: item.indicator.ticker,
-          indicator: item.indicator.indicator,
-          period: String(periodFromIndicator ?? ''),
-          value: numericValue,
-        },
-      ];
-    });
-
-    const indicatorData = buildIndicatorMap(indicatorDataValues as any);
-
-    const executionResult = executeStrategy(elements, indicatorData);
+    const { evaluation: executionResult } = await prepareStrategyEvaluation(elements as StrategyElement[], apiKey, apiSecret, false);
 
     if (!executionResult.positions || executionResult.positions.length === 0) {
       return res.status(400).json({ error: 'Strategy did not produce any positions to trade' });

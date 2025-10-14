@@ -10,8 +10,12 @@ import type {
   ExecutionResult,
   GateEvaluation,
   ScaleElement,
+  SortElement,
 } from "./types";
 import { buildIndicatorKey } from "../utils/indicatorKeys";
+import { buildSortTicker } from "./sortRuntime";
+
+const SORT_TIE_EPSILON = 1e-9;
 
 /**
  * Evaluates a gate condition against indicator data
@@ -79,6 +83,16 @@ function evaluateCondition(
     default:
       throw new Error(`Unknown operator: ${condition.operator}`);
   }
+}
+
+function describeElement(element: Element): string {
+  if (element.type === "ticker") {
+    return (element as TickerElement).ticker;
+  }
+  if ((element as any).name && typeof (element as any).name === "string") {
+    return `${element.type}:${(element as any).name}`;
+  }
+  return `${element.type}:${element.id}`;
 }
 
 /**
@@ -279,6 +293,144 @@ function executeElement(
         } else if (totalUnallocated > 0) {
           // No positions at all - pass all weight up
           unallocatedWeight = totalUnallocated;
+        }
+      }
+    } else if (element.type === "sort") {
+      const sort = element as SortElement;
+
+      if (!sort.children || sort.children.length === 0) {
+        executionPath.push(
+          `Sort: ${sort.name} (${sort.weight}%) - no branches, returning ${context.baseWeight.toFixed(2)}% unallocated`
+        );
+        unallocatedWeight = context.baseWeight;
+      } else {
+        executionPath.push(
+          `Sort: ${sort.name} (${sort.weight}%, direction: ${sort.direction.toUpperCase()}, count: ${sort.count})`
+        );
+
+        type SortCandidate = {
+          element: Element;
+          score: number;
+          indicatorKey: string;
+        };
+
+        const candidates: SortCandidate[] = sort.children.map((child) => {
+          const sortTicker = buildSortTicker(sort.id, child.id);
+          const indicatorKey = sort.params && Object.keys(sort.params).length > 0
+            ? buildIndicatorKey(sortTicker, sort.indicator, sort.params)
+            : `${sortTicker}:${sort.indicator}:${sort.period || ""}`;
+          const indicatorRecord = context.indicatorData.get(indicatorKey);
+          if (!indicatorRecord) {
+            throw new Error(
+              `Missing sort indicator data for key "${indicatorKey}" (sort=${sort.name}, child=${describeElement(child)})`
+            );
+          }
+          return {
+            element: child,
+            score: indicatorRecord.value,
+            indicatorKey,
+          };
+        });
+
+        const sortedCandidates = candidates
+          .slice()
+          .sort((a, b) => (sort.direction === "top" ? b.score - a.score : a.score - b.score));
+
+        const grouped: Array<{ score: number; members: SortCandidate[] }> = [];
+        for (const candidate of sortedCandidates) {
+          const lastGroup = grouped[grouped.length - 1];
+          if (lastGroup && Math.abs(candidate.score - lastGroup.score) <= SORT_TIE_EPSILON) {
+            lastGroup.members.push(candidate);
+          } else {
+            grouped.push({ score: candidate.score, members: [candidate] });
+          }
+        }
+
+        const selectedGroupCount = Math.max(1, Math.min(sort.count, grouped.length));
+        const selectedGroups = grouped.slice(0, selectedGroupCount);
+        const selectedCandidates = selectedGroups.flatMap((group) => group.members);
+
+        if (grouped.length > 0) {
+          const scoreSummary = grouped
+            .map((group, idx) => {
+              const names = group.members.map((candidate) => describeElement(candidate.element)).join(", ");
+              return `${idx + 1}) ${names} = ${group.score.toFixed(6)}`;
+            })
+            .join(" | ");
+          executionPath.push(`Sort scores: ${scoreSummary}`);
+        }
+
+        if (selectedCandidates.length === 0) {
+          executionPath.push(
+            `Sort: ${sort.name} produced no winners - returning ${context.baseWeight.toFixed(2)}% unallocated`
+          );
+          unallocatedWeight = context.baseWeight;
+        } else {
+          const winnerSummary = selectedCandidates
+            .map((candidate) => describeElement(candidate.element))
+            .join(", ");
+          executionPath.push(`Sort winners: ${winnerSummary}`);
+
+          const weightValues = selectedCandidates.map((candidate) => {
+            const raw = (candidate.element as any).weight;
+            return typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : 0;
+          });
+          const totalWeight = weightValues.reduce((sum, value) => sum + value, 0);
+          const useDefinedWeights = totalWeight > 0;
+
+          let totalUnallocatedChildren = 0;
+          let allocatedShare = 0;
+
+          selectedCandidates.forEach((candidate, index) => {
+            const share = useDefinedWeights
+              ? weightValues[index] / totalWeight
+              : 1 / selectedCandidates.length;
+
+            if (share <= 0) {
+              return;
+            }
+
+            allocatedShare += share;
+
+            const childContext: ExecutionContext = {
+              baseWeight: context.baseWeight * share,
+              indicatorData: context.indicatorData,
+            };
+
+            const childResult = executeElement(
+              candidate.element,
+              childContext,
+              executionPath,
+              errors,
+              gateEvaluations,
+              debug
+            );
+            positions.push(...childResult.positions);
+            gateEvaluations.push(...childResult.gateEvaluations);
+            totalUnallocatedChildren += childResult.unallocatedWeight;
+          });
+
+          const remainingShare = 1 - allocatedShare;
+          if (remainingShare > SORT_TIE_EPSILON) {
+            totalUnallocatedChildren += context.baseWeight * Math.max(0, remainingShare);
+          }
+
+          if (totalUnallocatedChildren > 0 && positions.length > 0) {
+            const totalAllocated = positions.reduce((sum, pos) => sum + pos.weight, 0);
+            if (totalAllocated > 0) {
+              const redistributionFactor = (totalAllocated + totalUnallocatedChildren) / totalAllocated;
+              for (const pos of positions) {
+                pos.weight *= redistributionFactor;
+              }
+              executionPath.push(
+                `Redistributed ${totalUnallocatedChildren.toFixed(2)}% from unallocated sort branches to winners`
+              );
+            } else {
+              unallocatedWeight = totalUnallocatedChildren;
+            }
+          } else if (totalUnallocatedChildren > 0) {
+            unallocatedWeight = totalUnallocatedChildren;
+          }
         }
       }
     } else if (element.type === "scale") {

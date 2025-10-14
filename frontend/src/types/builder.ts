@@ -42,6 +42,19 @@ export interface WeightElement {
   children: Element[];
 }
 
+export interface SortElement {
+  id: string;
+  type: "sort";
+  name: string;
+  weight: number;
+  direction: "top" | "bottom";
+  count: number;
+  indicator: IndicatorName;
+  params?: Record<string, string>;
+  period?: string;
+  children: Element[];
+}
+
 export interface ScaleConfig {
   ticker: string;
   indicator: IndicatorName;
@@ -61,7 +74,7 @@ export interface ScaleElement {
   toChildren: Element[];
 }
 
-export type Element = GateElement | TickerElement | WeightElement | ScaleElement;
+export type Element = GateElement | TickerElement | WeightElement | ScaleElement | SortElement;
 
 export interface StrategyVersion {
   major: number;

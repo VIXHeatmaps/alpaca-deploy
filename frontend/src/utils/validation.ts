@@ -25,7 +25,7 @@ export interface ValidationResult {
 
 interface Element {
   id: string;
-  type: "ticker" | "weight" | "gate" | "scale";
+  type: "ticker" | "weight" | "gate" | "scale" | "sort";
   weight: number;
   [key: string]: any;
 }
@@ -97,6 +97,8 @@ function hasTickerInTree(element: Element): boolean {
     const hasFrom = element.fromChildren?.some((child: Element) => hasTickerInTree(child)) || false;
     const hasTo = element.toChildren?.some((child: Element) => hasTickerInTree(child)) || false;
     return hasFrom || hasTo;
+  } else if (element.type === "sort") {
+    return element.children?.some((child: Element) => hasTickerInTree(child)) || false;
   }
   return false;
 }
@@ -136,6 +138,8 @@ function validateElement(
     validateGate(element, errors, warnings);
   } else if (element.type === "scale") {
     validateScale(element, errors, warnings);
+  } else if (element.type === "sort") {
+    validateSort(element, errors, warnings);
   }
 }
 
@@ -537,6 +541,56 @@ function validateScale(
     });
   } else {
     for (const child of scale.toChildren) {
+      validateElement(child, errors, warnings);
+    }
+  }
+}
+
+function validateSort(
+  sort: Element,
+  errors: ValidationError[],
+  warnings: ValidationError[]
+): void {
+  if (!sort.name || sort.name.trim() === "") {
+    warnings.push({
+      elementId: sort.id,
+      elementType: "sort",
+      field: "name",
+      message: "Sort element should have a name",
+      severity: "warning",
+    });
+  }
+
+  if (typeof sort.count !== "number" || sort.count <= 0) {
+    errors.push({
+      elementId: sort.id,
+      elementType: "sort",
+      field: "count",
+      message: "Sort count must be a positive number",
+      severity: "error",
+    });
+  }
+
+  if (!sort.indicator || typeof sort.indicator !== "string") {
+    errors.push({
+      elementId: sort.id,
+      elementType: "sort",
+      field: "indicator",
+      message: "Select an indicator for sort ranking",
+      severity: "error",
+    });
+  }
+
+  if (!sort.children || sort.children.length === 0) {
+    errors.push({
+      elementId: sort.id,
+      elementType: "sort",
+      field: "children",
+      message: "Sort element must contain at least one child branch",
+      severity: "error",
+    });
+  } else {
+    for (const child of sort.children) {
       validateElement(child, errors, warnings);
     }
   }

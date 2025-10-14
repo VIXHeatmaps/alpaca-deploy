@@ -11,6 +11,7 @@ import { fetchPriceData } from './dataFetcher';
 import { collectRequiredIndicators, fetchIndicators } from './indicatorCache';
 import { runSimulation } from './simulation';
 import { getMarketDateToday } from '../../utils/marketTime';
+import { paramsToPeriodString } from '../../utils/indicatorKeys';
 
 /**
  * Calculate warmup days needed for indicators
@@ -53,6 +54,33 @@ function calculateWarmupDays(indicators: Array<{ ticker: string; indicator: stri
 
   // Add extra buffer for safety (indicators need data to stabilize)
   return maxWarmup + 10;
+}
+
+function collectSortIndicatorRequests(elements: any[]): Array<{ indicator: string; period: number }> {
+  const result: Array<{ indicator: string; period: number }> = [];
+
+  const traverse = (els: any[]) => {
+    for (const el of els || []) {
+      if (!el || typeof el !== 'object') continue;
+      if (el.type === 'sort') {
+        const indicator = (el.indicator || '').toUpperCase();
+        const periodKey = paramsToPeriodString(el.indicator, el.params) || el.period || '';
+        const firstPart = periodKey.split('-')[0];
+        const parsed = parseInt(firstPart, 10);
+        result.push({ indicator, period: Number.isFinite(parsed) ? parsed : 0 });
+        traverse(el.children || []);
+        continue;
+      }
+      if (el.children) traverse(el.children);
+      if (el.thenChildren) traverse(el.thenChildren);
+      if (el.elseChildren) traverse(el.elseChildren);
+      if (el.fromChildren) traverse(el.fromChildren);
+      if (el.toChildren) traverse(el.toChildren);
+    }
+  };
+
+  traverse(elements);
+  return result;
 }
 
 /**
@@ -109,6 +137,8 @@ export async function runV2Backtest(req: Request, res: Response) {
         if (el.children) collectTickers(el.children);
         if (el.thenChildren) collectTickers(el.thenChildren);
         if (el.elseChildren) collectTickers(el.elseChildren);
+        if (el.fromChildren) collectTickers(el.fromChildren);
+        if (el.toChildren) collectTickers(el.toChildren);
       }
     }
     collectTickers(elements);
@@ -117,6 +147,11 @@ export async function runV2Backtest(req: Request, res: Response) {
     tickers.add('SPY');
 
     const requiredIndicators = collectRequiredIndicators(elements);
+    const sortIndicatorRequests = collectSortIndicatorRequests(elements).map((req) => ({
+      ticker: 'SORT',
+      indicator: req.indicator,
+      period: req.period,
+    }));
 
     // Add indicator tickers to price data fetch (they need price bars for indicator calculation)
     for (const ind of requiredIndicators) {
@@ -135,7 +170,7 @@ export async function runV2Backtest(req: Request, res: Response) {
     const reqEndDate = endDate || getMarketDateToday();
 
     // Calculate warmup period needed for indicators
-    const warmupDays = calculateWarmupDays(requiredIndicators);
+    const warmupDays = calculateWarmupDays([...requiredIndicators, ...sortIndicatorRequests]);
     console.log(`[V2] Warmup needed: ${warmupDays} trading days`);
 
     // Extend start date backwards for indicator warmup

@@ -14,6 +14,7 @@ export type {
   GateCondition,
   ScaleElement,
   ScaleConfig,
+  SortElement,
   Position,
   IndicatorValue,
   ExecutionContext,
