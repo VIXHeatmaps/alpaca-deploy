@@ -72,6 +72,7 @@ export interface WeightCardProps {
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
+  onVariableCreated?: () => void;
 }
 
 export const createDefaultGateElement = (allElements: Element[] = []): GateElement => {
@@ -346,7 +347,7 @@ function AddElementDropdown({
 
 // ========== WEIGHT CARD ==========
 
-export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError }: WeightCardProps & { initiallyOpen?: boolean }) {
+export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError, onVariableCreated }: WeightCardProps & { initiallyOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -612,6 +613,7 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
+                          onVariableCreated={onVariableCreated}
                         />
                       );
                     }
@@ -631,6 +633,7 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
+                          onVariableCreated={onVariableCreated}
                         />
                       );
                     }
@@ -672,6 +675,7 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
+                          onVariableCreated={onVariableCreated}
                         />
                       );
                     }
@@ -781,6 +785,7 @@ export interface SortCardProps {
   metadataLoading?: boolean;
   metadataError?: string | null;
   allElements?: Element[];
+  onVariableCreated?: () => void;
 }
 
 export function SortCard({
@@ -797,6 +802,7 @@ export function SortCard({
   metadataLoading,
   metadataError,
   allElements = [],
+  onVariableCreated,
 }: SortCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -1117,6 +1123,7 @@ export function SortCard({
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
+                          onVariableCreated={onVariableCreated}
                         />
                       );
                     }
@@ -1135,6 +1142,7 @@ export function SortCard({
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
+                          onVariableCreated={onVariableCreated}
                         />
                       );
                     }
@@ -1175,6 +1183,7 @@ export function SortCard({
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
+                          onVariableCreated={onVariableCreated}
                         />
                       );
                     }
@@ -1289,9 +1298,10 @@ export interface ScaleCardProps {
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
+  onVariableCreated?: () => void;
 }
 
-export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError }: ScaleCardProps) {
+export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError, onVariableCreated }: ScaleCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
@@ -1409,7 +1419,10 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
         values,
         is_shared: false,
       });
-      // Note: Parent component will refresh variables
+      // Refresh variables list to update UI
+      if (onVariableCreated) {
+        onVariableCreated();
+      }
     } catch (err) {
       console.error("Failed to create variable:", err);
     }
@@ -2290,6 +2303,7 @@ interface ConditionRowProps {
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
+  onVariableCreated?: () => void;
 }
 
 function ConditionRow({
@@ -2305,6 +2319,7 @@ function ConditionRow({
   tickerMetadata,
   metadataLoading,
   metadataError,
+  onVariableCreated,
 }: ConditionRowProps) {
   const [showTickerPopover, setShowTickerPopover] = useState(false);
   const [showThresholdPopover, setShowThresholdPopover] = useState(false);
@@ -2362,7 +2377,10 @@ function ConditionRow({
         values,
         is_shared: false,
       });
-      // Note: Parent component will refresh variables
+      // Refresh variables list to update UI
+      if (onVariableCreated) {
+        onVariableCreated();
+      }
     } catch (err) {
       console.error("Failed to create variable:", err);
     }
@@ -2695,9 +2713,10 @@ export interface GateCardProps {
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
+  onVariableCreated?: () => void;
 }
 
-export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError }: GateCardProps) {
+export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError, onVariableCreated }: GateCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showThenDropdown, setShowThenDropdown] = useState(false);
   const [showElseDropdown, setShowElseDropdown] = useState(false);
@@ -2971,6 +2990,7 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
             tickerMetadata={tickerMetadata}
             metadataLoading={metadataLoading}
             metadataError={metadataError}
+            onVariableCreated={onVariableCreated}
           />
 
           {/* Copy and Delete buttons - inline on same row */}

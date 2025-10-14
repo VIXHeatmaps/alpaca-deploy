@@ -2288,6 +2288,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
+                onVariableCreated={refreshVariableLists}
               />
             );
           } else if (el.type === "ticker") {
@@ -2304,6 +2305,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
+                onVariableCreated={refreshVariableLists}
               />
             );
           } else if (el.type === "weight") {
@@ -2323,6 +2325,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
+                onVariableCreated={refreshVariableLists}
               />
             );
           } else if (el.type === "scale") {
@@ -2342,6 +2345,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
+                onVariableCreated={refreshVariableLists}
               />
             );
           } else if (el.type === "sort") {
