@@ -47,7 +47,7 @@ export function TickerCard({
     !tickerMetadata.has(symbol);
   const showErrorBorder = hasValidationError || hasUndefinedVar || isUnknownTicker;
   const tickerTooltip = hasUndefinedVar
-    ? `Variable ${element.ticker} is not defined in Variables tab`
+    ? `Variable ${element.ticker} is not defined in Variables tab. Double-click to define.`
     : isUnknownTicker
       ? `${symbol} not found in Alpaca asset list`
       : resolvedName || undefined;

@@ -1324,7 +1324,7 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
     !tickerHasUndefinedVar &&
     !tickerMetadata?.has(configTickerSymbol);
   const configTickerTooltip = tickerHasUndefinedVar
-    ? `Variable ${config.ticker} is not defined in Variables tab`
+    ? `Variable ${config.ticker} is not defined in Variables tab. Double-click to define.`
     : configTickerUnknown
       ? `${configTickerSymbol} not found in Alpaca asset list`
       : (configTickerMetadata?.name?.trim() || undefined);
@@ -2250,7 +2250,7 @@ function ConditionRow({
     !tickerHasUndefinedVar &&
     !tickerMetadata?.has(conditionTickerSymbol);
   const conditionTickerTooltip = tickerHasUndefinedVar
-    ? `Variable ${condition.ticker} is not defined in Variables tab`
+    ? `Variable ${condition.ticker} is not defined in Variables tab. Double-click to define.`
     : conditionTickerUnknown
       ? `${conditionTickerSymbol} not found in Alpaca asset list`
       : (conditionTickerMetadata?.name?.trim() || undefined);
@@ -2262,7 +2262,7 @@ function ConditionRow({
     !rightTickerHasUndefinedVar &&
     !tickerMetadata?.has(rightTickerSymbol);
   const rightTickerTooltip = rightTickerHasUndefinedVar
-    ? `Variable ${condition.rightTicker} is not defined in Variables tab`
+    ? `Variable ${condition.rightTicker} is not defined in Variables tab. Double-click to define.`
     : rightTickerUnknown
       ? `${rightTickerSymbol} not found in Alpaca asset list`
       : (rightTickerMetadata?.name?.trim() || undefined);
@@ -2425,7 +2425,7 @@ function ConditionRow({
           }}
           className="focus:ring-2 focus:ring-blue-500"
           placeholder="Value"
-          title={thresholdHasUndefinedVar ? `Variable ${condition.threshold} is not defined in Variables tab` : undefined}
+          title={thresholdHasUndefinedVar ? `Variable ${condition.threshold} is not defined in Variables tab. Double-click to define.` : undefined}
         />
       ) : (
         <>
