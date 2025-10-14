@@ -1,8 +1,12 @@
 import { Copy } from "lucide-react";
+import { useState, useRef } from "react";
 import type { TickerElement } from "../../types/builder";
 import type { TickerMetadata } from "../../api/tickers";
 import type { ValidationError } from "../../utils/validation";
 import { hasFieldError, hasUndefinedVariableInField } from "../../utils/builder";
+import { VariablePopover } from "./VariablePopover";
+import * as variablesApi from "../../api/variables";
+import type { VarType } from "../../api/variables";
 
 export interface TickerCardProps {
   element: TickerElement;
@@ -17,6 +21,7 @@ export interface TickerCardProps {
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
+  onVariableCreated?: () => void;
 }
 
 export function TickerCard({
@@ -32,7 +37,11 @@ export function TickerCard({
   tickerMetadata,
   metadataLoading = false,
   metadataError = null,
+  onVariableCreated,
 }: TickerCardProps) {
+  const [showPopover, setShowPopover] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const hasUndefinedVar = hasUndefinedVariableInField(element.ticker, definedVariables);
   const hasValidationError = hasFieldError(element.id, "ticker", validationErrors);
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
@@ -51,6 +60,35 @@ export function TickerCard({
     : isUnknownTicker
       ? `${symbol} not found in Alpaca asset list`
       : resolvedName || undefined;
+
+  const handleDoubleClick = () => {
+    if (hasUndefinedVar) {
+      setShowPopover(true);
+    }
+  };
+
+  const handleSaveVariable = async (values: string[], type: VarType) => {
+    try {
+      // Get variable name without $ prefix
+      const varName = element.ticker.startsWith("$")
+        ? element.ticker.slice(1)
+        : element.ticker;
+
+      await variablesApi.createVariableList({
+        name: varName,
+        type,
+        values,
+        is_shared: false,
+      });
+
+      // Notify parent to refresh variables
+      if (onVariableCreated) {
+        onVariableCreated();
+      }
+    } catch (err) {
+      console.error("Failed to create variable:", err);
+    }
+  };
 
   return (
     <div
@@ -126,9 +164,11 @@ export function TickerCard({
       )}
 
       <input
+        ref={inputRef}
         type="text"
         value={element.ticker}
         onChange={(e) => onUpdate({ ...element, ticker: e.target.value.toUpperCase() })}
+        onDoubleClick={handleDoubleClick}
         style={{
           border: showErrorBorder ? "2px solid #ef4444" : "1px solid #d1d5db",
           outline: "none",
@@ -140,11 +180,21 @@ export function TickerCard({
           minWidth: "60px",
           flexShrink: 0,
           borderRadius: "4px",
+          cursor: hasUndefinedVar ? "pointer" : "text",
         }}
         className="focus:ring-2 focus:ring-blue-500"
         placeholder="TICKER"
         title={tickerTooltip}
       />
+
+      {showPopover && inputRef.current && (
+        <VariablePopover
+          variableName={element.ticker.startsWith("$") ? element.ticker.slice(1) : element.ticker}
+          anchorEl={inputRef.current}
+          onSave={handleSaveVariable}
+          onClose={() => setShowPopover(false)}
+        />
+      )}
 
       <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>
         {onCopy && (

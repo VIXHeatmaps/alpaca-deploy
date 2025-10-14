@@ -17,10 +17,13 @@
  * This ensures fields resize to fit content without truncation.
  */
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { motion, AnimatePresence } from "framer-motion";
 import { Copy } from "lucide-react";
+import { VariablePopover } from "./VariablePopover";
+import * as variablesApi from "../../api/variables";
+import type { VarType } from "../../api/variables";
 import type { IndicatorName } from "../../types/indicators";
 import {
   indicatorOptions,
@@ -1292,6 +1295,12 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const [isOpen, setIsOpen] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
+  const [showTickerPopover, setShowTickerPopover] = useState(false);
+  const [showRangeMinPopover, setShowRangeMinPopover] = useState(false);
+  const [showRangeMaxPopover, setShowRangeMaxPopover] = useState(false);
+  const tickerInputRef = useRef<HTMLInputElement>(null);
+  const rangeMinInputRef = useRef<HTMLInputElement>(null);
+  const rangeMaxInputRef = useRef<HTMLInputElement>(null);
 
   const config = element.config ?? {
     ticker: "",
@@ -1389,6 +1398,21 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
       ...element,
       toChildren: element.toChildren.filter((child) => child.id !== id),
     });
+  };
+
+  const handleSaveVariable = async (fieldValue: string, values: string[], type: VarType) => {
+    try {
+      const varName = fieldValue.startsWith("$") ? fieldValue.slice(1) : fieldValue;
+      await variablesApi.createVariableList({
+        name: varName,
+        type,
+        values,
+        is_shared: false,
+      });
+      // Note: Parent component will refresh variables
+    } catch (err) {
+      console.error("Failed to create variable:", err);
+    }
   };
 
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
@@ -1558,10 +1582,17 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
           <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>of</span>
 
           <input
+            ref={tickerInputRef}
             type="text"
             value={config.ticker}
             onChange={(e) => updateConfig({ ticker: e.target.value.toUpperCase() })}
             onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (tickerHasUndefinedVar) {
+                setShowTickerPopover(true);
+              }
+            }}
             style={{
               border: tickerHasVisualError ? "2px solid #ef4444" : "1px solid #d1d5db",
               outline: "none",
@@ -1573,20 +1604,37 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
               maxWidth: "300px",
               flexShrink: 0,
               borderRadius: "4px",
+              cursor: tickerHasUndefinedVar ? "pointer" : "text",
             }}
             className="focus:ring-2 focus:ring-blue-500"
             placeholder="Ticker"
             title={configTickerTooltip}
           />
 
+          {showTickerPopover && tickerInputRef.current && (
+            <VariablePopover
+              variableName={config.ticker.startsWith("$") ? config.ticker.slice(1) : config.ticker}
+              anchorEl={tickerInputRef.current}
+              onSave={(values, type) => handleSaveVariable(config.ticker, values, type)}
+              onClose={() => setShowTickerPopover(false)}
+            />
+          )}
+
           <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>from</span>
 
           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             <input
+              ref={rangeMinInputRef}
               type="text"
               value={config.rangeMin}
               onChange={(e) => updateConfig({ rangeMin: e.target.value })}
               onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (rangeMinHasUndefinedVar) {
+                  setShowRangeMinPopover(true);
+                }
+              }}
               style={{
                 border: (rangeMinHasError || rangeMinHasUndefinedVar) ? "2px solid #ef4444" : "1px solid #d1d5db",
                 outline: "none",
@@ -1596,22 +1644,39 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                 color: config.rangeMin ? "#111827" : "#9ca3af",
                 width: "80px",
                 borderRadius: "4px",
+                cursor: rangeMinHasUndefinedVar ? "pointer" : "text",
               }}
               className="focus:ring-2 focus:ring-blue-500"
               placeholder={unitSuffix ? `0${unitSuffix}` : "0"}
-              title={rangeMinHasUndefinedVar ? `Variable ${config.rangeMin} is not defined` : undefined}
+              title={rangeMinHasUndefinedVar ? `Variable ${config.rangeMin} is not defined. Double-click to define.` : undefined}
             />
             {unitSuffix && <span style={{ fontSize: "13px", color: "#6b7280" }}>{unitSuffix}</span>}
           </div>
+
+          {showRangeMinPopover && rangeMinInputRef.current && (
+            <VariablePopover
+              variableName={config.rangeMin.startsWith("$") ? config.rangeMin.slice(1) : config.rangeMin}
+              anchorEl={rangeMinInputRef.current}
+              onSave={(values, type) => handleSaveVariable(config.rangeMin, values, type)}
+              onClose={() => setShowRangeMinPopover(false)}
+            />
+          )}
 
           <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>to</span>
 
           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             <input
+              ref={rangeMaxInputRef}
               type="text"
               value={config.rangeMax}
               onChange={(e) => updateConfig({ rangeMax: e.target.value })}
               onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (rangeMaxHasUndefinedVar) {
+                  setShowRangeMaxPopover(true);
+                }
+              }}
               style={{
                 border: (rangeMaxHasError || rangeMaxHasUndefinedVar) ? "2px solid #ef4444" : "1px solid #d1d5db",
                 outline: "none",
@@ -1621,13 +1686,23 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                 color: config.rangeMax ? "#111827" : "#9ca3af",
                 width: "80px",
                 borderRadius: "4px",
+                cursor: rangeMaxHasUndefinedVar ? "pointer" : "text",
               }}
               className="focus:ring-2 focus:ring-blue-500"
               placeholder={unitSuffix ? `0${unitSuffix}` : "0"}
-              title={rangeMaxHasUndefinedVar ? `Variable ${config.rangeMax} is not defined` : undefined}
+              title={rangeMaxHasUndefinedVar ? `Variable ${config.rangeMax} is not defined. Double-click to define.` : undefined}
             />
             {unitSuffix && <span style={{ fontSize: "13px", color: "#6b7280" }}>{unitSuffix}</span>}
           </div>
+
+          {showRangeMaxPopover && rangeMaxInputRef.current && (
+            <VariablePopover
+              variableName={config.rangeMax.startsWith("$") ? config.rangeMax.slice(1) : config.rangeMax}
+              anchorEl={rangeMaxInputRef.current}
+              onSave={(values, type) => handleSaveVariable(config.rangeMax, values, type)}
+              onClose={() => setShowRangeMaxPopover(false)}
+            />
+          )}
 
           <div style={{ marginLeft: "auto", display: "flex", gap: "4px", flexShrink: 0 }}>
             {onCopy && (
@@ -2231,6 +2306,13 @@ function ConditionRow({
   metadataLoading,
   metadataError,
 }: ConditionRowProps) {
+  const [showTickerPopover, setShowTickerPopover] = useState(false);
+  const [showThresholdPopover, setShowThresholdPopover] = useState(false);
+  const [showRightTickerPopover, setShowRightTickerPopover] = useState(false);
+  const tickerInputRef = useRef<HTMLInputElement>(null);
+  const thresholdInputRef = useRef<HTMLInputElement>(null);
+  const rightTickerInputRef = useRef<HTMLInputElement>(null);
+
   // Check for undefined variables in this condition's fields
   const tickerHasUndefinedVar = hasUndefinedVariableInField(condition.ticker, definedVariables);
   const periodHasUndefinedVar = hasUndefinedVariableInField(condition.period, definedVariables);
@@ -2270,6 +2352,21 @@ function ConditionRow({
   const rightTickerHasFieldError = hasFieldError(elementId, `conditions.${conditionIndex}.rightTicker`, validationErrors);
   const leftTickerVisualError = leftTickerHasFieldError || tickerHasUndefinedVar || conditionTickerUnknown;
   const rightTickerVisualError = rightTickerHasFieldError || rightTickerHasUndefinedVar || rightTickerUnknown;
+
+  const handleSaveVariable = async (fieldValue: string, values: string[], type: VarType) => {
+    try {
+      const varName = fieldValue.startsWith("$") ? fieldValue.slice(1) : fieldValue;
+      await variablesApi.createVariableList({
+        name: varName,
+        type,
+        values,
+        is_shared: false,
+      });
+      // Note: Parent component will refresh variables
+    } catch (err) {
+      console.error("Failed to create variable:", err);
+    }
+  };
 
   return (
     <div style={{
@@ -2331,10 +2428,17 @@ function ConditionRow({
       <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
 
       <input
+        ref={tickerInputRef}
         type="text"
         value={condition.ticker}
         onChange={(e) => onUpdate({ ticker: e.target.value.toUpperCase() })}
         onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if (tickerHasUndefinedVar) {
+            setShowTickerPopover(true);
+          }
+        }}
         style={{
           border: leftTickerVisualError ? '2px solid #ef4444' : '1px solid #d1d5db',
           outline: 'none',
@@ -2346,11 +2450,21 @@ function ConditionRow({
           maxWidth: '300px',
           flexShrink: 0,
           borderRadius: '4px',
+          cursor: tickerHasUndefinedVar ? 'pointer' : 'text',
         }}
         className="focus:ring-2 focus:ring-blue-500"
         placeholder="Ticker"
         title={conditionTickerTooltip}
       />
+
+      {showTickerPopover && tickerInputRef.current && (
+        <VariablePopover
+          variableName={condition.ticker.startsWith("$") ? condition.ticker.slice(1) : condition.ticker}
+          anchorEl={tickerInputRef.current}
+          onSave={(values, type) => handleSaveVariable(condition.ticker, values, type)}
+          onClose={() => setShowTickerPopover(false)}
+        />
+      )}
 
       {/* Operator */}
       <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>is</span>
@@ -2406,27 +2520,46 @@ function ConditionRow({
 
       {/* Conditional right side based on compareTo */}
       {condition.compareTo === "threshold" ? (
-        <input
-          type="text"
-          value={condition.threshold || ""}
-          onChange={(e) => onUpdate({ threshold: e.target.value })}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            border: (hasFieldError(elementId, `conditions.${conditionIndex}.threshold`, validationErrors) || thresholdHasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
-            outline: 'none',
-            padding: '4px 8px',
-            background: (hasFieldError(elementId, `conditions.${conditionIndex}.threshold`, validationErrors) || thresholdHasUndefinedVar) ? '#fee2e2' : '#fff',
-            fontSize: '13px',
-            color: condition.threshold ? '#111827' : '#9ca3af',
-            width: `${Math.max((condition.threshold || 'Value').length * 9 + 20, 80)}px`,
-            maxWidth: '300px',
-            flexShrink: 0,
-            borderRadius: '4px',
-          }}
-          className="focus:ring-2 focus:ring-blue-500"
-          placeholder="Value"
-          title={thresholdHasUndefinedVar ? `Variable ${condition.threshold} is not defined in Variables tab. Double-click to define.` : undefined}
-        />
+        <>
+          <input
+            ref={thresholdInputRef}
+            type="text"
+            value={condition.threshold || ""}
+            onChange={(e) => onUpdate({ threshold: e.target.value })}
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (thresholdHasUndefinedVar) {
+                setShowThresholdPopover(true);
+              }
+            }}
+            style={{
+              border: (hasFieldError(elementId, `conditions.${conditionIndex}.threshold`, validationErrors) || thresholdHasUndefinedVar) ? '2px solid #ef4444' : '1px solid #d1d5db',
+              outline: 'none',
+              padding: '4px 8px',
+              background: (hasFieldError(elementId, `conditions.${conditionIndex}.threshold`, validationErrors) || thresholdHasUndefinedVar) ? '#fee2e2' : '#fff',
+              fontSize: '13px',
+              color: condition.threshold ? '#111827' : '#9ca3af',
+              width: `${Math.max((condition.threshold || 'Value').length * 9 + 20, 80)}px`,
+              maxWidth: '300px',
+              flexShrink: 0,
+              borderRadius: '4px',
+              cursor: thresholdHasUndefinedVar ? 'pointer' : 'text',
+            }}
+            className="focus:ring-2 focus:ring-blue-500"
+            placeholder="Value"
+            title={thresholdHasUndefinedVar ? `Variable ${condition.threshold} is not defined in Variables tab. Double-click to define.` : undefined}
+          />
+
+          {showThresholdPopover && thresholdInputRef.current && (
+            <VariablePopover
+              variableName={condition.threshold?.startsWith("$") ? condition.threshold.slice(1) : condition.threshold || ""}
+              anchorEl={thresholdInputRef.current}
+              onSave={(values, type) => handleSaveVariable(condition.threshold || "", values, type)}
+              onClose={() => setShowThresholdPopover(false)}
+            />
+          )}
+        </>
       ) : (
         <>
           <select
@@ -2477,10 +2610,17 @@ function ConditionRow({
           <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
 
           <input
+            ref={rightTickerInputRef}
             type="text"
             value={condition.rightTicker || ""}
             onChange={(e) => onUpdate({ rightTicker: e.target.value.toUpperCase() })}
             onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (rightTickerHasUndefinedVar) {
+                setShowRightTickerPopover(true);
+              }
+            }}
             style={{
               border: rightTickerVisualError ? '2px solid #ef4444' : '1px solid #d1d5db',
               outline: 'none',
@@ -2492,11 +2632,21 @@ function ConditionRow({
               maxWidth: '300px',
               flexShrink: 0,
               borderRadius: '4px',
+              cursor: rightTickerHasUndefinedVar ? 'pointer' : 'text',
         }}
         className="focus:ring-2 focus:ring-blue-500"
         placeholder="Ticker"
         title={rightTickerTooltip}
       />
+
+          {showRightTickerPopover && rightTickerInputRef.current && (
+            <VariablePopover
+              variableName={condition.rightTicker?.startsWith("$") ? condition.rightTicker.slice(1) : condition.rightTicker || ""}
+              anchorEl={rightTickerInputRef.current}
+              onSave={(values, type) => handleSaveVariable(condition.rightTicker || "", values, type)}
+              onClose={() => setShowRightTickerPopover(false)}
+            />
+          )}
         </>
       )}
 
