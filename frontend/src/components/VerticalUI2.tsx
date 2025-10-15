@@ -1670,10 +1670,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                     borderRadius: '6px',
                     marginBottom: '16px',
                   }}>
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '16px' }}>
-                      {backtestResults.dates.length}
-                    </div>
-                    <ResponsiveContainer width="100%" height={380} debounce={300}>
+                    <ResponsiveContainer width="100%" height={400} debounce={300}>
                       <LineChart
                         data={chartData}
                         margin={{ top: 8, right: 16, bottom: 0, left: 8 }}
