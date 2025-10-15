@@ -23,6 +23,52 @@ export function buildSortTicker(sortId: string, childId: string): string {
   return `SORT_${sortId}_${childId}`;
 }
 
+/**
+ * Compute an indicator from price data for a specific date
+ * Used when we need indicator values for tickers that don't have pre-computed Sort indicators
+ */
+async function computeIndicatorFromPriceData(
+  ticker: string,
+  indicator: string,
+  params: any,
+  period: string,
+  priceData: PriceData,
+  date: string,
+  indicatorServiceUrl: string
+): Promise<number | null> {
+  const tickerData = priceData[ticker];
+  if (!tickerData) return null;
+
+  // Get all dates up to and including the target date
+  const allDates = Object.keys(tickerData).sort().filter(d => d <= date);
+
+  // Extract period as number
+  const periodNum = parseInt(period, 10) || 14;
+
+  // Need enough historical data
+  if (allDates.length < periodNum) return null;
+
+  // Get the required price series
+  const closePrices = allDates.map(d => tickerData[d].c);
+
+  // Build payload for indicator service
+  const payload = buildSortIndicatorPayload(indicator, params || {}, closePrices);
+
+  try {
+    const response = await axios.post(`${indicatorServiceUrl}/indicator`, payload, {
+      timeout: 30000,
+    });
+
+    const values: Array<number | null> = response.data?.values || [];
+    // Return the last value (most recent)
+    const lastValue = values[values.length - 1];
+    return typeof lastValue === 'number' && Number.isFinite(lastValue) ? lastValue : null;
+  } catch (err) {
+    console.error(`[SORT] Error computing ${indicator} for ${ticker}:`, err);
+    return null;
+  }
+}
+
 function describeNode(element: any): string {
   if (!element || typeof element !== 'object') return 'unknown';
   if (element.type === 'ticker') {
@@ -183,7 +229,7 @@ function getPeriodKey(indicator: string, params?: Record<string, string>, fallba
   return periodStr || '0';
 }
 
-function simulateBranchEquity(
+async function simulateBranchEquity(
   sortName: string,
   childLabel: string,
   childElement: Element,
@@ -192,8 +238,9 @@ function simulateBranchEquity(
   indicatorData: IndicatorValues,
   executeStrategy: (elements: Element[], indicatorMap: Map<string, any>, debug?: boolean) => ExecutionResult,
   buildIndicatorMap: (values: Array<{ ticker: string; indicator: string; period: string; value: number }>) => Map<string, any>,
-  debug = false
-): number[] {
+  debug = false,
+  indicatorServiceUrl = INDICATOR_SERVICE_URL
+): Promise<number[]> {
   const branchElement = cloneElement(childElement);
   (branchElement as any).weight = 100;
   const branchElements = [branchElement];
@@ -225,19 +272,70 @@ function simulateBranchEquity(
     const decisionDate = validDateGrid[i - 1];
     const executionDate = validDateGrid[i];
 
+    // Collect indicators - try pre-computed first, then compute from price data for tickers
     const { values: indicatorValuesForDate, missing } = collectIndicatorValuesForDate(
       indicatorLookup,
       indicatorData,
       decisionDate
     );
 
+    // If indicators are missing, try computing them from price data (for ticker children)
+    const allIndicatorValues = [...indicatorValuesForDate];
+
     if (missing.length > 0) {
+      // Extract ticker and indicator info from missing entries
+      for (const missingEntry of missing) {
+        // Parse: "SORT_xxx_yyy INDICATOR(period) on date"
+        const match = missingEntry.match(/SORT_[^_]+_([^ ]+) ([A-Z_]+)\(([^)]+)\)/);
+        if (match) {
+          const childId = match[1];
+          const indicator = match[2];
+          const period = match[3];
+
+          // Find the child element
+          const child = (childElement as any).children?.find((c: any) => c.id === childId) ||
+                       (childElement as any).thenChildren?.find((c: any) => c.id === childId) ||
+                       (childElement as any).elseChildren?.find((c: any) => c.id === childId);
+
+          if (child && child.type === 'ticker') {
+            const ticker = child.ticker;
+            // Compute indicator from price data
+            const value = await computeIndicatorFromPriceData(
+              ticker,
+              indicator,
+              {},
+              period,
+              priceData,
+              decisionDate,
+              indicatorServiceUrl
+            );
+
+            if (value !== null) {
+              allIndicatorValues.push({ ticker, indicator, period, value });
+            }
+          }
+        }
+      }
+    }
+
+    // Check if we still have missing indicators after attempting to compute from price data
+    const stillMissing = missing.filter(m => {
+      const match = m.match(/SORT_[^_]+_([^ ]+)/);
+      if (match) {
+        const childId = match[1];
+        const child = (childElement as any).children?.find((c: any) => c.id === childId);
+        return !(child && child.type === 'ticker');
+      }
+      return true;
+    });
+
+    if (stillMissing.length > 0) {
       throw new Error(
-        `Sort "${sortName}" branch ${childLabel} missing indicator inputs on ${decisionDate}: ${missing.join(', ')}`
+        `Sort "${sortName}" branch ${childLabel} missing indicator inputs on ${decisionDate}: ${stillMissing.join(', ')}`
       );
     }
 
-    const indicatorMap = buildIndicatorMap(indicatorValuesForDate);
+    const indicatorMap = buildIndicatorMap(allIndicatorValues);
     const result = executeStrategy(branchElements, indicatorMap, debug);
 
     if (result.errors && result.errors.length > 0) {
@@ -393,7 +491,7 @@ export async function precomputeSortIndicators(options: {
 
     for (const child of sortNode.children) {
       const childLabel = describeNode(child);
-      const equitySeries = simulateBranchEquity(
+      const equitySeries = await simulateBranchEquity(
         sortNode.name,
         childLabel,
         child,
@@ -402,7 +500,8 @@ export async function precomputeSortIndicators(options: {
         indicatorData,
         executeStrategy,
         buildIndicatorMap,
-        debug
+        debug,
+        indicatorServiceUrl
       );
 
       const { valuesByDate, firstValidDate } = await computeSortIndicatorSeries(
