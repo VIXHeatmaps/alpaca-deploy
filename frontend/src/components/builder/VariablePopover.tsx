@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { VarType } from "../../api/variables";
 
 interface VariablePopoverProps {
@@ -54,6 +55,11 @@ export function VariablePopover({
 
       if (valuesList.length > 0) {
         await onSave(valuesList, "ticker");
+        // Force React to flush state updates before closing popover
+        // This ensures the parent component re-renders with fresh variable data
+        flushSync(() => {
+          // Trigger a micro-task to allow state propagation
+        });
       }
     }
     onClose();
