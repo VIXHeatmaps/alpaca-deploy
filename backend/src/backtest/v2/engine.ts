@@ -117,8 +117,9 @@ function calculateNestedSortWarmup(elements: any[]): number {
    * Traverse recursively and return the cumulative warmup at each level
    * Returns: warmup days needed for this subtree
    */
-  const traverse = (els: any[]): number => {
+  const traverse = (els: any[], depth = 0): number => {
     let maxWarmup = 0;
+    const indent = '  '.repeat(depth);
 
     for (const el of els || []) {
       if (!el || typeof el !== 'object') continue;
@@ -126,12 +127,15 @@ function calculateNestedSortWarmup(elements: any[]): number {
       if (el.type === 'sort') {
         // Get this Sort's indicator period
         const sortIndicatorPeriod = extractIndicatorPeriod(el.indicator, el.params, el.period);
+        console.log(`${indent}[WARMUP] Sort "${el.name || el.id}" needs ${sortIndicatorPeriod} days for ${el.indicator}`);
 
         // Recursively calculate warmup for children
-        const childWarmup = traverse(el.children || []);
+        const childWarmup = traverse(el.children || [], depth + 1);
+        console.log(`${indent}[WARMUP] Sort "${el.name || el.id}" children need ${childWarmup} days`);
 
         // THIS is the key: cumulative warmup = child warmup + this Sort's period
         const cumulativeWarmup = childWarmup + sortIndicatorPeriod;
+        console.log(`${indent}[WARMUP] Sort "${el.name || el.id}" total cumulative: ${cumulativeWarmup} days`);
 
         if (cumulativeWarmup > maxWarmup) {
           maxWarmup = cumulativeWarmup;
