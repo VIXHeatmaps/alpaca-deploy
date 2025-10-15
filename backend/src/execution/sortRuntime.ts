@@ -198,25 +198,28 @@ function simulateBranchEquity(
   (branchElement as any).weight = 100;
   const branchElements = [branchElement];
 
-  // CRITICAL: Filter dateGrid to only include dates where this branch can execute
-  // This accounts for nested warmup requirements
-  const validDateGrid = getValidDateGrid(branchElements, priceData, dateGrid);
+  // CRITICAL: Only filter dateGrid if this branch has its own nested elements
+  // If it's a leaf (ticker), use the parent's dateGrid as-is
+  let validDateGrid = dateGrid;
 
-  if (debug) {
-    console.log(`[SORT] Branch ${childLabel} valid date range: ${validDateGrid[0]} to ${validDateGrid[validDateGrid.length - 1]} (${validDateGrid.length} days, trimmed ${dateGrid.length - validDateGrid.length} days)`);
+  if (childElement.type !== 'ticker') {
+    // This branch has nested logic (Sort, Gate, etc), so calculate its warmup
+    validDateGrid = getValidDateGrid(branchElements, priceData, dateGrid);
+
+    if (debug) {
+      console.log(`[SORT] Branch ${childLabel} valid date range: ${validDateGrid[0]} to ${validDateGrid[validDateGrid.length - 1]} (${validDateGrid.length} days, trimmed ${dateGrid.length - validDateGrid.length} days)`);
+    }
+  } else {
+    // Leaf ticker - use parent's dateGrid directly (parent already handled warmup)
+    if (debug) {
+      console.log(`[SORT] Branch ${childLabel} (leaf ticker) using parent dateGrid: ${dateGrid[0]} to ${dateGrid[dateGrid.length - 1]} (${dateGrid.length} days)`);
+    }
   }
 
   const indicatorLookup = buildIndicatorLookupMap(branchElements);
 
   let equity = 1;
   const equitySeries: number[] = [equity];
-
-  // Pad equity series with initial value for skipped dates
-  // This ensures the equity series aligns with the original dateGrid
-  const skipDays = dateGrid.length - validDateGrid.length;
-  for (let i = 0; i < skipDays; i++) {
-    equitySeries.push(1); // Maintain equity at 1.0 during warmup period
-  }
 
   for (let i = 1; i < validDateGrid.length; i++) {
     const decisionDate = validDateGrid[i - 1];
