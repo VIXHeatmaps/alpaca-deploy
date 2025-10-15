@@ -299,6 +299,11 @@ async function simulateBranchEquity(
 
           if (child && child.type === 'ticker') {
             const ticker = child.ticker;
+
+            if (debug) {
+              console.log(`[SORT] Computing ${indicator}(${period}) for ticker ${ticker} on ${decisionDate}`);
+            }
+
             // Compute indicator from price data
             const value = await computeIndicatorFromPriceData(
               ticker,
@@ -311,7 +316,12 @@ async function simulateBranchEquity(
             );
 
             if (value !== null) {
+              if (debug) {
+                console.log(`[SORT] ✓ Computed ${indicator}(${period}) = ${value} for ${ticker}`);
+              }
               allIndicatorValues.push({ ticker, indicator, period, value });
+            } else {
+              console.error(`[SORT] ✗ Failed to compute ${indicator}(${period}) for ${ticker} on ${decisionDate}`);
             }
           }
         }
