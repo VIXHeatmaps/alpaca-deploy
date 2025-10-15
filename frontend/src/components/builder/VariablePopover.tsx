@@ -45,7 +45,7 @@ export function VariablePopover({
     return () => document.removeEventListener("mousedown", handleClickAway);
   }, [values, anchorEl]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (values.trim()) {
       const valuesList = values
         .split(/[\n,]/)
@@ -53,7 +53,7 @@ export function VariablePopover({
         .filter((v) => v.length > 0);
 
       if (valuesList.length > 0) {
-        onSave(valuesList, "ticker");
+        await onSave(valuesList, "ticker");
       }
     }
     onClose();

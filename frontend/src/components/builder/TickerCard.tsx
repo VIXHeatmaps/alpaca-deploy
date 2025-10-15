@@ -85,9 +85,9 @@ export function TickerCard({
         is_shared: false,
       });
 
-      // Notify parent to refresh variables
+      // Notify parent to refresh variables and wait for it to complete
       if (onVariableCreated) {
-        onVariableCreated();
+        await onVariableCreated();
       }
     } catch (err) {
       console.error("Failed to create variable:", err);
