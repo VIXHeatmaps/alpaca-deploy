@@ -397,7 +397,7 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
               borderRadius: '4px',
             }}
             className="focus:ring-2 focus:ring-blue-500"
-            placeholder="WEIGHT"
+            placeholder="Weight name"
           />
 
           <select
