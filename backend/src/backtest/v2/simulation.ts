@@ -118,7 +118,8 @@ export async function runSimulation(
     throw new Error('Insufficient trading days in date range');
   }
 
-  const sortStartDate = await precomputeSortIndicators({
+  // Precompute Sort indicators (warmup already handled by engine.ts)
+  await precomputeSortIndicators({
     elements: elements as StrategyElement[],
     priceData,
     indicatorData,
@@ -127,17 +128,6 @@ export async function runSimulation(
     buildIndicatorMap,
     debug,
   });
-
-  if (sortStartDate) {
-    const filtered = dateGrid.filter(d => d >= sortStartDate);
-    if (filtered.length < 2) {
-      throw new Error(`Insufficient trading days after sort warmup (${sortStartDate})`);
-    }
-    if (filtered.length !== dateGrid.length) {
-      console.log(`[SIMULATION] Adjusted start date to ${sortStartDate} (sort warmup)`);
-    }
-    dateGrid = filtered;
-  }
 
   // Initialize portfolio (Decision #6: $100,000 starting capital)
   const STARTING_CAPITAL = 100000;

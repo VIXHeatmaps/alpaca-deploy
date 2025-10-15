@@ -229,14 +229,74 @@ function findLatestTickerStartDate(priceData: Record<string, Record<string, any>
 }
 
 /**
- * Subtract trading days from a date (approximate - uses calendar days * 1.4)
+ * Add trading days to a date (approximate - uses calendar days * 1.4)
  */
-function subtractTradingDays(dateStr: string, tradingDays: number): string {
+function addTradingDays(dateStr: string, tradingDays: number): string {
   const date = new Date(dateStr);
   // Rough approximation: 1 trading day ≈ 1.4 calendar days (accounts for weekends)
   const calendarDays = Math.ceil(tradingDays * 1.4);
-  date.setDate(date.getDate() - calendarDays);
+  date.setDate(date.getDate() + calendarDays);
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Find which logic element (Sort, Gate, Scale) requires the most warmup
+ * Returns the name of the element for user notification
+ */
+function findWarmupCulprit(elements: any[]): string {
+  let maxWarmup = 0;
+  let culpritElement: string | null = null;
+
+  const checkElement = (el: any, warmup: number) => {
+    if (warmup > maxWarmup) {
+      maxWarmup = warmup;
+      culpritElement = el.name || el.id || el.type;
+    }
+  };
+
+  const traverse = (els: any[]) => {
+    for (const el of els || []) {
+      if (!el || typeof el !== 'object') continue;
+
+      if (el.type === 'sort') {
+        const periodKey = paramsToPeriodString(el.indicator, el.params) || el.period || '';
+        const parts = periodKey
+          .split('-')
+          .map((part: string) => parseInt(part, 10))
+          .filter((value: number) => Number.isFinite(value));
+        const period = parts.length ? Math.max(...parts) : 0;
+        checkElement(el, period);
+        traverse(el.children || []);
+      }
+
+      if (el.type === 'gate' && Array.isArray(el.conditions)) {
+        for (const cond of el.conditions) {
+          if (cond.indicator) {
+            const periodKey = paramsToPeriodString(cond.indicator, cond.params) || cond.period || '';
+            const parts = periodKey.split('-').map((p: string) => parseInt(p, 10)).filter((v: number) => Number.isFinite(v));
+            const period = parts.length ? Math.max(...parts) : 0;
+            checkElement(el, period);
+          }
+        }
+      }
+
+      if (el.type === 'scale' && el.config?.indicator) {
+        const periodKey = paramsToPeriodString(el.config.indicator, el.config.params) || el.config.period || '';
+        const parts = periodKey.split('-').map((p: string) => parseInt(p, 10)).filter((v: number) => Number.isFinite(v));
+        const period = parts.length ? Math.max(...parts) : 0;
+        checkElement(el, period);
+      }
+
+      // Traverse children
+      const childrenArrays = [el.children, el.thenChildren, el.elseChildren, el.fromChildren, el.toChildren];
+      for (const childArray of childrenArrays) {
+        if (childArray) traverse(childArray);
+      }
+    }
+  };
+
+  traverse(elements);
+  return culpritElement || 'unknown element';
 }
 
 /**
@@ -311,32 +371,20 @@ export async function runV2Backtest(req: Request, res: Response) {
     }
 
     // Handle 'max' startDate (means "as far back as possible")
-    const MAX_START = '2015-01-01'; // 10 years back (Alpaca doesn't have data before ~2015)
-    const reqStartDate = (startDate && startDate !== 'max') ? startDate : MAX_START;
+    const MAX_START = '2013-01-01'; // ~12 years back (Alpaca limit, fetch everything available)
+    const userRequestedStart = (startDate && startDate !== 'max') ? startDate : null;
     const reqEndDate = endDate || getMarketDateToday();
 
-    // Calculate warmup period needed for indicators
-    const baseIndicatorWarmup = calculateWarmupDays([...requiredIndicators, ...sortIndicatorRequests]);
+    // ALWAYS fetch from MAX_START to get all available data
+    // We'll calculate the effective start date AFTER seeing what data is actually available
+    console.log(`[V2] User requested start: ${userRequestedStart || 'max'}`);
+    console.log(`[V2] Fetching all available data from ${MAX_START} to ${reqEndDate}`);
 
-    // Calculate nested Sort warmup (cumulative)
-    const nestedSortWarmup = calculateNestedSortWarmup(elements);
-
-    // Use the maximum of the two warmup calculations
-    const warmupDays = Math.max(baseIndicatorWarmup, nestedSortWarmup);
-
-    console.log(`[V2] Base indicator warmup: ${baseIndicatorWarmup} days`);
-    console.log(`[V2] Nested Sort warmup: ${nestedSortWarmup} days`);
-    console.log(`[V2] Total warmup needed: ${warmupDays} trading days`);
-
-    // Extend start date backwards for indicator warmup
-    const dataStartDate = subtractTradingDays(reqStartDate, warmupDays);
-    console.log(`[V2] Fetching data from ${dataStartDate} (${warmupDays}d warmup) to ${reqEndDate}`);
-
-    // Phase 2: Fetch price data with caching (extended range for warmup)
+    // Phase 2: Fetch price data with caching (always fetch from MAX_START)
     console.log('\n[V2] === PHASE 2: PRICE DATA FETCHING ===');
     const priceData = await fetchPriceData(
       Array.from(tickers),
-      dataStartDate,
+      MAX_START,
       reqEndDate,
       apiKey,
       apiSecret
@@ -371,13 +419,65 @@ export async function runV2Backtest(req: Request, res: Response) {
       console.log(`[V2] First indicator (${firstKey}) date range: ${dates[0]} to ${dates[dates.length - 1]}`);
     }
 
-    // Phase 4: Run simulation with pre-fetched data
-    console.log('\n[V2] === PHASE 4: SIMULATION ===');
-    const latestTickerStart = findLatestTickerStartDate(priceData);
-    let effectiveStartDate = reqStartDate;
-    if (latestTickerStart && latestTickerStart > effectiveStartDate) {
-      console.log(`[V2] Adjusting start date to ${latestTickerStart} (latest ticker availability)`);
-      effectiveStartDate = latestTickerStart;
+    // Phase 4: Calculate effective start date based on actual data availability + warmup
+    console.log('\n[V2] === PHASE 4: CALCULATE EFFECTIVE START DATE ===');
+
+    // Find the latest ticker start date (most restrictive)
+    const tickerStarts: Record<string, string> = {};
+    let latestTickerStart: string | null = null;
+    let culpritTickers: string[] = [];
+
+    for (const [ticker, data] of Object.entries(priceData)) {
+      const dates = Object.keys(data).sort();
+      if (dates.length > 0) {
+        const firstDate = dates[0];
+        tickerStarts[ticker] = firstDate;
+        if (!latestTickerStart || firstDate > latestTickerStart) {
+          latestTickerStart = firstDate;
+          culpritTickers = [ticker];
+        } else if (firstDate === latestTickerStart) {
+          culpritTickers.push(ticker);
+        }
+      }
+    }
+
+    console.log(`[V2] Ticker data availability:`);
+    for (const [ticker, startDate] of Object.entries(tickerStarts)) {
+      console.log(`[V2]   ${ticker}: ${startDate}`);
+    }
+    console.log(`[V2] Latest ticker start: ${latestTickerStart} (${culpritTickers.join(', ')})`);
+
+    // Calculate warmup needed for nested elements
+    const nestedWarmup = calculateNestedSortWarmup(elements);
+    console.log(`[V2] Nested element warmup: ${nestedWarmup} days`);
+
+    // Calculate the effective start date: latest ticker start + warmup
+    const dataBasedStart = latestTickerStart || MAX_START;
+    const effectiveStartDate = addTradingDays(dataBasedStart, nestedWarmup);
+
+    console.log(`[V2] Calculated effective start: ${effectiveStartDate}`);
+    console.log(`[V2]   = ${dataBasedStart} (data start) + ${nestedWarmup} days (warmup)`);
+
+    // Determine if we need to notify user of adjustment
+    let adjustmentReason: string | null = null;
+    let adjustedStartDate: string | null = null;
+
+    if (userRequestedStart && effectiveStartDate > userRequestedStart) {
+      adjustedStartDate = effectiveStartDate;
+      // Determine the culprit
+      if (latestTickerStart && latestTickerStart > userRequestedStart) {
+        // Ticker availability is the issue
+        adjustmentReason = culpritTickers.join(', ');
+      } else {
+        // Warmup is the issue - find which element needs it
+        adjustmentReason = findWarmupCulprit(elements);
+      }
+      console.log(`[V2] ⚠️  Start date adjusted from ${userRequestedStart} to ${effectiveStartDate}`);
+      console.log(`[V2]     Reason: ${adjustmentReason}`);
+    } else if (!userRequestedStart) {
+      // User requested 'max', so use effective start
+      adjustedStartDate = effectiveStartDate;
+      console.log(`[V2] Using effective start date: ${effectiveStartDate} (user requested 'max')`);
     }
 
     const simulationResult = await runSimulation(
@@ -403,7 +503,7 @@ export async function runV2Backtest(req: Request, res: Response) {
     console.log(`[V2] Cache: ${stats.keyCount} keys, ${stats.memoryUsage}`);
 
     // Return real backtest results
-    return res.json({
+    const response: any = {
       dates: simulationResult.dates,
       equityCurve: simulationResult.equityCurve,
       dailyPositions: simulationResult.dailyPositions,
@@ -423,7 +523,7 @@ export async function runV2Backtest(req: Request, res: Response) {
         },
         phase2: {
           totalBars,
-          dateRange: { start: reqStartDate, end: reqEndDate },
+          dateRange: { start: effectiveStartDate, end: reqEndDate },
         },
         phase3: {
           totalIndicatorValues,
@@ -432,7 +532,18 @@ export async function runV2Backtest(req: Request, res: Response) {
           daysSimulated: simulationResult.dates.length,
         },
       },
-    });
+    };
+
+    // Add start date adjustment notification if needed
+    if (adjustedStartDate && adjustmentReason) {
+      response.startDateAdjustment = {
+        requestedStart: userRequestedStart,
+        adjustedStart: adjustedStartDate,
+        reason: adjustmentReason,
+      };
+    }
+
+    return res.json(response);
   } catch (err: any) {
     console.error('[V2] Error:', err);
     return res.status(500).json({
