@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import axios from 'axios';
 
 import { requireAuth } from '../auth/jwt';
 import { getMarketDateToday } from '../utils/marketTime';
@@ -894,6 +895,135 @@ tradingRouter.post('/strategy/:id/liquidate', requireAuth, async (req: Request, 
   } catch (err: any) {
     console.error('POST /api/strategy/:id/liquidate error:', err);
     return res.status(500).json({ error: err.message || 'Liquidation failed' });
+  }
+});
+
+tradingRouter.get('/debug/data', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    }
+
+    // 1. Get active_strategies from DB
+    const strategies = await getActiveStrategiesByUserId(userId);
+
+    const activeStrategiesData = strategies.map((s) => ({
+      id: s.id,
+      name: s.name,
+      user_id: s.user_id,
+      status: s.status,
+      mode: s.mode,
+      initial_capital: s.initial_capital,
+      current_capital: s.current_capital,
+      started_at: s.started_at,
+      last_rebalance_at: s.last_rebalance_at,
+      stopped_at: s.stopped_at,
+    }));
+
+    // 2. Get active_strategy_snapshots from DB
+    const { getSnapshotsByStrategyId } = await import('../db/activeStrategySnapshotsDb');
+    const allSnapshots = [];
+    for (const strategy of strategies) {
+      const snapshots = await getSnapshotsByStrategyId(strategy.id);
+      allSnapshots.push(...snapshots.map((s) => ({
+        id: s.id,
+        active_strategy_id: s.active_strategy_id,
+        snapshot_date: s.snapshot_date,
+        equity: s.equity,
+        holdings: JSON.stringify(s.holdings),
+        daily_return: s.daily_return,
+        cumulative_return: s.cumulative_return,
+        total_return: s.total_return,
+        rebalance_type: s.rebalance_type,
+        created_at: s.created_at,
+      })));
+    }
+
+    // 3. Get Alpaca positions (live) - fetch full data
+    const positionsResponse = await axios.get('https://paper-api.alpaca.markets/v2/positions', {
+      headers: {
+        'APCA-API-KEY-ID': apiKey,
+        'APCA-API-SECRET-KEY': apiSecret,
+      },
+      timeout: 10000,
+    });
+    const alpacaPositionsData = positionsResponse.data.map((pos: any) => ({
+      symbol: pos.symbol,
+      qty: parseFloat(pos.qty),
+      avg_entry_price: parseFloat(pos.avg_entry_price),
+      current_price: parseFloat(pos.current_price),
+      market_value: parseFloat(pos.market_value),
+      cost_basis: parseFloat(pos.cost_basis),
+      unrealized_pl: parseFloat(pos.unrealized_pl),
+      unrealized_plpc: parseFloat(pos.unrealized_plpc),
+      side: pos.side,
+    }));
+
+    // 4. Get Alpaca account (live)
+    const accountResponse = await axios.get('https://paper-api.alpaca.markets/v2/account', {
+      headers: {
+        'APCA-API-KEY-ID': apiKey,
+        'APCA-API-SECRET-KEY': apiSecret,
+      },
+      timeout: 10000,
+    });
+    const account = accountResponse.data;
+    const alpacaAccountData = [{
+      portfolio_value: account.portfolio_value,
+      cash: account.cash,
+      equity: account.equity,
+      long_market_value: account.long_market_value,
+      buying_power: account.buying_power,
+      last_equity: account.last_equity,
+      account_number: account.account_number,
+      status: account.status,
+    }];
+
+    // 5. Calculate attribution & virtual holdings
+    const calculatedAttributionData = [];
+    for (const strategy of strategies) {
+      const attribution = strategy.position_attribution || {};
+
+      for (const [symbol, attr] of Object.entries(attribution as Record<string, any>)) {
+        const alpacaPos = alpacaPositionsData.find((p: any) => p.symbol === symbol);
+        const alpacaQty = alpacaPos?.qty || 0;
+        const alpacaMarketValue = alpacaPos?.market_value || 0;
+        const allocationPct = (attr as any)?.allocation_pct || 0;
+        const virtualQty = alpacaQty * allocationPct;
+        const virtualMarketValue = alpacaMarketValue * allocationPct;
+
+        calculatedAttributionData.push({
+          strategy_id: strategy.id,
+          strategy_name: strategy.name,
+          symbol,
+          attribution_qty: (attr as any)?.qty || 0,
+          allocation_pct: allocationPct,
+          alpaca_actual_qty: alpacaQty,
+          alpaca_market_value: alpacaMarketValue,
+          virtual_qty: virtualQty,
+          virtual_market_value: virtualMarketValue,
+        });
+      }
+    }
+
+    return res.json({
+      active_strategies: activeStrategiesData,
+      active_strategy_snapshots: allSnapshots,
+      alpaca_positions: alpacaPositionsData,
+      alpaca_account: alpacaAccountData,
+      calculated_attribution: calculatedAttributionData,
+    });
+  } catch (err: any) {
+    console.error('GET /api/debug/data error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch debug data' });
   }
 });
 

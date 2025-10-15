@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { DataDebugModal } from "./DataDebugModal";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
 
@@ -428,6 +429,7 @@ export function Dashboard({
   const [positions, setPositions] = useState<AccountPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [showDataDebug, setShowDataDebug] = useState(false);
 
   // Fetch account info
   useEffect(() => {
@@ -795,6 +797,21 @@ export function Dashboard({
             <div style={styles.cardTitle}>
               <span>Account Summary</span>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  onClick={() => setShowDataDebug(true)}
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    background: "#e8f5ed",
+                    color: "#0f7a3a",
+                    border: "1px solid #b7e3c8",
+                    cursor: "pointer",
+                  }}
+                >
+                  DATA
+                </button>
                 <div style={styles.accountTypeBadge(isPaperAccount)}>
                   {isPaperAccount ? "PAPER ACCOUNT" : "LIVE ACCOUNT"}
                 </div>
@@ -1191,6 +1208,14 @@ export function Dashboard({
           </div>
         </>
       ) : null}
+
+      {showDataDebug && apiKey && apiSecret && (
+        <DataDebugModal
+          apiKey={apiKey}
+          apiSecret={apiSecret}
+          onClose={() => setShowDataDebug(false)}
+        />
+      )}
     </div>
   );
 }
