@@ -240,7 +240,7 @@ async function simulateBranchEquity(
   buildIndicatorMap: (values: Array<{ ticker: string; indicator: string; period: string; value: number }>) => Map<string, any>,
   debug = false,
   indicatorServiceUrl = INDICATOR_SERVICE_URL
-): Promise<number[]> {
+): Promise<{ equitySeries: number[]; dateGrid: string[] }> {
   const branchElement = cloneElement(childElement);
   (branchElement as any).weight = 100;
   const branchElements = [branchElement];
@@ -368,7 +368,7 @@ async function simulateBranchEquity(
     equitySeries.push(equity);
   }
 
-  return equitySeries;
+  return { equitySeries, dateGrid: validDateGrid };
 }
 
 async function computeSortIndicatorSeries(
@@ -508,7 +508,7 @@ export async function precomputeSortIndicators(options: {
 
     for (const child of sortNode.children) {
       const childLabel = describeNode(child);
-      const equitySeries = await simulateBranchEquity(
+      const { equitySeries, dateGrid: branchDateGrid } = await simulateBranchEquity(
         sortNode.name,
         childLabel,
         child,
@@ -525,7 +525,7 @@ export async function precomputeSortIndicators(options: {
         sortNode,
         child,
         equitySeries,
-        dateGrid,
+        branchDateGrid,
         indicatorServiceUrl
       );
       const sortTicker = buildSortTicker(sortNode.id, child.id);
