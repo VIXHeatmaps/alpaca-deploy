@@ -119,8 +119,12 @@ export async function runSimulation(
   }
 
   // Precompute Sort indicators (warmup already handled by engine.ts)
+  console.log('[SIMULATION] About to call precomputeSortIndicators...');
+  console.log('[SIMULATION] Elements:', elements.length, 'elements');
+  console.log('[SIMULATION] DateGrid:', dateGrid.length, 'days from', dateGrid[0], 'to', dateGrid[dateGrid.length - 1]);
+
   try {
-    await precomputeSortIndicators({
+    const result = await precomputeSortIndicators({
       elements: elements as StrategyElement[],
       priceData,
       indicatorData,
@@ -129,6 +133,7 @@ export async function runSimulation(
       buildIndicatorMap,
       debug: false, // Disable debug to reduce log spam
     });
+    console.log('[SIMULATION] precomputeSortIndicators completed, result:', result);
   } catch (err: any) {
     console.error('[SIMULATION] Error in precomputeSortIndicators:', err.message);
     console.error('[SIMULATION] Stack:', err.stack);
