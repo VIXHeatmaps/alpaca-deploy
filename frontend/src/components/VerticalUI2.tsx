@@ -123,6 +123,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
   // Variables state
   const { variableLists, variablesLoading, refreshVariableLists } = useVariableLists();
+  const [variablesVersion, setVariablesVersion] = useState(0);
+
+  // Wrapper to increment version after refresh
+  const handleVariableCreated = async () => {
+    await refreshVariableLists();
+    setVariablesVersion(v => v + 1);
+  };
 
   // Invest modal state
   const [showInvestModal, setShowInvestModal] = useState(false);
@@ -2274,7 +2281,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           if (el.type === "gate") {
             return (
               <GateCard
-                key={el.id}
+                key={`${el.id}-${variablesVersion}`}
                 element={el}
                 onUpdate={(updated) => updateElement(el.id, updated)}
                 onDelete={() => deleteElement(el.id)}
@@ -2288,13 +2295,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
-                onVariableCreated={refreshVariableLists}
+                onVariableCreated={handleVariableCreated}
               />
             );
           } else if (el.type === "ticker") {
             return (
               <TickerCard
-                key={el.id}
+                key={`${el.id}-${variablesVersion}`}
                 element={el}
                 onUpdate={(updated) => updateElement(el.id, updated)}
                 onDelete={() => deleteElement(el.id)}
@@ -2306,13 +2313,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
-                onVariableCreated={refreshVariableLists}
+                onVariableCreated={handleVariableCreated}
               />
             );
           } else if (el.type === "weight") {
             return (
               <WeightCard
-                key={el.id}
+                key={`${el.id}-${variablesVersion}`}
                 element={el}
                 onUpdate={(updated) => updateElement(el.id, updated)}
                 onDelete={() => deleteElement(el.id)}
@@ -2327,13 +2334,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
-                onVariableCreated={refreshVariableLists}
+                onVariableCreated={handleVariableCreated}
               />
             );
           } else if (el.type === "scale") {
             return (
               <ScaleCard
-                key={el.id}
+                key={`${el.id}-${variablesVersion}`}
                 element={el}
                 onUpdate={(updated) => updateElement(el.id, updated)}
                 onDelete={() => deleteElement(el.id)}
@@ -2348,13 +2355,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
-                onVariableCreated={refreshVariableLists}
+                onVariableCreated={handleVariableCreated}
               />
             );
           } else if (el.type === "sort") {
             return (
               <SortCard
-                key={el.id}
+                key={`${el.id}-${variablesVersion}`}
                 element={el}
                 onUpdate={(updated) => updateElement(el.id, updated)}
                 onDelete={() => deleteElement(el.id)}
@@ -2369,6 +2376,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
                 allElements={elements}
+                onVariableCreated={handleVariableCreated}
               />
             );
           }
