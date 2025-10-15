@@ -56,6 +56,127 @@ function calculateWarmupDays(indicators: Array<{ ticker: string; indicator: stri
   return maxWarmup + 10;
 }
 
+/**
+ * Calculate the cumulative warmup needed for nested Sort elements
+ *
+ * For nested Sorts, warmup periods are CUMULATIVE because each level depends on the previous:
+ * - Leaf level: base indicator warmup (e.g., RSI 14 days)
+ * - Level 1 Sort: must simulate children, then accumulate indicator period (e.g., +100 days for RETURN(100))
+ * - Level 2 Sort: must wait for Level 1, then accumulate its period (e.g., +200 days for RETURN(200))
+ *
+ * Example:
+ *   Sort1(RETURN 200)
+ *     └─ Sort2(RETURN 100)
+ *          └─ Ticker(RSI 14)
+ *
+ * Total warmup = 14 (RSI) + 100 (Sort2 needs 100 days of simulated data) + 200 (Sort1 needs 200 days) = 314 days
+ */
+function calculateNestedSortWarmup(elements: any[]): number {
+  /**
+   * Extract the maximum period from an indicator configuration
+   */
+  const extractIndicatorPeriod = (indicator: string, params?: any, period?: string): number => {
+    const periodKey = paramsToPeriodString(indicator, params) || period || '';
+    const parts = periodKey
+      .split('-')
+      .map((part: string) => parseInt(part, 10))
+      .filter((value: number) => Number.isFinite(value));
+    return parts.length ? Math.max(...parts) : 0;
+  };
+
+  /**
+   * Get the maximum indicator period used in this element's conditions/config
+   */
+  const getElementIndicatorPeriod = (el: any): number => {
+    let maxPeriod = 0;
+
+    // Gate conditions
+    if (el.type === 'gate' && Array.isArray(el.conditions)) {
+      for (const cond of el.conditions) {
+        if (cond.indicator) {
+          const period = extractIndicatorPeriod(cond.indicator, cond.params, cond.period);
+          if (period > maxPeriod) maxPeriod = period;
+        }
+        if (cond.rightIndicator) {
+          const period = extractIndicatorPeriod(cond.rightIndicator, cond.rightParams, cond.rightPeriod);
+          if (period > maxPeriod) maxPeriod = period;
+        }
+      }
+    }
+
+    // Scale config
+    if (el.type === 'scale' && el.config?.indicator) {
+      const period = extractIndicatorPeriod(el.config.indicator, el.config.params, el.config.period);
+      if (period > maxPeriod) maxPeriod = period;
+    }
+
+    return maxPeriod;
+  };
+
+  /**
+   * Traverse recursively and return the cumulative warmup at each level
+   * Returns: warmup days needed for this subtree
+   */
+  const traverse = (els: any[]): number => {
+    let maxWarmup = 0;
+
+    for (const el of els || []) {
+      if (!el || typeof el !== 'object') continue;
+
+      if (el.type === 'sort') {
+        // Get this Sort's indicator period
+        const sortIndicatorPeriod = extractIndicatorPeriod(el.indicator, el.params, el.period);
+
+        // Recursively calculate warmup for children
+        const childWarmup = traverse(el.children || []);
+
+        // THIS is the key: cumulative warmup = child warmup + this Sort's period
+        const cumulativeWarmup = childWarmup + sortIndicatorPeriod;
+
+        if (cumulativeWarmup > maxWarmup) {
+          maxWarmup = cumulativeWarmup;
+        }
+
+        // Don't traverse children again
+        continue;
+      }
+
+      // For elements that use indicators (Gate, Scale), add their warmup
+      const elementIndicatorPeriod = getElementIndicatorPeriod(el);
+
+      // For non-sort elements, check all child branches
+      const childrenArrays = [
+        el.children,
+        el.thenChildren,
+        el.elseChildren,
+        el.fromChildren,
+        el.toChildren
+      ];
+
+      for (const childArray of childrenArrays) {
+        if (childArray) {
+          const childWarmup = traverse(childArray);
+          // For non-Sort elements, warmup is max(child warmup, element's own indicator warmup)
+          // not cumulative like Sort
+          const totalWarmup = Math.max(childWarmup, elementIndicatorPeriod);
+          if (totalWarmup > maxWarmup) {
+            maxWarmup = totalWarmup;
+          }
+        }
+      }
+
+      // If element has no children but uses indicators, count its warmup
+      if (elementIndicatorPeriod > maxWarmup) {
+        maxWarmup = elementIndicatorPeriod;
+      }
+    }
+
+    return maxWarmup;
+  };
+
+  return traverse(elements);
+}
+
 function collectSortIndicatorRequests(elements: any[]): Array<{ indicator: string; period: number }> {
   const result: Array<{ indicator: string; period: number }> = [];
 
@@ -191,8 +312,17 @@ export async function runV2Backtest(req: Request, res: Response) {
     const reqEndDate = endDate || getMarketDateToday();
 
     // Calculate warmup period needed for indicators
-    const warmupDays = calculateWarmupDays([...requiredIndicators, ...sortIndicatorRequests]);
-    console.log(`[V2] Warmup needed: ${warmupDays} trading days`);
+    const baseIndicatorWarmup = calculateWarmupDays([...requiredIndicators, ...sortIndicatorRequests]);
+
+    // Calculate nested Sort warmup (cumulative)
+    const nestedSortWarmup = calculateNestedSortWarmup(elements);
+
+    // Use the maximum of the two warmup calculations
+    const warmupDays = Math.max(baseIndicatorWarmup, nestedSortWarmup);
+
+    console.log(`[V2] Base indicator warmup: ${baseIndicatorWarmup} days`);
+    console.log(`[V2] Nested Sort warmup: ${nestedSortWarmup} days`);
+    console.log(`[V2] Total warmup needed: ${warmupDays} trading days`);
 
     // Extend start date backwards for indicator warmup
     const dataStartDate = subtractTradingDays(reqStartDate, warmupDays);
