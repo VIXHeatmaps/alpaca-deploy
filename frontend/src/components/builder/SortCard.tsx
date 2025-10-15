@@ -716,7 +716,7 @@ export function SortCard({
                           onCopy={onCopy}
                           clipboard={clipboard}
                           depth={depth + 1}
-                          showWeight
+                          showWeight={false}
                           allElements={allElements}
                           validationErrors={validationErrors}
                           variableLists={variableLists}
@@ -737,7 +737,7 @@ export function SortCard({
                           onDelete={() => deleteChild(child.id)}
                           onCopy={onCopy}
                           depth={depth + 1}
-                          showWeight
+                          showWeight={false}
                           validationErrors={validationErrors}
                           variableLists={variableLists}
                           variablesLoading={variablesLoading}
@@ -758,7 +758,7 @@ export function SortCard({
                           onCopy={onCopy}
                           clipboard={clipboard}
                           depth={depth + 1}
-                          showWeight
+                          showWeight={true}
                           allElements={allElements}
                           validationErrors={validationErrors}
                           variableLists={variableLists}
@@ -779,7 +779,7 @@ export function SortCard({
                           onCopy={onCopy}
                           clipboard={clipboard}
                           depth={depth + 1}
-                          showWeight
+                          showWeight={false}
                           allElements={allElements}
                           validationErrors={validationErrors}
                           variableLists={variableLists}
@@ -801,7 +801,7 @@ export function SortCard({
                           onCopy={onCopy}
                           clipboard={clipboard}
                           depth={depth + 1}
-                          showWeight
+                          showWeight={false}
                           validationErrors={validationErrors}
                           variableLists={variableLists}
                           variablesLoading={variablesLoading}
