@@ -1,12 +1,8 @@
 import { Copy } from "lucide-react";
-import { useState, useRef } from "react";
 import type { TickerElement } from "../../types/builder";
 import type { TickerMetadata } from "../../api/tickers";
 import type { ValidationError } from "../../utils/validation";
-import { hasFieldError, hasUndefinedVariableInField } from "../../utils/builder";
-import { VariablePopover } from "./VariablePopover";
-import * as variablesApi from "../../api/variables";
-import type { VarType } from "../../api/variables";
+import { TickerInput } from "./shared/TickerInput";
 
 export interface TickerCardProps {
   element: TickerElement;
@@ -41,59 +37,7 @@ export function TickerCard({
   metadataError = null,
   onVariableCreated,
 }: TickerCardProps) {
-  const [showPopover, setShowPopover] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const hasUndefinedVar = hasUndefinedVariableInField(element.ticker, variableLists, variablesLoading);
-  const hasValidationError = hasFieldError(element.id, "ticker", validationErrors);
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
-  const symbol = element.ticker?.toUpperCase() ?? "";
-  const resolvedMetadata = symbol && tickerMetadata ? tickerMetadata.get(symbol) : undefined;
-  const resolvedName = resolvedMetadata?.name?.trim() ? resolvedMetadata.name.trim() : null;
-  const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
-  // Only check ticker metadata if it's not a variable reference
-  const isVariable = element.ticker?.trim().startsWith("$");
-  const isUnknownTicker =
-    metadataReady &&
-    symbol.length > 0 &&
-    !isVariable &&  // Don't check metadata for variables
-    !tickerMetadata.has(symbol);
-  const showErrorBorder = hasValidationError || hasUndefinedVar || isUnknownTicker;
-  const tickerTooltip = hasUndefinedVar
-    ? `Variable ${element.ticker} is not defined in Variables tab. Double-click to define.`
-    : isUnknownTicker
-      ? `${symbol} not found in Alpaca asset list`
-      : resolvedName || undefined;
-
-  const handleDoubleClick = () => {
-    if (hasUndefinedVar) {
-      setShowPopover(true);
-    }
-  };
-
-  const handleSaveVariable = async (values: string[], type: VarType) => {
-    try {
-      // Get variable name without $ prefix and normalize to lowercase
-      const varName = element.ticker.startsWith("$")
-        ? element.ticker.slice(1).toLowerCase()
-        : element.ticker.toLowerCase();
-
-      await variablesApi.createVariableList({
-        name: varName,
-        type,
-        values,
-        is_shared: false,
-      });
-
-      // Notify parent to refresh variables and wait for completion
-      if (onVariableCreated) {
-        await onVariableCreated();
-      }
-    } catch (err) {
-      console.error("Failed to create variable:", err);
-      throw err; // Re-throw so popover knows it failed
-    }
-  };
 
   return (
     <div
@@ -168,38 +112,21 @@ export function TickerCard({
         </div>
       )}
 
-      <input
-        ref={inputRef}
-        type="text"
+      <TickerInput
         value={element.ticker}
-        onChange={(e) => onUpdate({ ...element, ticker: e.target.value.toUpperCase() })}
-        onDoubleClick={handleDoubleClick}
-        style={{
-          border: showErrorBorder ? "2px solid #ef4444" : "1px solid #d1d5db",
-          outline: "none",
-          padding: "4px 8px",
-          background: showErrorBorder ? "#fee2e2" : "#fff",
-          fontSize: "13px",
-          color: showErrorBorder ? "#b91c1c" : "#111827",
-          width: `${(element.ticker.length || 1) * 9 + 20}px`,
-          minWidth: "60px",
-          flexShrink: 0,
-          borderRadius: "4px",
-          cursor: hasUndefinedVar ? "pointer" : "text",
-        }}
-        className="focus:ring-2 focus:ring-blue-500"
+        onChange={(ticker) => onUpdate({ ...element, ticker })}
+        elementId={element.id}
+        field="ticker"
+        variableLists={variableLists}
+        variablesLoading={variablesLoading}
+        tickerMetadata={tickerMetadata}
+        metadataLoading={metadataLoading}
+        metadataError={metadataError}
+        validationErrors={validationErrors}
+        onVariableCreated={onVariableCreated}
         placeholder="TICKER"
-        title={tickerTooltip}
+        minWidth={60}
       />
-
-      {showPopover && inputRef.current && (
-        <VariablePopover
-          variableName={element.ticker.startsWith("$") ? element.ticker.slice(1) : element.ticker}
-          anchorEl={inputRef.current}
-          onSave={handleSaveVariable}
-          onClose={() => setShowPopover(false)}
-        />
-      )}
 
       <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>
         {onCopy && (
