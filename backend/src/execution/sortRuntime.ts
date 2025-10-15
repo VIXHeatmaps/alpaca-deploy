@@ -479,6 +479,9 @@ export async function precomputeSortIndicators(options: {
   } = options;
 
   const descriptors = collectSortDescriptors(elements).sort((a, b) => b.depth - a.depth);
+
+  console.log(`[SORT PRECOMPUTE] Found ${descriptors.length} Sort node(s)`);
+
   if (descriptors.length === 0) {
     return null;
   }
@@ -491,7 +494,11 @@ export async function precomputeSortIndicators(options: {
 
   for (const { sort } of descriptors) {
     const sortNode: any = sort;
+
+    console.log(`[SORT PRECOMPUTE] Processing Sort "${sortNode.name}" with ${sortNode.children?.length || 0} children`);
+
     if (!sortNode.children || sortNode.children.length === 0) {
+      console.log(`[SORT PRECOMPUTE] Skipping Sort "${sortNode.name}" - no children`);
       continue;
     }
 
