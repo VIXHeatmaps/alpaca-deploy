@@ -758,7 +758,7 @@ export function SortCard({
                           onCopy={onCopy}
                           clipboard={clipboard}
                           depth={depth + 1}
-                          showWeight={true}
+                          showWeight={false}
                           allElements={allElements}
                           validationErrors={validationErrors}
                           variableLists={variableLists}
