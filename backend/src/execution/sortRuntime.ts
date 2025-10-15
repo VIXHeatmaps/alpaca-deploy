@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { paramsToPeriodString } from '../utils/indicatorKeys';
+import { getValidDateGrid } from '../utils/effectiveStartCalculator';
 import type { Element, ExecutionResult } from './types';
 
 export type PriceData = {
@@ -197,14 +198,29 @@ function simulateBranchEquity(
   (branchElement as any).weight = 100;
   const branchElements = [branchElement];
 
+  // CRITICAL: Filter dateGrid to only include dates where this branch can execute
+  // This accounts for nested warmup requirements
+  const validDateGrid = getValidDateGrid(branchElements, priceData, dateGrid);
+
+  if (debug) {
+    console.log(`[SORT] Branch ${childLabel} valid date range: ${validDateGrid[0]} to ${validDateGrid[validDateGrid.length - 1]} (${validDateGrid.length} days, trimmed ${dateGrid.length - validDateGrid.length} days)`);
+  }
+
   const indicatorLookup = buildIndicatorLookupMap(branchElements);
 
   let equity = 1;
   const equitySeries: number[] = [equity];
 
-  for (let i = 1; i < dateGrid.length; i++) {
-    const decisionDate = dateGrid[i - 1];
-    const executionDate = dateGrid[i];
+  // Pad equity series with initial value for skipped dates
+  // This ensures the equity series aligns with the original dateGrid
+  const skipDays = dateGrid.length - validDateGrid.length;
+  for (let i = 0; i < skipDays; i++) {
+    equitySeries.push(1); // Maintain equity at 1.0 during warmup period
+  }
+
+  for (let i = 1; i < validDateGrid.length; i++) {
+    const decisionDate = validDateGrid[i - 1];
+    const executionDate = validDateGrid[i];
 
     const { values: indicatorValuesForDate, missing } = collectIndicatorValuesForDate(
       indicatorLookup,

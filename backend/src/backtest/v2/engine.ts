@@ -12,6 +12,7 @@ import { collectRequiredIndicators, fetchIndicators } from './indicatorCache';
 import { runSimulation } from './simulation';
 import { getMarketDateToday } from '../../utils/marketTime';
 import { paramsToPeriodString } from '../../utils/indicatorKeys';
+import { calculateEffectiveStart } from '../../utils/effectiveStartCalculator';
 
 /**
  * Calculate warmup days needed for indicators
@@ -419,44 +420,16 @@ export async function runV2Backtest(req: Request, res: Response) {
       console.log(`[V2] First indicator (${firstKey}) date range: ${dates[0]} to ${dates[dates.length - 1]}`);
     }
 
-    // Phase 4: Calculate effective start date based on actual data availability + warmup
+    // Phase 4: Calculate effective start date using centralized calculator
     console.log('\n[V2] === PHASE 4: CALCULATE EFFECTIVE START DATE ===');
 
-    // Find the latest ticker start date (most restrictive)
-    const tickerStarts: Record<string, string> = {};
-    let latestTickerStart: string | null = null;
-    let culpritTickers: string[] = [];
+    const startCalc = calculateEffectiveStart(elements, priceData, indicatorData);
+    const effectiveStartDate = startCalc.effectiveStart;
 
-    for (const [ticker, data] of Object.entries(priceData)) {
-      const dates = Object.keys(data).sort();
-      if (dates.length > 0) {
-        const firstDate = dates[0];
-        tickerStarts[ticker] = firstDate;
-        if (!latestTickerStart || firstDate > latestTickerStart) {
-          latestTickerStart = firstDate;
-          culpritTickers = [ticker];
-        } else if (firstDate === latestTickerStart) {
-          culpritTickers.push(ticker);
-        }
-      }
+    console.log(`[V2] Effective start calculation:`);
+    for (const step of startCalc.breakdown.steps) {
+      console.log(`[V2]   ${step}`);
     }
-
-    console.log(`[V2] Ticker data availability:`);
-    for (const [ticker, startDate] of Object.entries(tickerStarts)) {
-      console.log(`[V2]   ${ticker}: ${startDate}`);
-    }
-    console.log(`[V2] Latest ticker start: ${latestTickerStart} (${culpritTickers.join(', ')})`);
-
-    // Calculate warmup needed for nested elements
-    const nestedWarmup = calculateNestedSortWarmup(elements);
-    console.log(`[V2] Nested element warmup: ${nestedWarmup} days`);
-
-    // Calculate the effective start date: latest ticker start + warmup
-    const dataBasedStart = latestTickerStart || MAX_START;
-    const effectiveStartDate = addTradingDays(dataBasedStart, nestedWarmup);
-
-    console.log(`[V2] Calculated effective start: ${effectiveStartDate}`);
-    console.log(`[V2]   = ${dataBasedStart} (data start) + ${nestedWarmup} days (warmup)`);
 
     // Determine if we need to notify user of adjustment
     let adjustmentReason: string | null = null;
@@ -464,14 +437,7 @@ export async function runV2Backtest(req: Request, res: Response) {
 
     if (userRequestedStart && effectiveStartDate > userRequestedStart) {
       adjustedStartDate = effectiveStartDate;
-      // Determine the culprit
-      if (latestTickerStart && latestTickerStart > userRequestedStart) {
-        // Ticker availability is the issue
-        adjustmentReason = culpritTickers.join(', ');
-      } else {
-        // Warmup is the issue - find which element needs it
-        adjustmentReason = findWarmupCulprit(elements);
-      }
+      adjustmentReason = startCalc.reason;
       console.log(`[V2] ⚠️  Start date adjusted from ${userRequestedStart} to ${effectiveStartDate}`);
       console.log(`[V2]     Reason: ${adjustmentReason}`);
     } else if (!userRequestedStart) {
