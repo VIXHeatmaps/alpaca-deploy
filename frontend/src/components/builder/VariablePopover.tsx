@@ -15,6 +15,7 @@ export function VariablePopover({
   onClose,
 }: VariablePopoverProps) {
   const [values, setValues] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Position popover next to anchor element
@@ -29,7 +30,7 @@ export function VariablePopover({
     }
   }, [anchorEl]);
 
-  // Click-away detection
+  // Click-away detection - cancel without saving if already saving
   useEffect(() => {
     const handleClickAway = (e: MouseEvent) => {
       if (
@@ -37,26 +38,54 @@ export function VariablePopover({
         !popoverRef.current.contains(e.target as Node) &&
         !anchorEl.contains(e.target as Node)
       ) {
-        handleSave();
+        if (!isSaving) {
+          onClose(); // Just close, don't save on click-away
+        }
       }
     };
 
     document.addEventListener("mousedown", handleClickAway);
     return () => document.removeEventListener("mousedown", handleClickAway);
-  }, [values, anchorEl]);
+  }, [isSaving, anchorEl, onClose]);
 
-  const handleSave = () => {
-    if (values.trim()) {
-      const valuesList = values
-        .split(/[\n,]/)
-        .map((v) => v.trim())
-        .filter((v) => v.length > 0);
+  const handleSave = async () => {
+    if (isSaving) return; // Prevent double-save
+    if (!values.trim()) {
+      onClose();
+      return;
+    }
 
-      if (valuesList.length > 0) {
-        onSave(valuesList, "ticker");
+    const valuesList = values
+      .split(/[\n,]/)
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+
+    if (valuesList.length === 0) {
+      onClose();
+      return;
+    }
+
+    // Save with loading state
+    setIsSaving(true);
+    try {
+      await onSave(valuesList, "ticker");
+      // Wait a tiny bit to ensure state propagates
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } finally {
+      setIsSaving(false);
+      onClose();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab" || e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === "Escape") {
+      if (!isSaving) {
+        onClose();
       }
     }
-    onClose();
   };
 
   return (
@@ -89,12 +118,9 @@ export function VariablePopover({
           autoFocus
           value={values}
           onChange={(e) => setValues(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              onClose();
-            }
-          }}
-          placeholder="AAPL, MSFT, GOOGL"
+          onKeyDown={handleKeyDown}
+          disabled={isSaving}
+          placeholder={isSaving ? "Saving..." : "AAPL, MSFT, GOOGL"}
           style={{
             width: "100%",
             minHeight: "80px",
@@ -104,6 +130,8 @@ export function VariablePopover({
             fontSize: "13px",
             fontFamily: "monospace",
             resize: "vertical",
+            opacity: isSaving ? 0.6 : 1,
+            cursor: isSaving ? "wait" : "text",
           }}
         />
       </div>
@@ -112,10 +140,11 @@ export function VariablePopover({
         style={{
           marginTop: "8px",
           fontSize: "11px",
-          color: "#9ca3af",
+          color: isSaving ? "#3b82f6" : "#9ca3af",
+          fontWeight: isSaving ? 500 : 400,
         }}
       >
-        Click away or press Escape to save
+        {isSaving ? "Saving variable..." : "Press Tab or Enter to save, Escape to cancel"}
       </div>
     </div>
   );

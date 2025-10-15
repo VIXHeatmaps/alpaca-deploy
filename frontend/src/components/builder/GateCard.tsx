@@ -1439,12 +1439,13 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
         values,
         is_shared: false,
       });
-      // Refresh variables list to update UI
+      // Refresh variables list to update UI and wait for completion
       if (onVariableCreated) {
-        onVariableCreated();
+        await onVariableCreated();
       }
     } catch (err) {
       console.error("Failed to create variable:", err);
+      throw err; // Re-throw so popover knows it failed
     }
   };
 
@@ -2418,12 +2419,13 @@ function ConditionRow({
         values,
         is_shared: false,
       });
-      // Refresh variables list to update UI
+      // Refresh variables list to update UI and wait for completion
       if (onVariableCreated) {
-        onVariableCreated();
+        await onVariableCreated();
       }
     } catch (err) {
       console.error("Failed to create variable:", err);
+      throw err; // Re-throw so popover knows it failed
     }
   };
 
