@@ -67,6 +67,28 @@ export const countSortsInTree = (elements: Element[]): number => {
   return count;
 };
 
+export const countWeightsInTree = (elements: Element[]): number => {
+  let count = 0;
+  for (const el of elements) {
+    if (el.type === "weight") {
+      count++;
+      count += countWeightsInTree(el.children);
+    }
+    if (el.type === "gate") {
+      count += countWeightsInTree((el as GateElement).thenChildren);
+      count += countWeightsInTree((el as GateElement).elseChildren);
+    }
+    if (el.type === "scale") {
+      count += countWeightsInTree(el.fromChildren);
+      count += countWeightsInTree(el.toChildren);
+    }
+    if (el.type === "sort") {
+      count += countWeightsInTree((el as SortElement).children);
+    }
+  }
+  return count;
+};
+
 export const hasFieldError = (
   elementId: string,
   field: string,

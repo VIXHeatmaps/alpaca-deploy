@@ -1,7 +1,7 @@
 import type { IndicatorName } from "../../../types/indicators";
 import { defaultParams, paramsToPeriodString } from "../../../types/indicators";
-import type { Element, GateElement, ScaleElement, SortElement } from "../../../types/builder";
-import { countGatesInTree, countScalesInTree, countSortsInTree } from "../../../utils/builder";
+import type { Element, GateElement, ScaleElement, SortElement, WeightElement } from "../../../types/builder";
+import { countGatesInTree, countScalesInTree, countSortsInTree, countWeightsInTree } from "../../../utils/builder";
 
 /**
  * Factory functions for creating default element configurations
@@ -79,6 +79,19 @@ export const createDefaultSortElement = (weight: number, allElements: Element[] 
     indicator: defaultIndicator,
     params: baseParams,
     period,
+    children: [],
+  };
+};
+
+export const createDefaultWeightElement = (weight: number, allElements: Element[] = []): WeightElement => {
+  const weightCount = countWeightsInTree(allElements);
+
+  return {
+    id: `weight-${Date.now()}`,
+    type: "weight",
+    name: `Weight${weightCount + 1}`,
+    weight,
+    weightMode: "equal",
     children: [],
   };
 };

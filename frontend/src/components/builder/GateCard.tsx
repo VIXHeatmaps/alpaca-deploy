@@ -62,6 +62,7 @@ import {
   createDefaultGateElement,
   createDefaultScaleElement,
   createDefaultSortElement,
+  createDefaultWeightElement,
 } from "./shared/elementFactories";
 // ========== ADD ELEMENT DROPDOWN ==========
 
@@ -104,14 +105,7 @@ function AddElementDropdown({
 
   const handleSelectType = (type: "weight" | "gate" | "scale" | "sort") => {
     if (type === "weight") {
-      const newWeight: WeightElement = {
-        id: `weight-${Date.now()}`,
-        type: "weight",
-        name: "",
-        weight: 100,
-        weightMode: "equal",
-        children: [],
-      };
+      const newWeight = createDefaultWeightElement(100, allElements);
       onAddElement(newWeight);
     } else if (type === "gate") {
       const newGate = createDefaultGateElement(allElements);
