@@ -57,6 +57,7 @@ import { TickerCard } from "./TickerCard";
 import { WeightCard } from "./WeightCard";
 import { ScaleCard } from "./ScaleCard";
 import { SortCard } from "./SortCard";
+import { TickerInput } from "./shared/TickerInput";
 import {
   createDefaultGateElement,
   createDefaultScaleElement,
@@ -409,12 +410,8 @@ function ConditionRow({
   metadataError,
   onVariableCreated,
 }: ConditionRowProps) {
-  const [showTickerPopover, setShowTickerPopover] = useState(false);
   const [showThresholdPopover, setShowThresholdPopover] = useState(false);
-  const [showRightTickerPopover, setShowRightTickerPopover] = useState(false);
-  const tickerInputRef = useRef<HTMLInputElement>(null);
   const thresholdInputRef = useRef<HTMLInputElement>(null);
-  const rightTickerInputRef = useRef<HTMLInputElement>(null);
 
   // Check for undefined variables in this condition's fields
   const tickerHasUndefinedVar = hasUndefinedVariableInField(condition.ticker, variableLists, variablesLoading);
@@ -541,44 +538,22 @@ function ConditionRow({
 
       <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
 
-      <input
-        ref={tickerInputRef}
-        type="text"
+      <TickerInput
         value={condition.ticker}
-        onChange={(e) => onUpdate({ ticker: e.target.value.toUpperCase() })}
-        onClick={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          if (tickerHasUndefinedVar) {
-            setShowTickerPopover(true);
-          }
-        }}
-        style={{
-          border: leftTickerVisualError ? '2px solid #ef4444' : '1px solid #d1d5db',
-          outline: 'none',
-          padding: '4px 8px',
-          background: leftTickerVisualError ? '#fee2e2' : '#fff',
-          fontSize: '13px',
-          color: leftTickerVisualError ? '#b91c1c' : condition.ticker ? '#111827' : '#9ca3af',
-          width: `${Math.max((condition.ticker || 'Ticker').length * 9 + 20, 80)}px`,
-          maxWidth: '300px',
-          flexShrink: 0,
-          borderRadius: '4px',
-          cursor: tickerHasUndefinedVar ? 'pointer' : 'text',
-        }}
-        className="focus:ring-2 focus:ring-blue-500"
+        onChange={(ticker) => onUpdate({ ticker })}
+        elementId={elementId}
+        field={`conditions.${conditionIndex}.ticker`}
+        variableLists={variableLists}
+        variablesLoading={variablesLoading}
+        tickerMetadata={tickerMetadata}
+        metadataLoading={metadataLoading}
+        metadataError={metadataError}
+        validationErrors={validationErrors}
+        onVariableCreated={onVariableCreated}
         placeholder="Ticker"
-        title={conditionTickerTooltip}
+        maxWidth="300px"
+        stopPropagation={true}
       />
-
-      {showTickerPopover && tickerInputRef.current && (
-        <VariablePopover
-          variableName={condition.ticker.startsWith("$") ? condition.ticker.slice(1) : condition.ticker}
-          anchorEl={tickerInputRef.current}
-          onSave={(values, type) => handleSaveVariable(condition.ticker, values, type)}
-          onClose={() => setShowTickerPopover(false)}
-        />
-      )}
 
       {/* Operator */}
       <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>is</span>
@@ -724,44 +699,22 @@ function ConditionRow({
 
           <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
 
-          <input
-            ref={rightTickerInputRef}
-            type="text"
+          <TickerInput
             value={condition.rightTicker || ""}
-            onChange={(e) => onUpdate({ rightTicker: e.target.value.toUpperCase() })}
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              if (rightTickerHasUndefinedVar) {
-                setShowRightTickerPopover(true);
-              }
-            }}
-            style={{
-              border: rightTickerVisualError ? '2px solid #ef4444' : '1px solid #d1d5db',
-              outline: 'none',
-              padding: '4px 8px',
-              background: rightTickerVisualError ? '#fee2e2' : '#fff',
-              fontSize: '13px',
-              color: rightTickerVisualError ? '#b91c1c' : condition.rightTicker ? '#111827' : '#9ca3af',
-              width: `${Math.max((condition.rightTicker || 'Ticker').length * 9 + 20, 80)}px`,
-              maxWidth: '300px',
-              flexShrink: 0,
-              borderRadius: '4px',
-              cursor: rightTickerHasUndefinedVar ? 'pointer' : 'text',
-        }}
-        className="focus:ring-2 focus:ring-blue-500"
-        placeholder="Ticker"
-        title={rightTickerTooltip}
-      />
-
-          {showRightTickerPopover && rightTickerInputRef.current && (
-            <VariablePopover
-              variableName={condition.rightTicker?.startsWith("$") ? condition.rightTicker.slice(1) : condition.rightTicker || ""}
-              anchorEl={rightTickerInputRef.current}
-              onSave={(values, type) => handleSaveVariable(condition.rightTicker || "", values, type)}
-              onClose={() => setShowRightTickerPopover(false)}
-            />
-          )}
+            onChange={(rightTicker) => onUpdate({ rightTicker })}
+            elementId={elementId}
+            field={`conditions.${conditionIndex}.rightTicker`}
+            variableLists={variableLists}
+            variablesLoading={variablesLoading}
+            tickerMetadata={tickerMetadata}
+            metadataLoading={metadataLoading}
+            metadataError={metadataError}
+            validationErrors={validationErrors}
+            onVariableCreated={onVariableCreated}
+            placeholder="Ticker"
+            maxWidth="300px"
+            stopPropagation={true}
+          />
         </>
       )}
 
