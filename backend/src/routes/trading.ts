@@ -898,8 +898,10 @@ tradingRouter.post('/strategy/:id/liquidate', requireAuth, async (req: Request, 
   }
 });
 
+// Data Debug Endpoint - returns all data sources for debugging live strategies
 tradingRouter.get('/debug/data', requireAuth, async (req: Request, res: Response) => {
   try {
+    console.log('[DEBUG DATA] Request received');
     const userId = (req as any).user?.id;
     if (!userId) {
       return res.status(401).json({ error: 'User not authenticated' });
