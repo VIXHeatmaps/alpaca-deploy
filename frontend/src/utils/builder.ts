@@ -90,10 +90,7 @@ export const hasUndefinedVariableInField = (
   isLoading: boolean = false
 ): boolean => {
   // Don't show red borders while variables are loading
-  if (isLoading) {
-    console.log('[hasUndefinedVariableInField]', value, '- LOADING, returning false');
-    return false;
-  }
+  if (isLoading) return false;
 
   // Only check string values
   if (typeof value !== "string") return false;
@@ -108,8 +105,6 @@ export const hasUndefinedVariableInField = (
 
   // Check if this variable exists in the list (case-insensitive)
   const isDefined = variableLists.some(v => v.name.toLowerCase() === varName);
-
-  console.log('[hasUndefinedVariableInField]', value, '- isLoading:', isLoading, 'variableLists.length:', variableLists.length, 'isDefined:', isDefined, 'returning:', !isDefined);
 
   return !isDefined;
 };

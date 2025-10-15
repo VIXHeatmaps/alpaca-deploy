@@ -7,15 +7,12 @@ export const useVariableLists = () => {
 
   const refreshVariableLists = useCallback(async () => {
     try {
-      console.log('[useVariableLists] Starting fetch - setting loading=true');
       setVariablesLoading(true);
       const lists = await variablesApi.getAllVariableLists();
-      console.log('[useVariableLists] Fetch complete - received', lists.length, 'variables:', lists.map(v => v.name));
       setVariableLists(lists);
     } catch (error) {
       console.error("Failed to load variables:", error);
     } finally {
-      console.log('[useVariableLists] Setting loading=false');
       setVariablesLoading(false);
     }
   }, []);

@@ -2374,10 +2374,12 @@ function ConditionRow({
   const conditionTickerSymbol = condition.ticker?.toUpperCase() ?? "";
   const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
   const conditionTickerMetadata = conditionTickerSymbol && tickerMetadata ? tickerMetadata.get(conditionTickerSymbol) : undefined;
+  // Only check ticker metadata if it's not a variable reference
+  const isVariable = condition.ticker?.trim().startsWith("$");
   const conditionTickerUnknown =
     metadataReady &&
     conditionTickerSymbol.length > 0 &&
-    !tickerHasUndefinedVar &&
+    !isVariable &&  // Don't check metadata for variables
     !tickerMetadata?.has(conditionTickerSymbol);
   const conditionTickerTooltip = tickerHasUndefinedVar
     ? `Variable ${condition.ticker} is not defined in Variables tab. Double-click to define.`
@@ -2386,10 +2388,11 @@ function ConditionRow({
       : (conditionTickerMetadata?.name?.trim() || undefined);
   const rightTickerSymbol = condition.rightTicker?.toUpperCase() ?? "";
   const rightTickerMetadata = rightTickerSymbol && tickerMetadata ? tickerMetadata.get(rightTickerSymbol) : undefined;
+  const isRightVariable = condition.rightTicker?.trim().startsWith("$");
   const rightTickerUnknown =
     metadataReady &&
     rightTickerSymbol.length > 0 &&
-    !rightTickerHasUndefinedVar &&
+    !isRightVariable &&  // Don't check metadata for variables
     !tickerMetadata?.has(rightTickerSymbol);
   const rightTickerTooltip = rightTickerHasUndefinedVar
     ? `Variable ${condition.rightTicker} is not defined in Variables tab. Double-click to define.`
