@@ -300,35 +300,51 @@ export function getValidDateGrid(
 ): string[] {
   let effectiveStart = calculateEffectiveStart(elements, priceData).effectiveStart;
 
-  // For Sort elements, check when precomputed indicators are actually available
+  // Check when precomputed Sort indicators are actually available
+  // This applies to any element that contains nested Sorts (Sort, Gate, Scale, etc.)
   if (indicatorData && elements.length > 0) {
-    const sortElement = elements[0];
-    if (sortElement.type === 'sort' && sortElement.children) {
-      let latestIndicatorStart: string | null = null;
+    let latestIndicatorStart: string | null = null;
 
-      // Check when each child's Sort indicator becomes available
-      for (const child of sortElement.children) {
-        const sortTicker = `SORT_${sortElement.id}_${child.id}`;
-        const indicator = sortElement.indicator;
+    // Helper to recursively find all Sort indicators in the tree
+    const findSortIndicators = (els: any[]) => {
+      for (const el of els || []) {
+        if (!el || typeof el !== 'object') continue;
 
-        // Look for the indicator key in indicatorData (pipe-separated format)
-        for (const key of Object.keys(indicatorData)) {
-          if (key.startsWith(`${sortTicker}|${indicator}|`)) {
-            const dates = Object.keys(indicatorData[key]).sort();
-            if (dates.length > 0) {
-              const firstDate = dates[0];
-              if (!latestIndicatorStart || firstDate > latestIndicatorStart) {
-                latestIndicatorStart = firstDate;
+        if (el.type === 'sort' && el.children) {
+          // Check when this Sort's child indicators become available
+          for (const child of el.children) {
+            const sortTicker = `SORT_${el.id}_${child.id}`;
+            const indicator = el.indicator;
+
+            // Look for the indicator key in indicatorData (pipe-separated format)
+            for (const key of Object.keys(indicatorData)) {
+              if (key.startsWith(`${sortTicker}|${indicator}|`)) {
+                const dates = Object.keys(indicatorData[key]).sort();
+                if (dates.length > 0) {
+                  const firstDate = dates[0];
+                  if (!latestIndicatorStart || firstDate > latestIndicatorStart) {
+                    latestIndicatorStart = firstDate;
+                  }
+                }
               }
             }
           }
         }
-      }
 
-      // Use the later of: calculated effective start OR actual indicator availability
-      if (latestIndicatorStart && latestIndicatorStart > effectiveStart) {
-        effectiveStart = latestIndicatorStart;
+        // Recursively check all child branches
+        if (el.children) findSortIndicators(el.children);
+        if (el.thenChildren) findSortIndicators(el.thenChildren);
+        if (el.elseChildren) findSortIndicators(el.elseChildren);
+        if (el.fromChildren) findSortIndicators(el.fromChildren);
+        if (el.toChildren) findSortIndicators(el.toChildren);
       }
+    };
+
+    findSortIndicators(elements);
+
+    // Use the later of: calculated effective start OR actual indicator availability
+    if (latestIndicatorStart && latestIndicatorStart > effectiveStart) {
+      effectiveStart = latestIndicatorStart;
     }
   }
 
