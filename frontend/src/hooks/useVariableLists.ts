@@ -1,9 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import * as variablesApi from "../api/variables";
 
 export const useVariableLists = () => {
   const [variableLists, setVariableLists] = useState<variablesApi.VariableList[]>([]);
-  const [variablesLoading, setVariablesLoading] = useState(false);
+  const [variablesLoading, setVariablesLoading] = useState(true); // Start as true since we auto-fetch
 
   const refreshVariableLists = useCallback(async () => {
     try {
@@ -16,6 +16,11 @@ export const useVariableLists = () => {
       setVariablesLoading(false);
     }
   }, []);
+
+  // Auto-fetch variables on mount
+  useEffect(() => {
+    refreshVariableLists();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     variableLists,

@@ -73,15 +73,40 @@ export const hasFieldError = (
   errors: ValidationError[]
 ): boolean => errors.some((err) => err.elementId === elementId && err.field === field);
 
+/**
+ * Checks if a field value references an undefined variable
+ *
+ * Uses Pull Model: checks against the variableLists array directly
+ * to ensure always-fresh validation without stale cache issues.
+ *
+ * @param value - The field value to check (e.g., "$RISKON", "AAPL")
+ * @param variableLists - Array of defined variable lists from the API
+ * @param isLoading - If true, treats all variables as defined (prevents false positives during loading)
+ * @returns True if the value is a variable reference that is not defined
+ */
 export const hasUndefinedVariableInField = (
   value: unknown,
-  definedVars: Set<string>
+  variableLists: Array<{ name: string }>,
+  isLoading: boolean = false
 ): boolean => {
+  // Don't show red borders while variables are loading
+  if (isLoading) return false;
+
+  // Only check string values
   if (typeof value !== "string") return false;
+
   const trimmed = value.trim();
+
+  // Not a variable reference if doesn't start with $
   if (!trimmed.startsWith("$")) return false;
+
+  // Extract and normalize variable name
   const varName = trimmed.slice(1).toLowerCase();
-  return !definedVars.has(varName);
+
+  // Check if this variable exists in the list (case-insensitive)
+  const isDefined = variableLists.some(v => v.name.toLowerCase() === varName);
+
+  return !isDefined;
 };
 
 export const deepCloneElement = (element: Element): Element => {

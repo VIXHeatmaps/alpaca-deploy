@@ -17,7 +17,8 @@ export interface TickerCardProps {
   showWeight?: boolean;
   isWeightInvalid?: boolean;
   validationErrors?: ValidationError[];
-  definedVariables?: Set<string>;
+  variableLists?: Array<{ name: string }>;
+  variablesLoading?: boolean;
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
@@ -33,7 +34,8 @@ export function TickerCard({
   showWeight = true,
   isWeightInvalid = false,
   validationErrors = [],
-  definedVariables = new Set<string>(),
+  variableLists = [],
+  variablesLoading = false,
   tickerMetadata,
   metadataLoading = false,
   metadataError = null,
@@ -42,7 +44,7 @@ export function TickerCard({
   const [showPopover, setShowPopover] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const hasUndefinedVar = hasUndefinedVariableInField(element.ticker, definedVariables);
+  const hasUndefinedVar = hasUndefinedVariableInField(element.ticker, variableLists, variablesLoading);
   const hasValidationError = hasFieldError(element.id, "ticker", validationErrors);
   const bgColor = depth % 2 === 0 ? "transparent" : "rgba(0, 0, 0, 0.02)";
   const symbol = element.ticker?.toUpperCase() ?? "";

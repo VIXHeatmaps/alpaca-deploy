@@ -164,16 +164,18 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   const strategyVariables = useMemo(() => extractVariablesFromStrings(strategyStrings), [strategyStrings]);
   const hasVariables = strategyVariables.length > 0;
 
-  // Load defined variables and create lookup set
-  // Normalize to lowercase to match hasUndefinedVariableInField behavior
-  const definedVariables = useMemo(() => {
-    return new Set(variableLists.map(v => v.name.toLowerCase()));
-  }, [variableLists]);
-
-  // Check for undefined variables
+  // Check for undefined variables (Pull Model - always fresh)
   const undefinedVariables = useMemo(() => {
-    return strategyVariables.filter(varName => !definedVariables.has(varName));
-  }, [strategyVariables, definedVariables]);
+    // Don't validate while variables are loading
+    if (variablesLoading) return [];
+
+    return strategyVariables.filter(varName => {
+      // Normalize variable name (remove $, lowercase)
+      const normalized = varName.toLowerCase();
+      // Check if exists in variable lists (case-insensitive)
+      return !variableLists.some(v => v.name.toLowerCase() === normalized);
+    });
+  }, [strategyVariables, variableLists, variablesLoading]);
 
   const { symbols: referencedTickers, references: tickerReferencesForValidation } = useMemo(() => {
     const tickers = new Set<string>();
@@ -2285,7 +2287,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 depth={0}
                 allElements={elements}
                 validationErrors={validationErrors}
-                definedVariables={definedVariables}
+                variableLists={variableLists}
+                variablesLoading={variablesLoading}
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
@@ -2302,7 +2305,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 onCopy={() => setClipboard(el)}
                 depth={0}
                 validationErrors={validationErrors}
-                definedVariables={definedVariables}
+                variableLists={variableLists}
+                variablesLoading={variablesLoading}
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
@@ -2322,7 +2326,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 depth={0}
                 allElements={elements}
                 validationErrors={validationErrors}
-                definedVariables={definedVariables}
+                variableLists={variableLists}
+                variablesLoading={variablesLoading}
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
@@ -2342,7 +2347,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 showWeight={true}
                 allElements={elements}
                 validationErrors={validationErrors}
-                definedVariables={definedVariables}
+                variableLists={variableLists}
+                variablesLoading={variablesLoading}
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}
@@ -2361,7 +2367,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 depth={0}
                 showWeight={elements.length > 1}
                 validationErrors={validationErrors}
-                definedVariables={definedVariables}
+                variableLists={variableLists}
+                variablesLoading={variablesLoading}
                 tickerMetadata={tickerMetadata}
                 metadataLoading={tickerMetadataLoading}
                 metadataError={tickerMetadataError}

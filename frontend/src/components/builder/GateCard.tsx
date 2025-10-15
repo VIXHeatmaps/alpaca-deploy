@@ -68,7 +68,8 @@ export interface WeightCardProps {
   isWeightInvalid?: boolean;
   allElements?: Element[]; // For counting gates
   validationErrors?: ValidationError[];
-  definedVariables?: Set<string>;
+  variableLists?: Array<{ name: string }>;
+  variablesLoading?: boolean;
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
@@ -347,7 +348,7 @@ function AddElementDropdown({
 
 // ========== WEIGHT CARD ==========
 
-export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError, onVariableCreated }: WeightCardProps & { initiallyOpen?: boolean }) {
+export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, initiallyOpen = false, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], variableLists = [], variablesLoading = false, tickerMetadata, metadataLoading, metadataError, onVariableCreated }: WeightCardProps & { initiallyOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -609,7 +610,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           isWeightInvalid={areChildWeightsInvalid}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -629,7 +631,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           showWeight={element.weightMode === "defined"}
                           isWeightInvalid={areChildWeightsInvalid}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -651,7 +654,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           isWeightInvalid={areChildWeightsInvalid}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -671,7 +675,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           showWeight={element.weightMode === "defined"}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -691,7 +696,8 @@ export function WeightCard({ element, onUpdate, onDelete, onCopy, clipboard, ini
                           depth={depth + 1}
                           showWeight={element.weightMode === "defined"}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -780,7 +786,8 @@ export interface SortCardProps {
   depth?: number;
   showWeight?: boolean;
   validationErrors?: ValidationError[];
-  definedVariables?: Set<string>;
+  variableLists?: Array<{ name: string }>;
+  variablesLoading?: boolean;
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
@@ -797,7 +804,8 @@ export function SortCard({
   depth = 0,
   showWeight = false,
   validationErrors = [],
-  definedVariables = new Set<string>(),
+  variableLists = [],
+  variablesLoading = false,
   tickerMetadata,
   metadataLoading,
   metadataError,
@@ -1039,7 +1047,8 @@ export function SortCard({
             conditionIndex={0}
             elementId={element.id}
             validationErrors={validationErrors}
-            definedVariables={definedVariables}
+            variableLists={variableLists}
+            variablesLoading={variablesLoading}
             inline
           />
 
@@ -1119,7 +1128,8 @@ export function SortCard({
                           showWeight
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -1138,7 +1148,8 @@ export function SortCard({
                           depth={depth + 1}
                           showWeight
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -1159,7 +1170,8 @@ export function SortCard({
                           showWeight
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -1179,7 +1191,8 @@ export function SortCard({
                           showWeight
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -1199,7 +1212,8 @@ export function SortCard({
                           depth={depth + 1}
                           showWeight
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -1294,14 +1308,15 @@ export interface ScaleCardProps {
   showWeight?: boolean;
   allElements?: Element[];
   validationErrors?: ValidationError[];
-  definedVariables?: Set<string>;
+  variableLists?: Array<{ name: string }>;
+  variablesLoading?: boolean;
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
   onVariableCreated?: () => void;
 }
 
-export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError, onVariableCreated }: ScaleCardProps) {
+export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, allElements = [], validationErrors = [], variableLists = [], variablesLoading = false, tickerMetadata, metadataLoading, metadataError, onVariableCreated }: ScaleCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
@@ -1324,9 +1339,9 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const valueUnit = getIndicatorUnit(config.indicator as IndicatorName);
   const unitSuffix = valueUnit === "percent" ? "%" : "";
 
-  const tickerHasUndefinedVar = hasUndefinedVariableInField(config.ticker, definedVariables);
-  const rangeMinHasUndefinedVar = hasUndefinedVariableInField(config.rangeMin, definedVariables);
-  const rangeMaxHasUndefinedVar = hasUndefinedVariableInField(config.rangeMax, definedVariables);
+  const tickerHasUndefinedVar = hasUndefinedVariableInField(config.ticker, variableLists, variablesLoading);
+  const rangeMinHasUndefinedVar = hasUndefinedVariableInField(config.rangeMin, variableLists, variablesLoading);
+  const rangeMaxHasUndefinedVar = hasUndefinedVariableInField(config.rangeMax, variableLists, variablesLoading);
 
   const tickerHasError = hasFieldError(element.id, "ticker", validationErrors);
   const indicatorHasError = hasFieldError(element.id, "indicator", validationErrors);
@@ -1592,7 +1607,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
             conditionIndex={0}
             elementId={element.id}
             validationErrors={validationErrors}
-            definedVariables={definedVariables}
+            variableLists={variableLists}
+            variablesLoading={variablesLoading}
           />
 
           <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>of</span>
@@ -1817,7 +1833,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -1835,7 +1852,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               depth={depth + 1}
                               showWeight={false}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -1855,7 +1873,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -1875,7 +1894,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -1894,7 +1914,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               depth={depth + 1}
                               showWeight={false}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -2011,7 +2032,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -2029,7 +2051,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               depth={depth + 1}
                               showWeight={false}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -2049,7 +2072,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -2069,7 +2093,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -2088,7 +2113,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
                               depth={depth + 1}
                               showWeight={false}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -2183,7 +2209,8 @@ interface IndicatorParamsProps {
   conditionIndex: number;
   elementId: string;
   validationErrors: ValidationError[];
-  definedVariables: Set<string>;
+  variableLists: Array<{ name: string }>;
+  variablesLoading: boolean;
   inline?: boolean;
 }
 
@@ -2194,7 +2221,8 @@ function IndicatorParams({
   conditionIndex,
   elementId,
   validationErrors,
-  definedVariables,
+  variableLists,
+  variablesLoading,
   inline = false,
 }: IndicatorParamsProps) {
   const paramKeys = keysForIndicator(indicator);
@@ -2220,7 +2248,7 @@ function IndicatorParams({
       <span style={{ fontSize: '13px', color: '#9ca3af' }}>(</span>
       {paramKeys.map((key, idx) => {
         const value = params[key] || '';
-        const hasUndefinedVar = hasUndefinedVariableInField(value, definedVariables);
+        const hasUndefinedVar = hasUndefinedVariableInField(value, variableLists, variablesLoading);
         const hasError = hasFieldError(elementId, `conditions.${conditionIndex}.period`, validationErrors);
         const defaultValue = getEffectiveParams(indicator)[key];
 
@@ -2301,7 +2329,8 @@ interface ConditionRowProps {
   showRemove: boolean;
   elementId: string;
   validationErrors: ValidationError[];
-  definedVariables: Set<string>;
+  variableLists: Array<{ name: string }>;
+  variablesLoading: boolean;
   inline?: boolean; // If true, render without background (for single-line IF mode)
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
@@ -2317,7 +2346,8 @@ function ConditionRow({
   showRemove,
   elementId,
   validationErrors,
-  definedVariables,
+  variableLists,
+  variablesLoading,
   inline = false,
   tickerMetadata,
   metadataLoading,
@@ -2332,11 +2362,11 @@ function ConditionRow({
   const rightTickerInputRef = useRef<HTMLInputElement>(null);
 
   // Check for undefined variables in this condition's fields
-  const tickerHasUndefinedVar = hasUndefinedVariableInField(condition.ticker, definedVariables);
-  const periodHasUndefinedVar = hasUndefinedVariableInField(condition.period, definedVariables);
-  const thresholdHasUndefinedVar = hasUndefinedVariableInField(condition.threshold, definedVariables);
-  const rightTickerHasUndefinedVar = hasUndefinedVariableInField(condition.rightTicker, definedVariables);
-  const rightPeriodHasUndefinedVar = hasUndefinedVariableInField(condition.rightPeriod, definedVariables);
+  const tickerHasUndefinedVar = hasUndefinedVariableInField(condition.ticker, variableLists, variablesLoading);
+  const periodHasUndefinedVar = hasUndefinedVariableInField(condition.period, variableLists, variablesLoading);
+  const thresholdHasUndefinedVar = hasUndefinedVariableInField(condition.threshold, variableLists, variablesLoading);
+  const rightTickerHasUndefinedVar = hasUndefinedVariableInField(condition.rightTicker, variableLists, variablesLoading);
+  const rightPeriodHasUndefinedVar = hasUndefinedVariableInField(condition.rightPeriod, variableLists, variablesLoading);
   const indicatorLabel = (condition.indicator || "").replace(/_/g, " ");
   const indicatorSelectWidth = `${Math.max(indicatorLabel.length * 9 + 30, 120)}px`;
   const rightIndicatorLabel = ((condition.rightIndicator || "RSI") as string).replace(/_/g, " ");
@@ -2446,7 +2476,8 @@ function ConditionRow({
         conditionIndex={conditionIndex}
         elementId={elementId}
         validationErrors={validationErrors}
-        definedVariables={definedVariables}
+        variableLists={variableLists}
+        variablesLoading={variablesLoading}
       />
 
       <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
@@ -2628,7 +2659,8 @@ function ConditionRow({
             conditionIndex={conditionIndex}
             elementId={elementId}
             validationErrors={validationErrors}
-            definedVariables={definedVariables}
+            variableLists={variableLists}
+            variablesLoading={variablesLoading}
           />
 
           <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>of</span>
@@ -2715,14 +2747,15 @@ export interface GateCardProps {
   isWeightInvalid?: boolean;
   allElements?: Element[]; // For counting gates
   validationErrors?: ValidationError[];
-  definedVariables?: Set<string>;
+  variableLists?: Array<{ name: string }>;
+  variablesLoading?: boolean;
   tickerMetadata?: Map<string, TickerMetadata>;
   metadataLoading?: boolean;
   metadataError?: string | null;
   onVariableCreated?: () => void;
 }
 
-export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], definedVariables = new Set<string>(), tickerMetadata, metadataLoading, metadataError, onVariableCreated }: GateCardProps) {
+export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth = 0, showWeight = false, isWeightInvalid = false, allElements = [], validationErrors = [], variableLists = [], variablesLoading = false, tickerMetadata, metadataLoading, metadataError, onVariableCreated }: GateCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showThenDropdown, setShowThenDropdown] = useState(false);
   const [showElseDropdown, setShowElseDropdown] = useState(false);
@@ -2991,7 +3024,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
             showRemove={false}
             elementId={element.id}
             validationErrors={validationErrors}
-            definedVariables={definedVariables}
+            variableLists={variableLists}
+            variablesLoading={variablesLoading}
             inline={true}
             tickerMetadata={tickerMetadata}
             metadataLoading={metadataLoading}
@@ -3098,7 +3132,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                 showRemove={true}
                 elementId={element.id}
                 validationErrors={validationErrors}
-                definedVariables={definedVariables}
+                variableLists={variableLists}
+            variablesLoading={variablesLoading}
                 inline={true}
                 tickerMetadata={tickerMetadata}
                 metadataLoading={metadataLoading}
@@ -3210,7 +3245,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           depth={depth + 1}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -3227,7 +3263,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           depth={depth + 1}
                           showWeight={false}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -3246,7 +3283,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           showWeight={false}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -3265,7 +3303,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -3284,7 +3323,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -3378,7 +3418,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           depth={depth + 1}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -3395,7 +3436,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           depth={depth + 1}
                           showWeight={false}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -3414,7 +3456,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                           showWeight={false}
                           allElements={allElements}
                           validationErrors={validationErrors}
-                          definedVariables={definedVariables}
+                          variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                           tickerMetadata={tickerMetadata}
                           metadataLoading={metadataLoading}
                           metadataError={metadataError}
@@ -3433,7 +3476,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
@@ -3452,7 +3496,8 @@ export function GateCard({ element, onUpdate, onDelete, onCopy, clipboard, depth
                               showWeight={false}
                               allElements={allElements}
                               validationErrors={validationErrors}
-                              definedVariables={definedVariables}
+                              variableLists={variableLists}
+                          variablesLoading={variablesLoading}
                               tickerMetadata={tickerMetadata}
                               metadataLoading={metadataLoading}
                               metadataError={metadataError}
