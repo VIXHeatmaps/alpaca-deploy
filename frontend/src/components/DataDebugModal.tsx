@@ -159,6 +159,8 @@ export function DataDebugModal({ apiKey, apiSecret, onClose }: DataDebugModalPro
       setLoading(true);
       setError(null);
 
+      console.log('[DataDebug] Fetching from:', `${API_BASE}/api/debug/data`);
+
       const response = await axios.get(`${API_BASE}/api/debug/data`, {
         headers: {
           "APCA-API-KEY-ID": apiKey,
@@ -168,10 +170,19 @@ export function DataDebugModal({ apiKey, apiSecret, onClose }: DataDebugModalPro
         timeout: 30000,
       });
 
+      console.log('[DataDebug] Response:', response.data);
       setData(response.data);
     } catch (err: any) {
-      console.error("Failed to fetch debug data:", err);
-      setError(err?.response?.data?.error || err?.message || "Failed to fetch debug data");
+      console.error("[DataDebug] Failed to fetch debug data:", err);
+      console.error("[DataDebug] Error response:", err?.response);
+      console.error("[DataDebug] Error status:", err?.response?.status);
+      console.error("[DataDebug] Error data:", err?.response?.data);
+
+      const errorMsg = err?.response?.status === 404
+        ? `Endpoint not found (404). Backend may need to restart. Tried: ${API_BASE}/api/debug/data`
+        : (err?.response?.data?.error || err?.message || "Failed to fetch debug data");
+
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
