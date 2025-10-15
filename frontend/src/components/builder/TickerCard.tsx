@@ -51,10 +51,12 @@ export function TickerCard({
   const resolvedMetadata = symbol && tickerMetadata ? tickerMetadata.get(symbol) : undefined;
   const resolvedName = resolvedMetadata?.name?.trim() ? resolvedMetadata.name.trim() : null;
   const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
+  // Only check ticker metadata if it's not a variable reference
+  const isVariable = element.ticker?.trim().startsWith("$");
   const isUnknownTicker =
     metadataReady &&
     symbol.length > 0 &&
-    !hasUndefinedVar &&
+    !isVariable &&  // Don't check metadata for variables
     !tickerMetadata.has(symbol);
   const showErrorBorder = hasValidationError || hasUndefinedVar || isUnknownTicker;
   const tickerTooltip = hasUndefinedVar
