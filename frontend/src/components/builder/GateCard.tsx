@@ -1352,10 +1352,12 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const configTickerSymbol = config.ticker?.toUpperCase() ?? "";
   const metadataReady = !!tickerMetadata && !metadataLoading && !metadataError;
   const configTickerMetadata = configTickerSymbol && tickerMetadata ? tickerMetadata.get(configTickerSymbol) : undefined;
+  // Only check ticker metadata if it's not a variable reference
+  const isConfigVariable = config.ticker?.trim().startsWith("$");
   const configTickerUnknown =
     metadataReady &&
     configTickerSymbol.length > 0 &&
-    !tickerHasUndefinedVar &&
+    !isConfigVariable &&  // Don't check metadata for variables
     !tickerMetadata?.has(configTickerSymbol);
   const configTickerTooltip = tickerHasUndefinedVar
     ? `Variable ${config.ticker} is not defined in Variables tab. Double-click to define.`
