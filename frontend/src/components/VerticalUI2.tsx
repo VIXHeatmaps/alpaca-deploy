@@ -127,11 +127,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
   // Invest modal state
   const [showInvestModal, setShowInvestModal] = useState(false);
 
-  // Load variables on mount and when switching tabs
-  // This ensures we always have the latest variables when checking strategies
-  useEffect(() => {
-    refreshVariableLists();
-  }, [refreshVariableLists, activeTab]);
+  // Note: Variables are auto-fetched by useVariableLists hook on mount
+  // We only need to refresh when variables are created/updated (via onVariableCreated callback)
 
   // Batch backtest state
   const MAX_ASSIGNMENTS = 10000;

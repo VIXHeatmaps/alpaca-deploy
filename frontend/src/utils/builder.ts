@@ -100,10 +100,6 @@ export const hasUndefinedVariableInField = (
   // Not a variable reference if doesn't start with $
   if (!trimmed.startsWith("$")) return false;
 
-  // Defensive check: if variableLists is empty and we're checking a variable,
-  // assume we might still be loading (prevents false positives on initial render)
-  if (variableLists.length === 0) return false;
-
   // Extract and normalize variable name
   const varName = trimmed.slice(1).toLowerCase();
 
