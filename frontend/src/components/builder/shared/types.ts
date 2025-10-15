@@ -1,4 +1,5 @@
-import type { Element, ValidationError } from "../../../types/builder";
+import type { Element } from "../../../types/builder";
+import type { ValidationError } from "../../../utils/validation";
 import type { TickerMetadata } from "../../../api/tickers";
 
 /**
