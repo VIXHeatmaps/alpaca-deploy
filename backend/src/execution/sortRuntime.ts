@@ -282,6 +282,21 @@ async function simulateBranchEquity(
     // If indicators are missing, try computing them from price data (for ticker children)
     const allIndicatorValues = [...indicatorValuesForDate];
 
+    if (missing.length > 0 && i === 1) {
+      console.log(`[SORT DEBUG] Missing indicators on first day:`, missing);
+      console.log(`[SORT DEBUG] Indicator lookup map has ${indicatorLookup.size} entries:`);
+      for (const [key, period] of indicatorLookup.entries()) {
+        console.log(`[SORT DEBUG]   Lookup: ${key} -> ${period}`);
+      }
+      console.log(`[SORT DEBUG] IndicatorData has ${Object.keys(indicatorData).length} keys:`);
+      for (const key of Object.keys(indicatorData)) {
+        if (key.includes('SORT_')) {
+          const dates = Object.keys(indicatorData[key]);
+          console.log(`[SORT DEBUG]   Data: ${key} (${dates.length} dates, first: ${dates[0] || 'none'})`);
+        }
+      }
+    }
+
     if (missing.length > 0) {
       // Extract ticker and indicator info from missing entries
       for (const missingEntry of missing) {
