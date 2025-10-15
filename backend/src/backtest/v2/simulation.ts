@@ -119,15 +119,21 @@ export async function runSimulation(
   }
 
   // Precompute Sort indicators (warmup already handled by engine.ts)
-  await precomputeSortIndicators({
-    elements: elements as StrategyElement[],
-    priceData,
-    indicatorData,
-    dateGrid,
-    executeStrategy,
-    buildIndicatorMap,
-    debug,
-  });
+  try {
+    await precomputeSortIndicators({
+      elements: elements as StrategyElement[],
+      priceData,
+      indicatorData,
+      dateGrid,
+      executeStrategy,
+      buildIndicatorMap,
+      debug: false, // Disable debug to reduce log spam
+    });
+  } catch (err: any) {
+    console.error('[SIMULATION] Error in precomputeSortIndicators:', err.message);
+    console.error('[SIMULATION] Stack:', err.stack);
+    throw err;
+  }
 
   // Initialize portfolio (Decision #6: $100,000 starting capital)
   const STARTING_CAPITAL = 100000;
