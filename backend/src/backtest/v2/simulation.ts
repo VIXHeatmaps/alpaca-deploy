@@ -124,7 +124,7 @@ export async function runSimulation(
   console.log('[SIMULATION] DateGrid:', dateGrid.length, 'days from', dateGrid[0], 'to', dateGrid[dateGrid.length - 1]);
 
   try {
-    const result = await precomputeSortIndicators({
+    const sortStartDate = await precomputeSortIndicators({
       elements: elements as StrategyElement[],
       priceData,
       indicatorData,
@@ -133,7 +133,18 @@ export async function runSimulation(
       buildIndicatorMap,
       debug: false, // Disable debug to reduce log spam
     });
-    console.log('[SIMULATION] precomputeSortIndicators completed, result:', result);
+    console.log('[SIMULATION] precomputeSortIndicators completed, sortStartDate:', sortStartDate);
+
+    // If Sort elements exist and need warmup, adjust dateGrid
+    if (sortStartDate) {
+      const originalLength = dateGrid.length;
+      dateGrid = dateGrid.filter(d => d >= sortStartDate);
+      console.log(`[SIMULATION] Adjusted dateGrid for Sort warmup: ${originalLength} -> ${dateGrid.length} days (start: ${sortStartDate})`);
+
+      if (dateGrid.length < 2) {
+        throw new Error(`Insufficient trading days after Sort warmup. Sort indicators start at ${sortStartDate}`);
+      }
+    }
   } catch (err: any) {
     console.error('[SIMULATION] Error in precomputeSortIndicators:', err.message);
     console.error('[SIMULATION] Stack:', err.stack);
