@@ -982,8 +982,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
           if (status === 'running' || status === 'queued') {
             setTimeout(pollJobStatus, 2000); // Poll every 2 seconds
           } else if (status === 'finished') {
-            // Switch to Batch Tests tab to show results
-            setActiveTab("batchtests");
+            // Don't auto-switch tabs - let user stay in builder view
             alert(`Batch backtest completed! ${statusData.completed || assignments.length} strategies tested.`);
           } else if (status === 'failed') {
             alert(`Batch backtest failed: ${statusData.error || 'Unknown error'}`);
