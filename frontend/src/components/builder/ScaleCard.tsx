@@ -51,6 +51,7 @@ import { TickerCard } from "./TickerCard";
 import { WeightCard } from "./WeightCard";
 import { GateCard } from "./GateCard";
 import { SortCard } from "./SortCard";
+import { TickerInput } from "./shared/TickerInput";
 import {
   createDefaultGateElement,
   createDefaultScaleElement,
@@ -394,10 +395,8 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
   const [isOpen, setIsOpen] = useState(false);
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
-  const [showTickerPopover, setShowTickerPopover] = useState(false);
   const [showRangeMinPopover, setShowRangeMinPopover] = useState(false);
   const [showRangeMaxPopover, setShowRangeMaxPopover] = useState(false);
-  const tickerInputRef = useRef<HTMLInputElement>(null);
   const rangeMinInputRef = useRef<HTMLInputElement>(null);
   const rangeMaxInputRef = useRef<HTMLInputElement>(null);
 
@@ -690,44 +689,22 @@ export function ScaleCard({ element, onUpdate, onDelete, onCopy, clipboard, dept
 
           <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>of</span>
 
-          <input
-            ref={tickerInputRef}
-            type="text"
+          <TickerInput
             value={config.ticker}
-            onChange={(e) => updateConfig({ ticker: e.target.value.toUpperCase() })}
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-              if (tickerHasUndefinedVar) {
-                setShowTickerPopover(true);
-              }
-            }}
-            style={{
-              border: tickerHasVisualError ? "2px solid #ef4444" : "1px solid #d1d5db",
-              outline: "none",
-              padding: "4px 8px",
-              background: tickerHasVisualError ? "#fee2e2" : "#fff",
-              fontSize: "13px",
-              color: tickerHasVisualError ? "#b91c1c" : config.ticker ? "#111827" : "#9ca3af",
-              width: `${Math.max((config.ticker || "Ticker").length * 9 + 20, 80)}px`,
-              maxWidth: "300px",
-              flexShrink: 0,
-              borderRadius: "4px",
-              cursor: tickerHasUndefinedVar ? "pointer" : "text",
-            }}
-            className="focus:ring-2 focus:ring-blue-500"
+            onChange={(ticker) => updateConfig({ ticker })}
+            elementId={element.id}
+            field="ticker"
+            variableLists={variableLists}
+            variablesLoading={variablesLoading}
+            tickerMetadata={tickerMetadata}
+            metadataLoading={metadataLoading}
+            metadataError={metadataError}
+            validationErrors={validationErrors}
+            onVariableCreated={onVariableCreated}
             placeholder="Ticker"
-            title={configTickerTooltip}
+            maxWidth="300px"
+            stopPropagation={true}
           />
-
-          {showTickerPopover && tickerInputRef.current && (
-            <VariablePopover
-              variableName={config.ticker.startsWith("$") ? config.ticker.slice(1) : config.ticker}
-              anchorEl={tickerInputRef.current}
-              onSave={(values, type) => handleSaveVariable(config.ticker, values, type)}
-              onClose={() => setShowTickerPopover(false)}
-            />
-          )}
 
           <span style={{ fontSize: "13px", color: "#6b7280", flexShrink: 0 }}>from</span>
 
