@@ -295,8 +295,42 @@ export function calculateEffectiveStart(
 export function getValidDateGrid(
   elements: any[],
   priceData: PriceData,
-  fullDateGrid: string[]
+  fullDateGrid: string[],
+  indicatorData?: IndicatorData
 ): string[] {
-  const { effectiveStart } = calculateEffectiveStart(elements, priceData);
+  let effectiveStart = calculateEffectiveStart(elements, priceData).effectiveStart;
+
+  // For Sort elements, check when precomputed indicators are actually available
+  if (indicatorData && elements.length > 0) {
+    const sortElement = elements[0];
+    if (sortElement.type === 'sort' && sortElement.children) {
+      let latestIndicatorStart: string | null = null;
+
+      // Check when each child's Sort indicator becomes available
+      for (const child of sortElement.children) {
+        const sortTicker = `SORT_${sortElement.id}_${child.id}`;
+        const indicator = sortElement.indicator;
+
+        // Look for the indicator key in indicatorData (pipe-separated format)
+        for (const key of Object.keys(indicatorData)) {
+          if (key.startsWith(`${sortTicker}|${indicator}|`)) {
+            const dates = Object.keys(indicatorData[key]).sort();
+            if (dates.length > 0) {
+              const firstDate = dates[0];
+              if (!latestIndicatorStart || firstDate > latestIndicatorStart) {
+                latestIndicatorStart = firstDate;
+              }
+            }
+          }
+        }
+      }
+
+      // Use the later of: calculated effective start OR actual indicator availability
+      if (latestIndicatorStart && latestIndicatorStart > effectiveStart) {
+        effectiveStart = latestIndicatorStart;
+      }
+    }
+  }
+
   return fullDateGrid.filter(date => date >= effectiveStart);
 }
