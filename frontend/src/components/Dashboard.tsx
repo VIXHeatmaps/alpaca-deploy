@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { DataDebugModal } from "./DataDebugModal";
 import PortfolioHoldings from "./PortfolioHoldings";
-import { StrategyViewModal } from "./StrategyViewModal";
+import { BuilderModal } from "./BuilderModal";
 import type { Strategy } from "../api/strategies";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
@@ -1112,10 +1112,13 @@ export function Dashboard({
         />
       )}
 
-      {viewingStrategy && (
-        <StrategyViewModal
+      {viewingStrategy && onLoadStrategy && (
+        <BuilderModal
           strategy={viewingStrategy}
+          apiKey={apiKey}
+          apiSecret={apiSecret}
           onClose={() => setViewingStrategy(null)}
+          onLoadStrategy={onLoadStrategy}
         />
       )}
     </div>
