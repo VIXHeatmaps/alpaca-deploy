@@ -1059,7 +1059,7 @@ tradingRouter.get('/debug/data', requireAuth, async (req: Request, res: Response
  */
 tradingRouter.get('/portfolio/holdings', requireAuth, async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = (req as any).user?.id;
     const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
     const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
 

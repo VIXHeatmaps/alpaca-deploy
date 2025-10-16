@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { Dashboard } from "./components/Dashboard";
 import { BuilderWrapper } from "./components/BuilderWrapper";
+import { StrategyEditor } from "./components/StrategyEditor";
 import { BugReportModal } from "./components/BugReportModal";
 import { FeedbackView } from "./components/FeedbackView";
 import type { Strategy } from "./api/strategies";
@@ -530,6 +531,13 @@ function App() {
               apiKey={apiKey}
               apiSecret={apiSecret}
               view="builder"
+              onLoadStrategy={handleLoadStrategy}
+            />
+          } />
+          <Route path="/strategies/:strategyName" element={
+            <StrategyEditor
+              apiKey={apiKey}
+              apiSecret={apiSecret}
               onLoadStrategy={handleLoadStrategy}
             />
           } />

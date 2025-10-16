@@ -1,12 +1,12 @@
 /**
  * Builder Modal
  *
- * Large modal (90% viewport) containing the full Builder component
- * for editing LIVE strategies directly from the Dashboard
+ * Large modal showing the full Builder for a specific strategy
+ * Can be expanded to dedicated URL for full-page editing
  */
 
-import { useEffect } from 'react';
-import { BuilderWrapper } from './BuilderWrapper';
+import { useNavigate } from 'react-router-dom';
+import { StrategyEditor } from './StrategyEditor';
 import type { Strategy } from '../api/strategies';
 
 type Props = {
@@ -18,14 +18,11 @@ type Props = {
 };
 
 export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrategy }: Props) {
-  // Load the strategy when modal opens
-  useEffect(() => {
-    onLoadStrategy(strategy);
-  }, [strategy.id]);
+  const navigate = useNavigate();
 
-  const handleExpandToTab = () => {
-    // Strategy is already loaded, just navigate to builder in new tab
-    window.open('/builder', '_blank');
+  const handleExpandToPage = () => {
+    onClose();
+    navigate(`/strategies/${encodeURIComponent(strategy.name)}`);
   };
 
   return (
@@ -90,19 +87,19 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
-              onClick={handleExpandToTab}
+              onClick={handleExpandToPage}
               style={{
                 padding: '6px 12px',
                 fontSize: 13,
-                fontWeight: 500,
-                background: '#fff',
-                border: '1px solid #d1d5db',
+                fontWeight: 600,
+                background: '#1677ff',
+                border: 'none',
                 borderRadius: 6,
                 cursor: 'pointer',
-                color: '#374151',
+                color: '#fff',
               }}
             >
-              Expand to Tab →
+              Open Full Page →
             </button>
             <button
               onClick={onClose}
@@ -124,13 +121,14 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
           </div>
         </div>
 
-        {/* Builder Content */}
+        {/* Strategy Editor Content */}
         <div style={{ flex: 1, overflow: 'auto', background: '#fff' }}>
-          <BuilderWrapper
+          <StrategyEditor
             apiKey={apiKey}
             apiSecret={apiSecret}
-            view="builder"
+            strategyName={strategy.name}
             onLoadStrategy={onLoadStrategy}
+            isModal={true}
           />
         </div>
       </div>
