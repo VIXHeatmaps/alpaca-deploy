@@ -224,7 +224,7 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
 
   return (
     <div style={styles.card}>
-      <div style={styles.cardTitle}>Portfolio Holdings</div>
+      <div style={{ ...styles.cardTitle, justifyContent: 'flex-start' }}>Portfolio Holdings</div>
 
       {loading ? (
         <div style={styles.emptyState}>Loading portfolio holdings...</div>
@@ -237,15 +237,23 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
           No positions yet. Deploy a strategy to see holdings here.
         </div>
       ) : (
-        <table style={styles.table}>
+        <table style={{ ...styles.table, tableLayout: 'fixed' as const }}>
+          <colgroup>
+            <col style={{ width: '40px' }} />
+            <col style={{ width: 'auto' }} />
+            <col style={{ width: '120px' }} />
+            <col style={{ width: '140px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '140px' }} />
+          </colgroup>
           <thead>
             <tr>
+              <th style={styles.tableHeader}></th>
               <th style={styles.tableHeader}>Symbol</th>
               <th style={styles.tableHeaderRight}>Quantity</th>
               <th style={styles.tableHeaderRight}>Market Value</th>
               <th style={styles.tableHeaderRight}>Weight</th>
               <th style={styles.tableHeaderCenter}>Attribution</th>
-              <th style={styles.tableHeaderCenter}></th>
             </tr>
           </thead>
           <tbody>
@@ -257,6 +265,21 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
                 <React.Fragment key={holding.symbol}>
                   {/* Main Row */}
                   <tr>
+                    <td style={styles.tableCell}>
+                      <button
+                        onClick={() => toggleRow(holding.symbol)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: 14,
+                          color: '#666',
+                          padding: 0,
+                        }}
+                      >
+                        {isExpanded ? '▼' : '▶'}
+                      </button>
+                    </td>
                     <td style={styles.tableCell}>
                       <strong>{holding.symbol}</strong>
                     </td>
@@ -273,14 +296,6 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
                       <span style={styles.validationBadge(isValid)}>
                         {isValid ? '✓ 100%' : `⚠ ${(holding.strategies.reduce((sum, s) => sum + s.allocationPct, 0) * 100).toFixed(1)}%`}
                       </span>
-                    </td>
-                    <td style={styles.tableCellCenter}>
-                      <button
-                        onClick={() => toggleRow(holding.symbol)}
-                        style={styles.expandButton}
-                      >
-                        {isExpanded ? '▼ Hide' : '▶ Details'}
-                      </button>
                     </td>
                   </tr>
 
@@ -329,6 +344,7 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
             {/* Cash Row */}
             {data && (
               <tr style={{ background: "#fafafa" }}>
+                <td style={styles.tableCell}></td>
                 <td style={{ ...styles.tableCell, fontWeight: 700 }}>Cash (Remainder)</td>
                 <td style={styles.tableCellRight}>-</td>
                 <td style={{ ...styles.tableCellRight, fontWeight: 700 }}>
@@ -338,20 +354,19 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
                   {data.totalPortfolioValue > 0 ? ((data.cashBalance / data.totalPortfolioValue) * 100).toFixed(2) : '0.00'}%
                 </td>
                 <td style={{ ...styles.tableCellCenter, color: "#999", fontSize: 11 }}>Unattributed</td>
-                <td style={styles.tableCellCenter}></td>
               </tr>
             )}
 
             {/* Total Row */}
             {data && (
               <tr style={{ background: "#e6e6e6" }}>
+                <td style={styles.tableCell}></td>
                 <td style={{ ...styles.tableCell, fontWeight: 700, fontSize: 14 }}>TOTAL</td>
                 <td style={styles.tableCellRight}>-</td>
                 <td style={{ ...styles.tableCellRight, fontWeight: 700, fontSize: 14 }}>
                   ${data.totalPortfolioValue.toFixed(2)}
                 </td>
                 <td style={{ ...styles.tableCellRight, fontWeight: 700 }}>100.00%</td>
-                <td style={styles.tableCellCenter}></td>
                 <td style={styles.tableCellCenter}></td>
               </tr>
             )}

@@ -852,9 +852,19 @@ export function Dashboard({
               </div>
             ) : (
               <div>
-                <table style={{ ...styles.table, marginBottom: 0 }}>
+                <table style={{ ...styles.table, marginBottom: 0, tableLayout: 'fixed' as const }}>
+                  <colgroup>
+                    <col style={{ width: '40px' }} />
+                    <col style={{ width: 'auto' }} />
+                    <col style={{ width: '100px' }} />
+                    <col style={{ width: '140px' }} />
+                    <col style={{ width: '140px' }} />
+                    <col style={{ width: '120px' }} />
+                    <col style={{ width: '120px' }} />
+                  </colgroup>
                   <thead>
                     <tr>
+                      <th style={styles.tableHeader}></th>
                       <th style={styles.tableHeader}>Strategy</th>
                       <th style={styles.tableHeader}>Status</th>
                       <th style={styles.tableHeader}>Net Deposits</th>
@@ -870,8 +880,10 @@ export function Dashboard({
                           const detailsEl = document.getElementById(`strategy-details-${strategy.id}`) as HTMLDetailsElement;
                           if (detailsEl) detailsEl.open = !detailsEl.open;
                         }} style={{ cursor: "pointer" }}>
-                            <td style={{ ...styles.tableCell, display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 14, color: "#999" }}>▸</span>
+                            <td style={styles.tableCell}>
+                              <span style={{ fontSize: 18, color: "#999" }}>▸</span>
+                            </td>
+                            <td style={styles.tableCell}>
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
