@@ -107,14 +107,13 @@ async function createDailySnapshots() {
           continue;
         }
 
-        // Calculate total equity from holdings using actual entry prices
+        // Calculate total equity from holdings using CURRENT market prices
         let totalEquity = 0;
         const holdingsWithPrices = [];
 
         for (const holding of holdings) {
-          // Use the actual entry price from the trade (real fill price)
-          // If no entry_price, fall back to fetching current price (shouldn't happen for traded positions)
-          const price = holding.entry_price || await getCurrentPrice(holding.symbol, apiKey, apiSecret);
+          // Always use current price for daily snapshots (not entry price)
+          const price = await getCurrentPrice(holding.symbol, apiKey, apiSecret);
           const value = holding.qty * price;
           totalEquity += value;
 

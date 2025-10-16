@@ -428,7 +428,6 @@ export function Dashboard({
   const [snapshotsByStrategy, setSnapshotsByStrategy] = useState<Record<string, StrategySnapshot[]>>({});
   const [positions, setPositions] = useState<AccountPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [showDataDebug, setShowDataDebug] = useState(false);
 
   // Fetch account info
@@ -507,8 +506,8 @@ export function Dashboard({
             status: dbStrategy.status,
             investAmount: dbStrategy.initial_capital,
             currentValue: dbStrategy.current_capital || 0,
-            totalReturn: 0,
-            totalReturnPct: 0,
+            totalReturn: dbStrategy.totalReturn || 0,
+            totalReturnPct: dbStrategy.totalReturnPct || 0,
             createdAt: dbStrategy.started_at,
             lastRebalance: dbStrategy.last_rebalance_at,
             holdings: dbStrategy.holdings || [],
@@ -666,45 +665,6 @@ export function Dashboard({
       return new Date(dateStr).toLocaleDateString();
     } catch {
       return dateStr;
-    }
-  };
-
-  const handleSyncHoldings = async (strategy: ActiveStrategy) => {
-    if (!apiKey || !apiSecret) return;
-
-    setSyncing(true);
-
-    try {
-      const response = await axios.post(
-        `${API_BASE}/api/strategy/${strategy.id}/sync-holdings`,
-        {},
-        {
-          headers: {
-            "APCA-API-KEY-ID": apiKey,
-            "APCA-API-SECRET-KEY": apiSecret,
-          },
-          withCredentials: true,
-          timeout: 10000,
-        }
-      );
-
-      if (response.data.success) {
-        alert(
-          `Holdings synced successfully!\n\n` +
-          `Updated holdings: ${response.data.holdings.map((h: any) => `${h.qty.toFixed(4)} ${h.symbol}`).join(", ")}\n` +
-          `Current value: ${formatCurrency(response.data.currentValue)}`
-        );
-
-        // Refresh strategy data
-        window.location.reload();
-      }
-    } catch (err: any) {
-      console.error("Sync failed:", err);
-      alert(
-        `Failed to sync holdings:\n${err?.response?.data?.error || err?.message || "Unknown error"}`
-      );
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -982,49 +942,26 @@ export function Dashboard({
                               </strong>
                             </td>
                             <td style={{ ...styles.tableCell, textAlign: "right" as const }}>
-                              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSyncHoldings(strategy);
-                                  }}
-                                  disabled={syncing}
-                                  style={{
-                                    background: "#1677ff",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: 4,
-                                    padding: "6px 10px",
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    cursor: syncing ? "not-allowed" : "pointer",
-                                    opacity: syncing ? 0.6 : 1,
-                                  }}
-                                  title="Sync holdings from Alpaca positions"
-                                >
-                                  {syncing ? "Syncing..." : "Sync"}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleLiquidate(strategy);
-                                  }}
-                                  disabled={liquidatingStrategies.has(strategy.id)}
-                                  style={{
-                                    background: "#b00020",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: 4,
-                                    padding: "6px 10px",
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    cursor: liquidatingStrategies.has(strategy.id) ? "not-allowed" : "pointer",
-                                    opacity: liquidatingStrategies.has(strategy.id) ? 0.6 : 1,
-                                  }}
-                                >
-                                  {liquidatingStrategies.has(strategy.id) ? "Liquidating..." : "Liquidate"}
-                                </button>
-                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleLiquidate(strategy);
+                                }}
+                                disabled={liquidatingStrategies.has(strategy.id)}
+                                style={{
+                                  background: "#b00020",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: 4,
+                                  padding: "6px 10px",
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  cursor: liquidatingStrategies.has(strategy.id) ? "not-allowed" : "pointer",
+                                  opacity: liquidatingStrategies.has(strategy.id) ? 0.6 : 1,
+                                }}
+                              >
+                                {liquidatingStrategies.has(strategy.id) ? "Liquidating..." : "Liquidate"}
+                              </button>
                             </td>
                           </tr>
                           <tr>

@@ -504,22 +504,81 @@ tradingRouter.get('/active-strategies', requireAuth, async (req: Request, res: R
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
     const strategies = await getActiveStrategiesByUserId(userId);
 
+    // Fetch live Alpaca positions to calculate current values
+    let alpacaPositions: Array<{ symbol: string; qty: number; market_value: number; avg_entry_price: number; current_price: number }> = [];
+    if (apiKey && apiSecret) {
+      try {
+        const positionsResponse = await axios.get('https://paper-api.alpaca.markets/v2/positions', {
+          headers: {
+            'APCA-API-KEY-ID': apiKey,
+            'APCA-API-SECRET-KEY': apiSecret,
+          },
+          timeout: 10000,
+        });
+        alpacaPositions = positionsResponse.data.map((pos: any) => ({
+          symbol: pos.symbol,
+          qty: parseFloat(pos.qty),
+          market_value: parseFloat(pos.market_value),
+          avg_entry_price: parseFloat(pos.avg_entry_price),
+          current_price: parseFloat(pos.current_price),
+        }));
+      } catch (err: any) {
+        console.error('Failed to fetch Alpaca positions for live calculation:', err.message);
+      }
+    }
+
     return res.json({
-      strategies: strategies.map((s) => ({
-        id: s.id,
-        name: s.name,
-        status: s.status,
-        mode: s.mode,
-        initial_capital: parseFloat(s.initial_capital),
-        current_capital: s.current_capital ? parseFloat(s.current_capital) : null,
-        holdings: normalizeHoldings(s.holdings),
-        pending_orders: s.pending_orders || [],
-        started_at: s.started_at,
-        last_rebalance_at: s.last_rebalance_at,
-        flowData: s.flow_data || null,
-      })),
+      strategies: strategies.map((s) => {
+        const initialCapital = parseFloat(s.initial_capital);
+        const attribution = s.position_attribution || {};
+
+        // Calculate current value using attribution and live Alpaca positions
+        let currentValue = 0;
+        const virtualHoldings: Array<{ symbol: string; qty: number; marketValue: number }> = [];
+
+        for (const [symbol, attr] of Object.entries(attribution as Record<string, any>)) {
+          const alpacaPos = alpacaPositions.find((p) => p.symbol === symbol);
+          const allocationPct = (attr as any)?.allocation_pct || 0;
+
+          if (alpacaPos) {
+            // Calculate virtual holdings based on attribution
+            const virtualQty = alpacaPos.qty * allocationPct;
+            const virtualValue = alpacaPos.market_value * allocationPct;
+            currentValue += virtualValue;
+
+            virtualHoldings.push({
+              symbol,
+              qty: virtualQty,
+              marketValue: virtualValue,
+            });
+          }
+        }
+
+        // Calculate returns
+        const totalReturn = currentValue - initialCapital;
+        const totalReturnPct = initialCapital > 0 ? (totalReturn / initialCapital) * 100 : 0;
+
+        return {
+          id: s.id,
+          name: s.name,
+          status: s.status,
+          mode: s.mode,
+          initial_capital: initialCapital,
+          current_capital: currentValue, // Calculated, not from DB
+          totalReturn,
+          totalReturnPct,
+          holdings: virtualHoldings, // Virtual holdings based on attribution
+          pending_orders: s.pending_orders || [],
+          started_at: s.started_at,
+          last_rebalance_at: s.last_rebalance_at,
+          flowData: s.flow_data || null,
+        };
+      }),
     });
   } catch (err: any) {
     console.error('GET /api/active-strategies error:', err);
@@ -622,48 +681,6 @@ tradingRouter.post('/rebalance', requireAuth, async (req: Request, res: Response
   }
 });
 
-tradingRouter.post('/strategy/sync-holdings', async (req: Request, res: Response) => {
-  try {
-    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
-    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
-
-    if (!apiKey || !apiSecret) {
-      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
-    }
-
-    const strategy = await getActiveStrategy();
-    if (!strategy) {
-      return res.status(400).json({ error: 'No active strategy to sync' });
-    }
-
-    console.log(`\n=== SYNCING HOLDINGS FOR STRATEGY: ${strategy.name} ===`);
-
-    const positions = await getAlpacaPositions(apiKey, apiSecret);
-    console.log(`Found ${positions.length} positions in Alpaca account`);
-
-    const updatedHoldings = positions.map((pos) => ({
-      symbol: pos.symbol,
-      qty: pos.qty,
-    }));
-
-    const currentValue = positions.reduce((sum, pos) => sum + pos.market_value, 0);
-
-    await setActiveStrategy({
-      ...strategy,
-      holdings: updatedHoldings,
-      currentValue,
-      pendingOrders: [],
-    });
-
-    console.log('Holdings synced successfully');
-
-    return res.json({ success: true, holdings: updatedHoldings, currentValue });
-  } catch (err: any) {
-    console.error('POST /api/strategy/sync-holdings error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to sync holdings' });
-  }
-});
-
 tradingRouter.post('/liquidate', requireAuth, async (req: Request, res: Response) => {
   try {
     const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
@@ -726,53 +743,6 @@ tradingRouter.post('/liquidate', requireAuth, async (req: Request, res: Response
   } catch (err: any) {
     console.error('POST /api/liquidate error:', err);
     return res.status(500).json({ error: err.message || 'Liquidation failed' });
-  }
-});
-
-tradingRouter.post('/strategy/:id/sync-holdings', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const strategyId = parseInt(req.params.id);
-    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
-    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
-
-    if (!apiKey || !apiSecret) {
-      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
-    }
-
-    const strategy = await getActiveStrategyById(strategyId);
-    if (!strategy) {
-      return res.status(404).json({ error: `Strategy ${strategyId} not found` });
-    }
-
-    console.log(`\n=== SYNCING HOLDINGS FOR STRATEGY: ${strategy.name} (ID: ${strategyId}) ===`);
-
-    const positions = await getAlpacaPositions(apiKey, apiSecret);
-    console.log(`Found ${positions.length} total positions in Alpaca account`);
-
-    const updatedHoldings = positions.map((pos) => ({
-      symbol: pos.symbol,
-      qty: pos.qty,
-      marketValue: pos.market_value,
-    }));
-
-    const currentValue = positions.reduce((sum, pos) => sum + pos.market_value, 0);
-
-    await updateActiveStrategy(strategyId, {
-      holdings: updatedHoldings,
-      current_capital: currentValue,
-      pending_orders: [],
-    });
-
-    console.log('Holdings synced successfully');
-
-    return res.json({
-      success: true,
-      holdings: updatedHoldings,
-      currentValue,
-    });
-  } catch (err: any) {
-    console.error(`POST /api/strategy/:id/sync-holdings error:`, err);
-    return res.status(500).json({ error: err.message || 'Failed to sync holdings' });
   }
 });
 
