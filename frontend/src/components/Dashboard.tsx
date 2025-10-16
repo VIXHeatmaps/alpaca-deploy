@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { DataDebugModal } from "./DataDebugModal";
 import PortfolioHoldings from "./PortfolioHoldings";
+import { StrategyViewModal } from "./StrategyViewModal";
+import type { Strategy } from "../api/strategies";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
 
@@ -430,6 +432,7 @@ export function Dashboard({
   const [positions, setPositions] = useState<AccountPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [showDataDebug, setShowDataDebug] = useState(false);
+  const [viewingStrategy, setViewingStrategy] = useState<Strategy | null>(null);
 
   // Fetch account info
   useEffect(() => {
@@ -717,6 +720,22 @@ export function Dashboard({
     }
   };
 
+  const handleViewStrategy = async (strategyName: string) => {
+    try {
+      const { getAllStrategies } = await import('../api/strategies');
+      const strategies = await getAllStrategies();
+      const found = strategies.find(s => s.name === strategyName && s.status === 'LIVE');
+      if (found) {
+        setViewingStrategy(found);
+      } else {
+        alert(`Strategy "${strategyName}" not found in Library. It may not have been saved yet.`);
+      }
+    } catch (err: any) {
+      console.error('Failed to load strategy:', err);
+      alert(`Failed to load strategy: ${err.message}`);
+    }
+  };
+
   // Detect if this is a paper account (usually paper accounts have "PA" prefix or account_type field)
   const isPaperAccount = accountInfo
     ? accountInfo.account_number?.startsWith("PA") ||
@@ -854,24 +873,20 @@ export function Dashboard({
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (onViewStrategyFlow && strategy.flowData) {
-                                    onViewStrategyFlow(strategy.flowData);
-                                  }
+                                  handleViewStrategy(strategy.name);
                                 }}
                                 style={{
-                                  cursor: onViewStrategyFlow && strategy.flowData ? "pointer" : "default",
+                                  cursor: "pointer",
                                   color: "#1677ff",
                                   fontWeight: 600,
                                 }}
                                 onMouseEnter={(e) => {
-                                  if (onViewStrategyFlow && strategy.flowData) {
-                                    e.currentTarget.style.textDecoration = "underline";
-                                  }
+                                  e.currentTarget.style.textDecoration = "underline";
                                 }}
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.textDecoration = "none";
                                 }}
-                                title={onViewStrategyFlow && strategy.flowData ? "Click to view strategy logic in Flow Builder" : undefined}
+                                title="Click to view strategy logic"
                               >
                                 {strategy.name}
                               </div>
@@ -1092,6 +1107,13 @@ export function Dashboard({
           apiKey={apiKey}
           apiSecret={apiSecret}
           onClose={() => setShowDataDebug(false)}
+        />
+      )}
+
+      {viewingStrategy && (
+        <StrategyViewModal
+          strategy={viewingStrategy}
+          onClose={() => setViewingStrategy(null)}
         />
       )}
     </div>

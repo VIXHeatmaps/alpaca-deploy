@@ -4,6 +4,8 @@
 
 const API_BASE = import.meta.env?.VITE_API_BASE || 'http://localhost:4000';
 
+export type StrategyStatus = 'DRAFT' | 'LIVE' | 'LIQUIDATED';
+
 export interface Strategy {
   id: number;
   name: string;
@@ -13,6 +15,7 @@ export interface Strategy {
   version_patch: number;
   version_fork: string;
   elements: any[]; // The strategy element tree
+  status: StrategyStatus;
   created_at: string;
   updated_at: string;
 }

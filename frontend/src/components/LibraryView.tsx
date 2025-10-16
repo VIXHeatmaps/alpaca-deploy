@@ -14,6 +14,9 @@ export type LibraryViewProps = {
   onOpenStrategy?: (strategy: Strategy) => void;
 };
 
+type SortField = 'name' | 'status' | 'updated_at';
+type SortDirection = 'asc' | 'desc';
+
 export function LibraryView({
   batchJobs,
   batchJobsLoading,
@@ -25,6 +28,8 @@ export function LibraryView({
   const [libraryTab, setLibraryTab] = useState<"strategies" | "variables" | "batchtests">("strategies");
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [strategiesLoading, setStrategiesLoading] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('status');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   // Load strategies when tab is active
   useEffect(() => {
@@ -73,6 +78,64 @@ export function LibraryView({
     if (version_patch > 0) return `v${version_major}.${version_minor}.${version_patch}${forkLower}`;
     if (version_minor > 0) return `v${version_major}.${version_minor}${forkLower}`;
     return `v${version_major}${forkLower}`;
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortedStrategies = () => {
+    return [...strategies].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortField) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'status':
+          // Sort order: LIVE, DRAFT, LIQUIDATED
+          const statusOrder = { LIVE: 0, DRAFT: 1, LIQUIDATED: 2 };
+          aVal = statusOrder[a.status];
+          bVal = statusOrder[b.status];
+          break;
+        case 'updated_at':
+          aVal = new Date(a.updated_at).getTime();
+          bVal = new Date(b.updated_at).getTime();
+          break;
+      }
+
+      if (typeof aVal === 'string') {
+        return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  };
+
+  const getStatusBadgeStyle = (status: string) => {
+    const baseStyle = {
+      padding: "4px 8px",
+      borderRadius: 4,
+      fontSize: 11,
+      fontWeight: 700,
+      display: "inline-block",
+    };
+
+    switch (status) {
+      case 'LIVE':
+        return { ...baseStyle, background: "#e8f5ed", color: "#0f7a3a", border: "1px solid #b7e3c8" };
+      case 'LIQUIDATED':
+        return { ...baseStyle, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" };
+      case 'DRAFT':
+      default:
+        return { ...baseStyle, background: "#f3f4f6", color: "#6b7280", border: "1px solid #d1d5db" };
+    }
   };
 
   const tabBtn: React.CSSProperties = {
@@ -180,9 +243,27 @@ export function LibraryView({
                         fontSize: 12,
                         fontWeight: 600,
                         color: "#6b7280",
-                        textTransform: "uppercase"
-                      }}>
-                        Name
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        userSelect: "none"
+                      }}
+                      onClick={() => handleSort('name')}
+                      >
+                        Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </th>
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#6b7280",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        userSelect: "none"
+                      }}
+                      onClick={() => handleSort('status')}
+                      >
+                        Status {sortField === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
                       </th>
                       <th style={{
                         padding: "12px 16px",
@@ -200,9 +281,13 @@ export function LibraryView({
                         fontSize: 12,
                         fontWeight: 600,
                         color: "#6b7280",
-                        textTransform: "uppercase"
-                      }}>
-                        Updated
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        userSelect: "none"
+                      }}
+                      onClick={() => handleSort('updated_at')}
+                      >
+                        Updated {sortField === 'updated_at' && (sortDirection === 'asc' ? '↑' : '↓')}
                       </th>
                       <th style={{
                         padding: "12px 16px",
@@ -217,7 +302,7 @@ export function LibraryView({
                     </tr>
                   </thead>
                   <tbody>
-                    {strategies.map((strategy) => (
+                    {getSortedStrategies().map((strategy) => (
                       <tr key={strategy.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                         <td style={{
                           padding: "12px 16px",
@@ -226,6 +311,13 @@ export function LibraryView({
                           fontWeight: 500
                         }}>
                           {strategy.name}
+                        </td>
+                        <td style={{
+                          padding: "12px 16px"
+                        }}>
+                          <span style={getStatusBadgeStyle(strategy.status)}>
+                            {strategy.status}
+                          </span>
                         </td>
                         <td style={{
                           padding: "12px 16px",
