@@ -78,7 +78,8 @@ async function executeRebalance(
   toSell: Array<{ symbol: string; qty: number }>,
   toBuy: Array<{ symbol: string; targetDollars: number }>,
   apiKey: string,
-  apiSecret: string
+  apiSecret: string,
+  strategyId?: number
 ): Promise<{ newHoldings: Array<{ symbol: string; qty: number; price: number }>; cashRemaining: number }> {
   let availableCash = 0;
   const newHoldings: Array<{ symbol: string; qty: number; price: number }> = [];
@@ -88,7 +89,7 @@ async function executeRebalance(
   for (const { symbol, qty } of toSell) {
     try {
       console.log(`  Selling ${qty.toFixed(4)} ${symbol}...`);
-      const order = await placeMarketOrder(symbol, qty, 'sell', apiKey, apiSecret);
+      const order = await placeMarketOrder(symbol, qty, 'sell', apiKey, apiSecret, strategyId);
       const { filledQty, avgPrice } = await waitForFill(order.id, apiKey, apiSecret);
 
       const proceeds = filledQty * avgPrice;
@@ -121,7 +122,7 @@ async function executeRebalance(
 
       console.log(`  Buying ${qty.toFixed(4)} ${symbol} @ $${price.toFixed(2)} = $${dollarsToSpend.toFixed(2)}`);
 
-      const order = await placeMarketOrder(symbol, qty, 'buy', apiKey, apiSecret);
+      const order = await placeMarketOrder(symbol, qty, 'buy', apiKey, apiSecret, strategyId);
       const { filledQty, avgPrice, pending } = await waitForFill(order.id, apiKey, apiSecret);
 
       if (pending) {
@@ -253,7 +254,7 @@ export async function rebalanceActiveStrategy(
   }
 
   // Execute rebalance
-  const { newHoldings, cashRemaining } = await executeRebalance(toSell, toBuy, apiKey, apiSecret);
+  const { newHoldings, cashRemaining } = await executeRebalance(toSell, toBuy, apiKey, apiSecret, strategyId);
 
   // Update strategy storage
   const newValue = newHoldings.reduce((sum, h) => sum + (h.qty * h.price), cashRemaining);

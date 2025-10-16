@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { DataDebugModal } from "./DataDebugModal";
+import PortfolioHoldings from "./PortfolioHoldings";
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
 
@@ -1081,68 +1082,8 @@ export function Dashboard({
             )}
           </div>
 
-          {/* Current Account Holdings */}
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>Current Account Holdings</div>
-            {positionsLoading ? (
-              <div style={styles.emptyState}>Loading positions...</div>
-            ) : positions.length === 0 ? (
-              <div style={styles.emptyState}>No positions in account</div>
-            ) : (
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.tableHeader}>Symbol</th>
-                    <th style={styles.tableHeader}>Quantity</th>
-                    <th style={styles.tableHeader}>Avg Entry</th>
-                    <th style={styles.tableHeader}>Current Price</th>
-                    <th style={styles.tableHeader}>Market Value</th>
-                    <th style={styles.tableHeader}>Cost Basis</th>
-                    <th style={styles.tableHeader}>Unrealized P/L</th>
-                    <th style={styles.tableHeader}>Return %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.map((position) => (
-                    <tr key={position.symbol}>
-                      <td style={styles.tableCell}>
-                        <strong>{position.symbol}</strong>
-                      </td>
-                      <td style={styles.tableCell}>
-                        {position.qty.toFixed(4)}
-                      </td>
-                      <td style={styles.tableCell}>
-                        {formatCurrency(position.avgEntryPrice)}
-                      </td>
-                      <td style={styles.tableCell}>
-                        {formatCurrency(position.currentPrice)}
-                      </td>
-                      <td style={styles.tableCell}>
-                        <strong>{formatCurrency(position.marketValue)}</strong>
-                      </td>
-                      <td style={styles.tableCell}>
-                        {formatCurrency(position.costBasis)}
-                      </td>
-                      <td style={{
-                        ...styles.tableCell,
-                        color: position.unrealizedPl >= 0 ? "#0f7a3a" : "#b00020",
-                        fontWeight: 600,
-                      }}>
-                        {position.unrealizedPl >= 0 ? "+" : ""}{formatCurrency(position.unrealizedPl)}
-                      </td>
-                      <td style={{
-                        ...styles.tableCell,
-                        color: position.unrealizedPlpc >= 0 ? "#0f7a3a" : "#b00020",
-                        fontWeight: 600,
-                      }}>
-                        {position.unrealizedPlpc >= 0 ? "+" : ""}{(position.unrealizedPlpc * 100).toFixed(2)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {/* Portfolio Holdings with Attribution */}
+          <PortfolioHoldings />
         </>
       ) : null}
 

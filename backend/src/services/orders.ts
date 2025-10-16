@@ -49,15 +49,22 @@ export type AlpacaOrder = {
 
 /**
  * Place a market order with Alpaca
+ * @param strategyId - Optional strategy ID for tracking (will be included in client_order_id)
  */
 export async function placeMarketOrder(
   symbol: string,
   qty: number,
   side: OrderSide,
   apiKey: string,
-  apiSecret: string
+  apiSecret: string,
+  strategyId?: number
 ): Promise<AlpacaOrder> {
   try {
+    // Generate client_order_id for tracking: strategy_{id}_{timestamp}_{symbol}
+    const clientOrderId = strategyId
+      ? `strategy_${strategyId}_${Date.now()}_${symbol}`
+      : undefined;
+
     const response = await axios.post(
       `${ALPACA_TRADING_BASE}/v2/orders`,
       {
@@ -66,6 +73,7 @@ export async function placeMarketOrder(
         side,
         type: 'market',
         time_in_force: 'day',
+        ...(clientOrderId && { client_order_id: clientOrderId }),
       },
       {
         headers: {
@@ -75,6 +83,10 @@ export async function placeMarketOrder(
         timeout: 10000,
       }
     );
+
+    if (clientOrderId) {
+      console.log(`Order placed with client_order_id: ${clientOrderId}`);
+    }
 
     return response.data;
   } catch (err: any) {
@@ -87,15 +99,19 @@ export async function placeMarketOrder(
  * Wait for an order to fill (or fail)
  * Polls order status every 2 seconds, but only when market is open/pre-market
  * Returns immediately if market is closed - caller should retry later
+ *
+ * IMPORTANT: Only returns when order is FULLY filled, not partially filled
+ * This prevents attribution corruption from incomplete fills
  */
 export async function waitForFill(
   orderId: string,
   apiKey: string,
   apiSecret: string,
-  timeoutMs: number = 60000
+  timeoutMs: number = 120000  // Increased to 2 minutes for full fills
 ): Promise<{ filledQty: number; avgPrice: number; pending?: boolean }> {
   const startTime = Date.now();
   const pollInterval = 2000; // 2 seconds
+  let lastPartialQty = 0;
 
   while (Date.now() - startTime < timeoutMs) {
     // Check if market is open/pre-market before polling
@@ -120,15 +136,20 @@ export async function waitForFill(
       if (status === 'filled') {
         const filledQty = parseFloat(order.filled_qty);
         const avgPrice = parseFloat(order.filled_avg_price || '0');
+        console.log(`Order ${orderId} fully filled: ${filledQty} @ $${avgPrice.toFixed(2)}`);
         return { filledQty, avgPrice };
       }
 
       if (status === 'partially_filled') {
-        // For MVP, accept partial fills
-        const filledQty = parseFloat(order.filled_qty);
-        const avgPrice = parseFloat(order.filled_avg_price || '0');
-        console.warn(`Order ${orderId} partially filled: ${filledQty} of ${order.qty}`);
-        return { filledQty, avgPrice };
+        // DO NOT return - keep waiting for full fill
+        const currentQty = parseFloat(order.filled_qty);
+        if (currentQty !== lastPartialQty) {
+          console.log(`Order ${orderId} partially filled: ${currentQty} of ${order.qty} (waiting for full fill...)`);
+          lastPartialQty = currentQty;
+        }
+        // Continue polling
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        continue;
       }
 
       if (status === 'canceled' || status === 'expired' || status === 'rejected' || status === 'failed') {
@@ -146,7 +167,28 @@ export async function waitForFill(
     }
   }
 
-  throw new Error(`Order ${orderId} timed out after ${timeoutMs}ms`);
+  // Timeout - check if we have a partial fill we can accept
+  try {
+    const response = await axios.get(`${ALPACA_TRADING_BASE}/v2/orders/${orderId}`, {
+      headers: {
+        'APCA-API-KEY-ID': apiKey,
+        'APCA-API-SECRET-KEY': apiSecret,
+      },
+      timeout: 5000,
+    });
+
+    const order: AlpacaOrder = response.data;
+    if (order.status === 'partially_filled' || order.status === 'filled') {
+      const filledQty = parseFloat(order.filled_qty);
+      const avgPrice = parseFloat(order.filled_avg_price || '0');
+      console.warn(`Order ${orderId} timed out but has partial fill: ${filledQty} of ${order.qty}`);
+      return { filledQty, avgPrice };
+    }
+  } catch (err) {
+    // Ignore errors on final check
+  }
+
+  throw new Error(`Order ${orderId} timed out after ${timeoutMs}ms with no fills`);
 }
 
 /**

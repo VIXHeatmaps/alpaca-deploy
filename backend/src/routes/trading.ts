@@ -408,6 +408,17 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
 
     console.log('Allocation:', allocation);
 
+    // Create strategy first to get ID for order tagging
+    const dbStrategy = await createActiveStrategy({
+      name,
+      flow_data: { elements },
+      mode: 'paper',
+      initial_capital: investAmount,
+      current_capital: 0, // Will update after orders fill
+      holdings: [],
+      user_id: userId,
+    });
+
     const holdings: Array<{ symbol: string; qty: number; entry_price?: number }> = [];
     const pendingOrders: Array<{ orderId: string; symbol: string; side: 'buy' | 'sell'; qty: number }> = [];
     let totalInvested = 0;
@@ -420,7 +431,8 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
       console.log(`Placing market order for ${symbol}: ${qty.toFixed(4)} shares ($${targetDollars.toFixed(2)})`);
 
       try {
-        const order = await placeMarketOrder(symbol, qty, 'buy', apiKey, apiSecret);
+        // Pass strategyId for order tagging
+        const order = await placeMarketOrder(symbol, qty, 'buy', apiKey, apiSecret, dbStrategy.id);
         const { filledQty, avgPrice, pending } = await waitForFill(order.id, apiKey, apiSecret);
 
         if (pending) {
@@ -438,15 +450,11 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
       }
     }
 
-    const dbStrategy = await createActiveStrategy({
-      name,
-      flow_data: { elements },
-      mode: 'paper',
-      initial_capital: investAmount,
-      current_capital: totalInvested,
+    // Update strategy with actual holdings and capital
+    await updateActiveStrategy(dbStrategy.id, {
       holdings,
+      current_capital: totalInvested,
       pending_orders: pendingOrders.length > 0 ? pendingOrders : undefined,
-      user_id: userId,
     });
 
     if (pendingOrders.length === 0 && holdings.length > 0) {
@@ -705,6 +713,7 @@ tradingRouter.post('/liquidate', requireAuth, async (req: Request, res: Response
 
       try {
         console.log(`Selling ${holding.qty.toFixed(4)} ${holding.symbol}...`);
+        // Note: old /liquidate endpoint doesn't have strategy ID, so no tagging
         const order = await placeMarketOrder(holding.symbol, holding.qty, 'sell', apiKey, apiSecret);
         const { filledQty, avgPrice, pending } = await waitForFill(order.id, apiKey, apiSecret);
 
@@ -791,7 +800,8 @@ tradingRouter.post('/strategy/:id/liquidate', requireAuth, async (req: Request, 
 
       try {
         console.log(`Selling ${qtyToSell} ${holding.symbol}...`);
-        const order = await placeMarketOrder(holding.symbol, qtyToSell, 'sell', apiKey, apiSecret);
+        // Pass strategyId for order tagging
+        const order = await placeMarketOrder(holding.symbol, qtyToSell, 'sell', apiKey, apiSecret, strategyId);
         const { filledQty, avgPrice, pending } = await waitForFill(order.id, apiKey, apiSecret);
 
         if (pending) {
@@ -996,6 +1006,108 @@ tradingRouter.get('/debug/data', requireAuth, async (req: Request, res: Response
   } catch (err: any) {
     console.error('GET /api/debug/data error:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch debug data' });
+  }
+});
+
+/**
+ * GET /api/portfolio/holdings
+ * Returns comprehensive portfolio holdings view with attribution breakdown
+ */
+tradingRouter.get('/portfolio/holdings', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const apiKey = (req.header('APCA-API-KEY-ID') || process.env.ALPACA_API_KEY || '').trim();
+    const apiSecret = (req.header('APCA-API-SECRET-KEY') || process.env.ALPACA_API_SECRET || '').trim();
+
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ error: 'Missing Alpaca API credentials' });
+    }
+
+    // Fetch Alpaca positions (source of truth)
+    const alpacaPositions = await getAlpacaPositions(apiKey, apiSecret);
+
+    // Fetch Alpaca account for cash balance
+    const accountResponse = await axios.get('https://paper-api.alpaca.markets/v2/account', {
+      headers: {
+        'APCA-API-KEY-ID': apiKey,
+        'APCA-API-SECRET-KEY': apiSecret,
+      },
+      timeout: 10000,
+    });
+    const cashBalance = parseFloat(accountResponse.data.cash);
+
+    // Fetch all active strategies with attribution
+    const strategies = await getActiveStrategiesByUserId(userId);
+    const activeStrategies = strategies.filter(s => s.status === 'active');
+
+    // Calculate total portfolio value
+    const totalPositionsValue = alpacaPositions.reduce((sum, p) => sum + p.market_value, 0);
+    const totalPortfolioValue = totalPositionsValue + cashBalance;
+
+    // Build holdings array with attribution breakdown
+    const holdings: Array<{
+      symbol: string;
+      qty: number;
+      marketValue: number;
+      weight: number; // % of total portfolio
+      strategies: Array<{
+        strategyId: number;
+        strategyName: string;
+        allocationPct: number; // % of this position owned by strategy
+        qty: number;
+        marketValue: number;
+      }>;
+    }> = [];
+
+    for (const position of alpacaPositions) {
+      const strategiesForSymbol = [];
+
+      for (const strategy of activeStrategies) {
+        const attribution = strategy.position_attribution as Record<string, any> || {};
+        const attr = attribution[position.symbol];
+
+        if (attr) {
+          const virtualQty = position.qty * attr.allocation_pct;
+          const virtualValue = position.market_value * attr.allocation_pct;
+
+          strategiesForSymbol.push({
+            strategyId: strategy.id,
+            strategyName: strategy.name,
+            allocationPct: attr.allocation_pct,
+            qty: virtualQty,
+            marketValue: virtualValue,
+          });
+        }
+      }
+
+      holdings.push({
+        symbol: position.symbol,
+        qty: position.qty,
+        marketValue: position.market_value,
+        weight: totalPortfolioValue > 0 ? (position.market_value / totalPortfolioValue) : 0,
+        strategies: strategiesForSymbol,
+      });
+    }
+
+    // Calculate cash remainder (simple version: just use Alpaca cash balance)
+    // Future: track orders_placed - orders_filled via client_order_id
+    const cashRemainderStrategies = activeStrategies.map(s => ({
+      strategyId: s.id,
+      strategyName: s.name,
+      // For now, cash is unattributed - future enhancement
+      cashAmount: 0,
+    }));
+
+    return res.json({
+      totalPortfolioValue,
+      totalPositionsValue,
+      cashBalance,
+      holdings,
+      cashRemainderStrategies,
+    });
+  } catch (err: any) {
+    console.error('GET /api/portfolio/holdings error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch portfolio holdings' });
   }
 });
 
