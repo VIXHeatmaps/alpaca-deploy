@@ -6,6 +6,8 @@
 
 import db from './connection';
 
+export type StrategyStatus = 'DRAFT' | 'LIVE' | 'LIQUIDATED';
+
 export interface StrategyDb {
   id: number;
   name: string;
@@ -16,6 +18,7 @@ export interface StrategyDb {
   version_fork: string;
   elements: any; // JSONB - the entire strategy element tree
   user_id: string | null;
+  status: StrategyStatus;
   created_at: Date;
   updated_at: Date;
 }
@@ -29,6 +32,7 @@ export interface CreateStrategyInput {
   version_fork: string;
   elements: any;
   user_id: string;
+  status?: StrategyStatus; // Optional - defaults to DRAFT
   created_at?: string; // Optional - preserve original creation time if provided
 }
 
@@ -40,6 +44,7 @@ export interface UpdateStrategyInput {
   version_patch?: number;
   version_fork?: string;
   elements?: any;
+  status?: StrategyStatus;
 }
 
 /**
@@ -85,6 +90,7 @@ export async function saveStrategy(input: CreateStrategyInput): Promise<Strategy
       version_fork: input.version_fork,
       elements: JSON.stringify(input.elements),
       user_id: input.user_id,
+      status: input.status || 'DRAFT',
     };
 
     // Preserve original created_at if provided (for importing old strategies)
@@ -173,4 +179,47 @@ export async function getStrategiesByName(name: string): Promise<StrategyDb[]> {
     }
     return s;
   });
+}
+
+/**
+ * Check if a LIVE strategy with the given name already exists for this user
+ */
+export async function hasLiveStrategyWithName(name: string, userId: string): Promise<boolean> {
+  const existing = await db('strategies')
+    .where({ name, user_id: userId, status: 'LIVE' })
+    .first();
+  return !!existing;
+}
+
+/**
+ * Update strategy by ID
+ */
+export async function updateStrategy(id: number, input: UpdateStrategyInput): Promise<StrategyDb | null> {
+  const updates: any = {};
+
+  if (input.name !== undefined) updates.name = input.name;
+  if (input.versioning_enabled !== undefined) updates.versioning_enabled = input.versioning_enabled;
+  if (input.version_major !== undefined) updates.version_major = input.version_major;
+  if (input.version_minor !== undefined) updates.version_minor = input.version_minor;
+  if (input.version_patch !== undefined) updates.version_patch = input.version_patch;
+  if (input.version_fork !== undefined) updates.version_fork = input.version_fork;
+  if (input.status !== undefined) updates.status = input.status;
+  if (input.elements !== undefined) updates.elements = JSON.stringify(input.elements);
+
+  if (Object.keys(updates).length === 0) {
+    return getStrategyById(id);
+  }
+
+  const [updated] = await db('strategies')
+    .where({ id })
+    .update(updates)
+    .returning('*');
+
+  if (!updated) return null;
+
+  // Parse JSONB fields
+  if (typeof updated.elements === 'string') {
+    updated.elements = JSON.parse(updated.elements);
+  }
+  return updated;
 }
