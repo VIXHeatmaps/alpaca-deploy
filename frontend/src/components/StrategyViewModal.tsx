@@ -17,49 +17,136 @@ export function StrategyViewModal({ strategy, onClose }: Props) {
   if (!strategy) return null;
 
   const handleEdit = () => {
-    // Encode strategy data in URL for Builder to load
-    const encodedElements = encodeURIComponent(JSON.stringify(strategy.elements));
-    const encodedName = encodeURIComponent(strategy.name);
-    window.open(`/builder?strategy=${strategy.id}&name=${encodedName}&elements=${encodedElements}`, '_blank');
+    // Open builder with strategy ID - builder will load from library
+    window.open(`/#/builder?load=${strategy.id}`, '_blank');
   };
 
   const formatElement = (element: any, depth = 0): React.ReactNode => {
     const indent = depth * 20;
-
     if (!element) return null;
+
+    // Determine colors based on type
+    const bgColor = element.type === 'weight' ? '#eff6ff' : element.type === 'ticker' ? '#f0fdf4' : '#f9fafb';
+    const borderColor = element.type === 'weight' ? '#dbeafe' : element.type === 'ticker' ? '#dcfce7' : '#e5e7eb';
 
     return (
       <div key={element.id} style={{ marginLeft: indent, marginBottom: 8 }}>
         <div style={{
-          padding: "8px 12px",
-          background: "#f9fafb",
-          border: "1px solid #e5e7eb",
+          padding: "12px",
+          background: bgColor,
+          border: `1px solid ${borderColor}`,
           borderRadius: 6,
           fontSize: 13,
         }}>
-          <div style={{ fontWeight: 600, color: "#111827", marginBottom: 4 }}>
+          <div style={{ fontWeight: 600, color: "#6b7280", marginBottom: 6, textTransform: 'uppercase', fontSize: 10, letterSpacing: 0.5 }}>
             {element.type}
           </div>
-          {element.symbol && (
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              Symbol: <span style={{ fontFamily: "monospace", fontWeight: 500 }}>{element.symbol}</span>
-            </div>
+
+          {/* Weight element */}
+          {element.type === 'weight' && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#1e40af", marginBottom: 4 }}>
+                {element.name || 'Unnamed Weight'}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                Allocation: <span style={{ fontWeight: 600 }}>{element.weight}%</span>
+                {element.weightMode && <span> • Mode: {element.weightMode}</span>}
+              </div>
+            </>
           )}
-          {element.indicator && (
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              Indicator: {element.indicator}
-            </div>
+
+          {/* Ticker element */}
+          {element.type === 'ticker' && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#166534", marginBottom: 4, fontFamily: 'monospace' }}>
+                {element.ticker}
+              </div>
+              {element.weight !== undefined && (
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
+                  Weight: <span style={{ fontWeight: 600 }}>{element.weight}%</span>
+                </div>
+              )}
+            </>
           )}
-          {element.compareValue !== undefined && (
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              Value: {element.compareValue}
-            </div>
+
+          {/* Gate element */}
+          {element.type === 'gate' && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#7c2d12", marginBottom: 4 }}>
+                {element.name || 'Gate'}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                Mode: {element.conditionMode} • Conditions: {element.conditions?.length || 0}
+              </div>
+            </>
+          )}
+
+          {/* Sort element */}
+          {element.type === 'sort' && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#581c87", marginBottom: 4 }}>
+                {element.name || 'Sort'}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                {element.indicator} • {element.direction} {element.count}
+              </div>
+            </>
+          )}
+
+          {/* Scale element */}
+          {element.type === 'scale' && element.config && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#7c2d12", marginBottom: 4 }}>
+                {element.name || 'Scale'}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                Range: {element.config.rangeMin} - {element.config.rangeMax}
+              </div>
+            </>
           )}
         </div>
+
+        {/* Render children */}
         {element.children && element.children.length > 0 && (
           <div style={{ marginTop: 8 }}>
             {element.children.map((child: any) => formatElement(child, depth + 1))}
           </div>
+        )}
+
+        {/* Gate branches */}
+        {element.type === 'gate' && (
+          <>
+            {element.thenChildren && element.thenChildren.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#059669", marginBottom: 4, marginLeft: indent + 12 }}>THEN:</div>
+                {element.thenChildren.map((child: any) => formatElement(child, depth + 1))}
+              </div>
+            )}
+            {element.elseChildren && element.elseChildren.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginBottom: 4, marginLeft: indent + 12 }}>ELSE:</div>
+                {element.elseChildren.map((child: any) => formatElement(child, depth + 1))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Scale branches */}
+        {element.type === 'scale' && (
+          <>
+            {element.fromChildren && element.fromChildren.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#0369a1", marginBottom: 4, marginLeft: indent + 12 }}>FROM:</div>
+                {element.fromChildren.map((child: any) => formatElement(child, depth + 1))}
+              </div>
+            )}
+            {element.toChildren && element.toChildren.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#0369a1", marginBottom: 4, marginLeft: indent + 12 }}>TO:</div>
+                {element.toChildren.map((child: any) => formatElement(child, depth + 1))}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
