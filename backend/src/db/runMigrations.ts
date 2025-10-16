@@ -3,6 +3,17 @@ import db from './connection';
 export async function runMigrations(): Promise<void> {
   try {
     console.log('[MIGRATIONS] Running database migrations...');
+
+    // In production, fix migration records that reference .ts files to use .js
+    if (process.env.NODE_ENV === 'production') {
+      console.log('[MIGRATIONS] Fixing migration file extensions for production...');
+      await db.raw(`
+        UPDATE knex_migrations
+        SET name = REPLACE(name, '.ts', '.js')
+        WHERE name LIKE '%.ts'
+      `);
+    }
+
     const [batchNo, log] = await db.migrate.latest();
 
     if (log.length === 0) {
