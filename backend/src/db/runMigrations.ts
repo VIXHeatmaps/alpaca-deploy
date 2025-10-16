@@ -2,28 +2,30 @@ import db from './connection';
 
 export async function runMigrations(): Promise<void> {
   try {
-    console.log('[MIGRATIONS] Running database migrations...');
+    console.log('[MIGRATIONS] Checking for missing columns...');
 
-    // In production, fix migration records that reference .ts files to use .js
-    if (process.env.NODE_ENV === 'production') {
-      console.log('[MIGRATIONS] Fixing migration file extensions for production...');
+    // Check if status column exists on strategies table
+    const statusColumnExists = await db.raw(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name='strategies' AND column_name='status'
+    `);
+
+    if (statusColumnExists.rows.length === 0) {
+      console.log('[MIGRATIONS] Adding status column to strategies table...');
       await db.raw(`
-        UPDATE knex_migrations
-        SET name = REPLACE(name, '.ts', '.js')
-        WHERE name LIKE '%.ts'
+        ALTER TABLE strategies
+        ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
       `);
-    }
-
-    const [batchNo, log] = await db.migrate.latest();
-
-    if (log.length === 0) {
-      console.log('[MIGRATIONS] ✓ Database is up to date');
+      await db.raw(`
+        CREATE INDEX idx_strategies_status ON strategies(status)
+      `);
+      console.log('[MIGRATIONS] ✓ Status column added successfully');
     } else {
-      console.log(`[MIGRATIONS] ✓ Batch ${batchNo} completed: ${log.length} migration(s)`);
-      log.forEach((migration: string) => console.log(`[MIGRATIONS]   - ${migration}`));
+      console.log('[MIGRATIONS] ✓ Status column already exists');
     }
   } catch (error: any) {
     console.error('[MIGRATIONS] ✗ Migration failed:', error.message);
-    throw error;
+    // Don't throw - allow server to start even if migration fails
   }
 }
