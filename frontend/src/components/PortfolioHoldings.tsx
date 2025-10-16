@@ -10,6 +10,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+const API_BASE = import.meta.env?.VITE_API_BASE || "http://127.0.0.1:4000";
+
 type StrategyAttribution = {
   strategyId: number;
   strategyName: string;
@@ -55,12 +57,20 @@ export default function PortfolioHoldings() {
       const apiSecret = localStorage.getItem('alpaca_api_secret') || '';
       const token = localStorage.getItem('auth_token') || '';
 
-      const response = await axios.get('/api/portfolio/holdings', {
+      // Don't fetch if no credentials
+      if (!apiKey || !apiSecret || !token) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.get(`${API_BASE}/api/portfolio/holdings`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'APCA-API-KEY-ID': apiKey,
           'APCA-API-SECRET-KEY': apiSecret,
         },
+        withCredentials: true,
+        timeout: 10000,
       });
 
       setData(response.data);
