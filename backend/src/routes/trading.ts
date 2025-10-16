@@ -386,6 +386,13 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
     console.log('\n=== STARTING LIVE DEPLOYMENT ===');
     console.log(`Name: ${name}, Amount: $${investAmount.toFixed(2)}`);
 
+    // Check if a LIVE strategy with this name already exists
+    const { hasLiveStrategyWithName } = await import('../db/strategiesDb');
+    const hasDuplicate = await hasLiveStrategyWithName(name, userId);
+    if (hasDuplicate) {
+      return res.status(400).json({ error: `A LIVE strategy named "${name}" already exists. Please choose a different name or liquidate the existing strategy first.` });
+    }
+
     const { evaluation: executionResult } = await prepareStrategyEvaluation(elements as StrategyElement[], apiKey, apiSecret, false);
 
     if (!executionResult.positions || executionResult.positions.length === 0) {
@@ -485,6 +492,27 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
     }
 
     await calculateAttributionOnDeploy(dbStrategy.id, holdings);
+
+    // Auto-save strategy to Library with LIVE status
+    console.log('Saving strategy to Library with LIVE status...');
+    const { saveStrategy } = await import('../db/strategiesDb');
+    try {
+      await saveStrategy({
+        name,
+        versioning_enabled: false,
+        version_major: 1,
+        version_minor: 0,
+        version_patch: 0,
+        version_fork: '',
+        elements,
+        user_id: userId,
+        status: 'LIVE',
+      });
+      console.log('✓ Strategy saved to Library');
+    } catch (saveErr: any) {
+      console.error('Failed to auto-save strategy to Library:', saveErr.message);
+      // Don't fail deployment if auto-save fails
+    }
 
     console.log('=== INVEST COMPLETE ===\n');
 
@@ -865,6 +893,22 @@ tradingRouter.post('/strategy/:id/liquidate', requireAuth, async (req: Request, 
     });
 
     await removeStrategyFromAttribution(strategyId);
+
+    // Update saved strategy status to LIQUIDATED
+    console.log('Updating Library strategy status to LIQUIDATED...');
+    const { updateStrategy: updateSavedStrategy } = await import('../db/strategiesDb');
+    const { getStrategiesByName } = await import('../db/strategiesDb');
+    try {
+      const savedStrategies = await getStrategiesByName(strategy.name);
+      const liveStrategy = savedStrategies.find((s: any) => s.status === 'LIVE' && s.user_id === (req as any).user?.id);
+      if (liveStrategy) {
+        await updateSavedStrategy(liveStrategy.id, { status: 'LIQUIDATED' });
+        console.log('✓ Library strategy marked as LIQUIDATED');
+      }
+    } catch (updateErr: any) {
+      console.error('Failed to update Library strategy status:', updateErr.message);
+      // Don't fail liquidation if status update fails
+    }
 
     return res.json({
       success: true,
