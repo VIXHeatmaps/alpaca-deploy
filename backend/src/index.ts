@@ -343,6 +343,14 @@ function barsNeededForIndicator(indicatorType: string, params: Record<string, an
 app.listen(PORT, async () => {
   console.log(`Alpaca algo backend listening on port ${PORT} (feed=${FEED}, indicator=split, returns=all)`);
 
+  // Run database migrations
+  try {
+    const { runMigrations } = await import('./db/runMigrations');
+    await runMigrations();
+  } catch (err: any) {
+    console.error('Failed to run database migrations:', err.message);
+  }
+
   // Ensure database tables exist
   try {
     const { ensureAllTables } = await import('./db/ensureTables');
