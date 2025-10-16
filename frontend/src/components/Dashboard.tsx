@@ -1100,7 +1100,7 @@ export function Dashboard({
           </div>
 
           {/* Portfolio Holdings with Attribution */}
-          <PortfolioHoldings />
+          <PortfolioHoldings apiKey={apiKey} apiSecret={apiSecret} />
         </>
       ) : null}
 

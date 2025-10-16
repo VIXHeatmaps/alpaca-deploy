@@ -158,7 +158,12 @@ const styles = {
   } as React.CSSProperties),
 };
 
-export default function PortfolioHoldings() {
+type PortfolioHoldingsProps = {
+  apiKey: string;
+  apiSecret: string;
+};
+
+export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldingsProps) {
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,9 +171,6 @@ export default function PortfolioHoldings() {
 
   const fetchData = async () => {
     try {
-      const apiKey = localStorage.getItem('alpaca_api_key') || '';
-      const apiSecret = localStorage.getItem('alpaca_api_secret') || '';
-
       // Don't fetch if no credentials
       if (!apiKey || !apiSecret) {
         setLoading(false);
@@ -200,7 +202,7 @@ export default function PortfolioHoldings() {
     // Auto-refresh every 30 seconds
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [apiKey, apiSecret]);
 
   const toggleRow = (symbol: string) => {
     const newExpanded = new Set(expandedRows);
