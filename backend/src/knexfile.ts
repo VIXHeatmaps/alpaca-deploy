@@ -42,7 +42,7 @@ const config: { [key: string]: Knex.Config } = {
     },
     migrations: {
       tableName: "knex_migrations",
-      directory: "./db/migrations",
+      directory: path.join(__dirname, 'db', 'migrations'),
       extension: "js",
     },
   },
