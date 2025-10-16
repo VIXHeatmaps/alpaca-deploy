@@ -3,6 +3,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import passport from 'passport';
+import path from 'path';
 
 import { FRONTEND_URL } from './config/constants';
 import authRouter from './routes/auth';
@@ -40,6 +41,15 @@ export const createApp = () => {
   app.use('/api', strategiesRouter);
   app.use('/api', feedbackRouter);
   app.use(systemRouter);
+
+  // Serve static frontend files in production
+  const frontendPath = path.join(__dirname, '../../frontend/dist');
+  app.use(express.static(frontendPath));
+
+  // SPA catch-all route - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
 
   return app;
 };

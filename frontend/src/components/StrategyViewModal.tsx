@@ -17,8 +17,8 @@ export function StrategyViewModal({ strategy, onClose }: Props) {
   if (!strategy) return null;
 
   const handleEdit = () => {
-    // Open builder with strategy ID - builder will load from library
-    window.open(`/#/builder?load=${strategy.id}`, '_blank');
+    // Open builder in new tab - builder will load this strategy
+    window.open(`/builder?load=${strategy.id}`, '_blank');
   };
 
   const formatElement = (element: any, depth = 0): React.ReactNode => {

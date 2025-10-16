@@ -4,6 +4,7 @@
    ============================== */
 
 import { useState, useEffect } from "react";
+import { Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { Dashboard } from "./components/Dashboard";
 import { BuilderWrapper } from "./components/BuilderWrapper";
 import { BugReportModal } from "./components/BugReportModal";
@@ -22,7 +23,9 @@ interface User {
 }
 
 function App() {
-  const [uiTab, setUiTab] = useState<"dashboard" | "library" | "builder">("dashboard");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isBuilder = location.pathname === '/builder';
   const [saveCredentials, setSaveCredentials] = useState(() => {
     return localStorage.getItem('saveCredentials') === 'true';
   });
@@ -159,7 +162,7 @@ function App() {
       updatedAt: strategy.updated_at,
       elements: strategy.elements,
     }));
-    setUiTab("builder");
+    navigate("/builder");
   };
 
   if (loading) {
@@ -247,12 +250,12 @@ function App() {
       color: "#111",
       background: "#fff",
       minHeight: "100vh",
-      padding: uiTab === "builder" ? "0" : "12px 16px 40px"
+      padding: isBuilder ? "0" : "12px 16px 40px"
     }}>
       <div style={{
-        maxWidth: uiTab === "builder" ? "none" : 1400,
+        maxWidth: isBuilder ? "none" : 1400,
         margin: "0 auto",
-        padding: uiTab === "builder" ? "12px 16px 0" : "0"
+        padding: isBuilder ? "12px 16px 0" : "0"
       }}>
         {/* Header with user info and credentials */}
         <div style={{ marginBottom: 16 }}>
@@ -408,78 +411,126 @@ function App() {
           justifyContent: "center",
           gap: 16,
         }}>
-          <button
-            onClick={() => setUiTab("dashboard")}
-            style={{
+          <NavLink
+            to="/"
+            style={({ isActive }) => ({
               padding: "10px 20px",
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
+              textDecoration: "none",
               fontSize: 15,
               fontWeight: 500,
-              color: uiTab === "dashboard" ? "#1677ff" : "#6b7280",
-              borderBottom: uiTab === "dashboard" ? "2px solid #1677ff" : "2px solid transparent",
+              color: isActive ? "#1677ff" : "#6b7280",
+              borderBottom: isActive ? "2px solid #1677ff" : "2px solid transparent",
               transition: "all 0.2s",
-            }}
+            })}
           >
             Dashboard
-          </button>
-          <button
-            onClick={() => setUiTab("library")}
-            style={{
+          </NavLink>
+          <NavLink
+            to="/strategies"
+            style={({ isActive }) => ({
               padding: "10px 20px",
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
+              textDecoration: "none",
               fontSize: 15,
               fontWeight: 500,
-              color: uiTab === "library" ? "#1677ff" : "#6b7280",
-              borderBottom: uiTab === "library" ? "2px solid #1677ff" : "2px solid transparent",
+              color: isActive ? "#1677ff" : "#6b7280",
+              borderBottom: isActive ? "2px solid #1677ff" : "2px solid transparent",
               transition: "all 0.2s",
-            }}
+            })}
           >
-            Library
-          </button>
-          <button
-            onClick={() => setUiTab("builder")}
-            style={{
+            Strategies
+          </NavLink>
+          <NavLink
+            to="/variables"
+            style={({ isActive }) => ({
               padding: "10px 20px",
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
+              textDecoration: "none",
               fontSize: 15,
               fontWeight: 500,
-              color: uiTab === "builder" ? "#1677ff" : "#6b7280",
-              borderBottom: uiTab === "builder" ? "2px solid #1677ff" : "2px solid transparent",
+              color: isActive ? "#1677ff" : "#6b7280",
+              borderBottom: isActive ? "2px solid #1677ff" : "2px solid transparent",
               transition: "all 0.2s",
-            }}
+            })}
+          >
+            Variables
+          </NavLink>
+          <NavLink
+            to="/batchtests"
+            style={({ isActive }) => ({
+              padding: "10px 20px",
+              textDecoration: "none",
+              fontSize: 15,
+              fontWeight: 500,
+              color: isActive ? "#1677ff" : "#6b7280",
+              borderBottom: isActive ? "2px solid #1677ff" : "2px solid transparent",
+              transition: "all 0.2s",
+            })}
+          >
+            Batch Tests
+          </NavLink>
+          <NavLink
+            to="/builder"
+            style={({ isActive }) => ({
+              padding: "10px 20px",
+              textDecoration: "none",
+              fontSize: 15,
+              fontWeight: 500,
+              color: isActive ? "#1677ff" : "#6b7280",
+              borderBottom: isActive ? "2px solid #1677ff" : "2px solid transparent",
+              transition: "all 0.2s",
+            })}
           >
             Builder
-          </button>
+          </NavLink>
         </div>
 
-        {/* Tab Content */}
-        {uiTab === "dashboard" && (
-          <Dashboard
-            apiKey={apiKey}
-            apiSecret={apiSecret}
-            mask={mask}
-            connected={connected}
-            onApiKeyChange={setApiKey}
-            onApiSecretChange={setApiSecret}
-            onMaskToggle={() => setMask(!mask)}
-            onViewStrategyFlow={() => setUiTab("builder")}
-          />
-        )}
-
-        {(uiTab === "library" || uiTab === "builder") && (
-          <BuilderWrapper
-            apiKey={apiKey}
-            apiSecret={apiSecret}
-            view={uiTab}
-            onLoadStrategy={handleLoadStrategy}
-          />
-        )}
+        {/* Routes */}
+        <Routes>
+          <Route path="/" element={
+            <Dashboard
+              apiKey={apiKey}
+              apiSecret={apiSecret}
+              mask={mask}
+              connected={connected}
+              onApiKeyChange={setApiKey}
+              onApiSecretChange={setApiSecret}
+              onMaskToggle={() => setMask(!mask)}
+              onViewStrategyFlow={() => navigate("/builder")}
+              onLoadStrategy={handleLoadStrategy}
+            />
+          } />
+          <Route path="/strategies" element={
+            <BuilderWrapper
+              apiKey={apiKey}
+              apiSecret={apiSecret}
+              view="library"
+              onLoadStrategy={handleLoadStrategy}
+            />
+          } />
+          <Route path="/variables" element={
+            <BuilderWrapper
+              apiKey={apiKey}
+              apiSecret={apiSecret}
+              view="library"
+              onLoadStrategy={handleLoadStrategy}
+            />
+          } />
+          <Route path="/batchtests" element={
+            <BuilderWrapper
+              apiKey={apiKey}
+              apiSecret={apiSecret}
+              view="library"
+              onLoadStrategy={handleLoadStrategy}
+            />
+          } />
+          <Route path="/builder" element={
+            <BuilderWrapper
+              apiKey={apiKey}
+              apiSecret={apiSecret}
+              view="builder"
+              onLoadStrategy={handleLoadStrategy}
+            />
+          } />
+        </Routes>
 
       </div>
 

@@ -94,6 +94,7 @@ export type DashboardProps = {
   onApiSecretChange: (secret: string) => void;
   onMaskToggle: () => void;
   onViewStrategyFlow?: (flowData: { nodes: any[]; edges: any[] }) => void;
+  onLoadStrategy?: (strategy: Strategy) => void;
 };
 
 const styles = {
@@ -421,6 +422,7 @@ export function Dashboard({
   onApiSecretChange,
   onMaskToggle,
   onViewStrategyFlow,
+  onLoadStrategy,
 }: DashboardProps) {
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [loading, setLoading] = useState(false);
