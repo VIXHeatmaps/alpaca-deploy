@@ -503,6 +503,7 @@ function App() {
               apiKey={apiKey}
               apiSecret={apiSecret}
               view="library"
+              tab="strategies"
               onLoadStrategy={handleLoadStrategy}
             />
           } />
@@ -511,6 +512,7 @@ function App() {
               apiKey={apiKey}
               apiSecret={apiSecret}
               view="library"
+              tab="variables"
               onLoadStrategy={handleLoadStrategy}
             />
           } />
@@ -519,6 +521,7 @@ function App() {
               apiKey={apiKey}
               apiSecret={apiSecret}
               view="library"
+              tab="batchtests"
               onLoadStrategy={handleLoadStrategy}
             />
           } />

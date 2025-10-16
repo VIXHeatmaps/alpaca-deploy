@@ -11,10 +11,11 @@ export type BuilderWrapperProps = {
   apiKey: string;
   apiSecret: string;
   view: "library" | "builder";
+  tab?: "strategies" | "variables" | "batchtests";
   onLoadStrategy?: (strategy: Strategy) => void;
 };
 
-export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: BuilderWrapperProps) {
+export function BuilderWrapper({ apiKey, apiSecret, view, tab = "strategies", onLoadStrategy }: BuilderWrapperProps) {
   // Batch jobs state - load from IndexedDB (shared between Builder and Library)
   const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
 
@@ -202,6 +203,7 @@ export function BuilderWrapper({ apiKey, apiSecret, view, onLoadStrategy }: Buil
     return (
       <>
         <LibraryView
+          tab={tab}
           batchJobs={batchJobs}
           batchJobsLoading={batchLoading}
           onViewBatchJob={handleViewBatchJob}

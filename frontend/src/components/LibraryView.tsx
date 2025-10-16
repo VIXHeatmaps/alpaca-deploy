@@ -6,6 +6,7 @@ import * as strategiesApi from "../api/strategies";
 import type { Strategy } from "../api/strategies";
 
 export type LibraryViewProps = {
+  tab: "strategies" | "variables" | "batchtests";
   batchJobs: BatchJob[];
   batchJobsLoading: boolean;
   onViewBatchJob: (job: BatchJob) => void;
@@ -18,6 +19,7 @@ type SortField = 'name' | 'status' | 'updated_at';
 type SortDirection = 'asc' | 'desc';
 
 export function LibraryView({
+  tab,
   batchJobs,
   batchJobsLoading,
   onViewBatchJob,
@@ -25,7 +27,6 @@ export function LibraryView({
   onCancelJob,
   onOpenStrategy,
 }: LibraryViewProps) {
-  const [libraryTab, setLibraryTab] = useState<"strategies" | "variables" | "batchtests">("strategies");
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [strategiesLoading, setStrategiesLoading] = useState(false);
   const [sortField, setSortField] = useState<SortField>('status');
@@ -33,10 +34,10 @@ export function LibraryView({
 
   // Load strategies when tab is active
   useEffect(() => {
-    if (libraryTab === "strategies") {
+    if (tab === "strategies") {
       loadStrategies();
     }
-  }, [libraryTab]);
+  }, [tab]);
 
   const loadStrategies = async () => {
     setStrategiesLoading(true);
@@ -157,34 +158,8 @@ export function LibraryView({
 
   return (
     <div>
-      {/* Library Sub-tabs */}
-      <div style={{
-        marginBottom: 24,
-        display: "flex",
-        gap: 8,
-      }}>
-        <button
-          style={libraryTab === "strategies" ? tabBtnActive : tabBtn}
-          onClick={() => setLibraryTab("strategies")}
-        >
-          Strategies
-        </button>
-        <button
-          style={libraryTab === "variables" ? tabBtnActive : tabBtn}
-          onClick={() => setLibraryTab("variables")}
-        >
-          Variables
-        </button>
-        <button
-          style={libraryTab === "batchtests" ? tabBtnActive : tabBtn}
-          onClick={() => setLibraryTab("batchtests")}
-        >
-          Batch Tests
-        </button>
-      </div>
-
       {/* Library Content */}
-      {libraryTab === "strategies" && (
+      {tab === "strategies" && (
         <div style={{
           padding: 24,
           background: "#f9fafb",
@@ -391,9 +366,9 @@ export function LibraryView({
         </div>
       )}
 
-      {libraryTab === "variables" && <VariablesTab />}
+      {tab === "variables" && <VariablesTab />}
 
-      {libraryTab === "batchtests" && (
+      {tab === "batchtests" && (
         <BatchTestsTab
           jobs={batchJobs}
           loading={batchJobsLoading}
