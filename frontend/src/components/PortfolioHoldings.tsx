@@ -168,17 +168,15 @@ export default function PortfolioHoldings() {
     try {
       const apiKey = localStorage.getItem('alpaca_api_key') || '';
       const apiSecret = localStorage.getItem('alpaca_api_secret') || '';
-      const token = localStorage.getItem('auth_token') || '';
 
       // Don't fetch if no credentials
-      if (!apiKey || !apiSecret || !token) {
+      if (!apiKey || !apiSecret) {
         setLoading(false);
         return;
       }
 
       const response = await axios.get(`${API_BASE}/api/portfolio/holdings`, {
         headers: {
-          Authorization: `Bearer ${token}`,
           'APCA-API-KEY-ID': apiKey,
           'APCA-API-SECRET-KEY': apiSecret,
         },

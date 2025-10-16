@@ -5,7 +5,7 @@
  * for editing LIVE strategies directly from the Dashboard
  */
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { BuilderWrapper } from './BuilderWrapper';
 import type { Strategy } from '../api/strategies';
 
@@ -36,12 +36,12 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.7)',
+        background: 'rgba(0, 0, 0, 0.5)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 2000,
-        padding: '5vh 5vw',
+        padding: '2vh 2vw',
       }}
       onClick={onClose}
     >
@@ -107,16 +107,19 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
             <button
               onClick={onClose}
               style={{
-                background: 'transparent',
+                background: '#ef4444',
                 border: 'none',
-                fontSize: 24,
-                color: '#6b7280',
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#fff',
                 cursor: 'pointer',
-                padding: '0 8px',
-                lineHeight: 1,
+                padding: '6px 16px',
+                borderRadius: 6,
+                lineHeight: 1.4,
               }}
+              title="Close modal and return to Dashboard"
             >
-              ×
+              ✕ Close
             </button>
           </div>
         </div>
