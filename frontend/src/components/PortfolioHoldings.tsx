@@ -2,9 +2,7 @@
  * Portfolio Holdings Component
  *
  * Displays total Alpaca positions with attribution breakdown per strategy
- * - Shows what the account owns (Alpaca positions)
- * - Shows who owns what (attribution %)
- * - Validates accounting accuracy (100% totals)
+ * Matches the styling of Dashboard Account Summary and Active Strategies
  */
 
 import React, { useState, useEffect } from 'react';
@@ -40,16 +38,131 @@ type PortfolioData = {
   }>;
 };
 
-type SortField = 'symbol' | 'qty' | 'marketValue' | 'weight';
-type SortDirection = 'asc' | 'desc';
+const styles = {
+  card: {
+    border: "1px solid #e6e6e6",
+    borderRadius: 10,
+    padding: 16,
+    background: "#fafafa",
+    marginBottom: 16,
+  } as React.CSSProperties,
+
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    marginBottom: 12,
+    color: "#111",
+  } as React.CSSProperties,
+
+  table: {
+    width: "100%",
+    borderCollapse: "collapse" as const,
+    fontSize: 13,
+  } as React.CSSProperties,
+
+  tableHeader: {
+    textAlign: "left" as const,
+    padding: "10px 12px",
+    borderBottom: "2px solid #e6e6e6",
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#666",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+  } as React.CSSProperties,
+
+  tableHeaderRight: {
+    textAlign: "right" as const,
+    padding: "10px 12px",
+    borderBottom: "2px solid #e6e6e6",
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#666",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+  } as React.CSSProperties,
+
+  tableHeaderCenter: {
+    textAlign: "center" as const,
+    padding: "10px 12px",
+    borderBottom: "2px solid #e6e6e6",
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#666",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+  } as React.CSSProperties,
+
+  tableCell: {
+    padding: "12px",
+    borderBottom: "1px solid #f4f4f4",
+  } as React.CSSProperties,
+
+  tableCellRight: {
+    padding: "12px",
+    borderBottom: "1px solid #f4f4f4",
+    textAlign: "right" as const,
+  } as React.CSSProperties,
+
+  tableCellCenter: {
+    padding: "12px",
+    borderBottom: "1px solid #f4f4f4",
+    textAlign: "center" as const,
+  } as React.CSSProperties,
+
+  emptyState: {
+    padding: "40px 20px",
+    textAlign: "center" as const,
+    color: "#999",
+    fontSize: 14,
+  } as React.CSSProperties,
+
+  expandButton: {
+    background: "transparent",
+    border: "none",
+    color: "#1677ff",
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    padding: "4px 8px",
+  } as React.CSSProperties,
+
+  attributionBox: {
+    background: "#fff",
+    border: "1px solid #e6e6e6",
+    borderRadius: 6,
+    padding: 12,
+    marginLeft: 24,
+    marginTop: 8,
+    marginBottom: 8,
+  } as React.CSSProperties,
+
+  attributionTitle: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#666",
+    marginBottom: 8,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+  } as React.CSSProperties,
+
+  validationBadge: (isValid: boolean) => ({
+    fontSize: 11,
+    fontWeight: 700,
+    padding: "4px 8px",
+    borderRadius: 4,
+    background: isValid ? "#e8f5ed" : "#fdecea",
+    color: isValid ? "#0f7a3a" : "#b00020",
+    border: `1px solid ${isValid ? "#b7e3c8" : "#f2c0c0"}`,
+    display: "inline-block",
+  } as React.CSSProperties),
+};
 
 export default function PortfolioHoldings() {
   const [data, setData] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [sortField, setSortField] = useState<SortField>('symbol');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const fetchData = async () => {
     try {
@@ -101,253 +214,150 @@ export default function PortfolioHoldings() {
     setExpandedRows(newExpanded);
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const getSortedHoldings = (holdings: Holding[]): Holding[] => {
-    const sorted = [...holdings].sort((a, b) => {
-      let aVal: number | string = 0;
-      let bVal: number | string = 0;
-
-      switch (sortField) {
-        case 'symbol':
-          aVal = a.symbol;
-          bVal = b.symbol;
-          break;
-        case 'qty':
-          aVal = a.qty;
-          bVal = b.qty;
-          break;
-        case 'marketValue':
-          aVal = a.marketValue;
-          bVal = b.marketValue;
-          break;
-        case 'weight':
-          aVal = a.weight;
-          bVal = b.weight;
-          break;
-      }
-
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      }
-
-      return sortDirection === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
-    });
-
-    return sorted;
-  };
-
   const validateAttribution = (holding: Holding): boolean => {
     const totalPct = holding.strategies.reduce((sum, s) => sum + s.allocationPct, 0);
     const tolerance = 0.001; // 0.1% tolerance
     return Math.abs(totalPct - 1.0) < tolerance;
   };
 
-  const sortedHoldings = data ? getSortedHoldings(data.holdings) : [];
-  const isLoading = loading;
-  const hasError = !!error;
   const isEmpty = !data || (data.holdings.length === 0 && data.cashBalance === 0);
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 mt-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-white">Portfolio Holdings</h2>
-        <div className="text-sm text-gray-400">
-          {isLoading ? 'Loading...' : data ? `Auto-refresh: 30s | Total Value: $${data.totalPortfolioValue.toFixed(2)}` : 'Waiting for data'}
-        </div>
-      </div>
+    <div style={styles.card}>
+      <div style={styles.cardTitle}>Portfolio Holdings</div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-gray-700 rounded p-4">
-          <div className="text-gray-400 text-sm">Total Portfolio</div>
-          <div className="text-white text-2xl font-bold">
-            {isLoading ? '...' : data ? `$${data.totalPortfolioValue.toFixed(2)}` : '$0.00'}
-          </div>
+      {loading ? (
+        <div style={styles.emptyState}>Loading portfolio holdings...</div>
+      ) : error ? (
+        <div style={{ ...styles.emptyState, color: "#b00020" }}>
+          Error: {error}
         </div>
-        <div className="bg-gray-700 rounded p-4">
-          <div className="text-gray-400 text-sm">Positions Value</div>
-          <div className="text-white text-2xl font-bold">
-            {isLoading ? '...' : data ? `$${data.totalPositionsValue.toFixed(2)}` : '$0.00'}
-          </div>
+      ) : isEmpty ? (
+        <div style={styles.emptyState}>
+          No positions yet. Deploy a strategy to see holdings here.
         </div>
-        <div className="bg-gray-700 rounded p-4">
-          <div className="text-gray-400 text-sm">Cash Balance</div>
-          <div className="text-white text-2xl font-bold">
-            {isLoading ? '...' : data ? `$${data.cashBalance.toFixed(2)}` : '$0.00'}
-          </div>
-        </div>
-      </div>
-
-      {/* Holdings Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-700 sticky top-0">
+      ) : (
+        <table style={styles.table}>
+          <thead>
             <tr>
-              <th className="px-4 py-3 text-left text-gray-300 font-medium">
-                <button
-                  onClick={() => handleSort('symbol')}
-                  className="hover:text-white flex items-center gap-1"
-                >
-                  Symbol {sortField === 'symbol' && (sortDirection === 'asc' ? '↑' : '↓')}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-right text-gray-300 font-medium">
-                <button
-                  onClick={() => handleSort('qty')}
-                  className="hover:text-white flex items-center gap-1 ml-auto"
-                >
-                  Quantity {sortField === 'qty' && (sortDirection === 'asc' ? '↑' : '↓')}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-right text-gray-300 font-medium">
-                <button
-                  onClick={() => handleSort('marketValue')}
-                  className="hover:text-white flex items-center gap-1 ml-auto"
-                >
-                  Market Value {sortField === 'marketValue' && (sortDirection === 'asc' ? '↑' : '↓')}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-right text-gray-300 font-medium">
-                <button
-                  onClick={() => handleSort('weight')}
-                  className="hover:text-white flex items-center gap-1 ml-auto"
-                >
-                  Weight {sortField === 'weight' && (sortDirection === 'asc' ? '↑' : '↓')}
-                </button>
-              </th>
-              <th className="px-4 py-3 text-center text-gray-300 font-medium">Attribution</th>
-              <th className="px-4 py-3 text-center text-gray-300 font-medium"></th>
+              <th style={styles.tableHeader}>Symbol</th>
+              <th style={styles.tableHeaderRight}>Quantity</th>
+              <th style={styles.tableHeaderRight}>Market Value</th>
+              <th style={styles.tableHeaderRight}>Weight</th>
+              <th style={styles.tableHeaderCenter}>Attribution</th>
+              <th style={styles.tableHeaderCenter}></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700">
-            {hasError ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center">
-                  <div className="text-red-400 text-sm">Error loading portfolio data</div>
-                  <div className="text-gray-400 text-xs mt-1">{error}</div>
-                </td>
-              </tr>
-            ) : isLoading ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-sm">
-                  Loading portfolio holdings...
-                </td>
-              </tr>
-            ) : isEmpty ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-sm">
-                  No positions yet. Deploy a strategy to see holdings here.
-                </td>
-              </tr>
-            ) : (
-              <>
-                {sortedHoldings.map((holding) => {
-                  const isExpanded = expandedRows.has(holding.symbol);
-                  const isValid = validateAttribution(holding);
+          <tbody>
+            {data && data.holdings.map((holding) => {
+              const isExpanded = expandedRows.has(holding.symbol);
+              const isValid = validateAttribution(holding);
 
-                  return (
-                    <React.Fragment key={holding.symbol}>
-                      {/* Main Row */}
-                      <tr className="hover:bg-gray-700/50">
-                        <td className="px-4 py-3 text-white font-medium">{holding.symbol}</td>
-                        <td className="px-4 py-3 text-right text-gray-300">{holding.qty.toFixed(4)}</td>
-                        <td className="px-4 py-3 text-right text-gray-300">${holding.marketValue.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-gray-300">{(holding.weight * 100).toFixed(2)}%</td>
-                        <td className="px-4 py-3 text-center">
-                          {isValid ? (
-                            <span className="text-green-400 font-bold">✓ 100%</span>
-                          ) : (
-                            <span className="text-red-400 font-bold">⚠ {(holding.strategies.reduce((sum, s) => sum + s.allocationPct, 0) * 100).toFixed(1)}%</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => toggleRow(holding.symbol)}
-                            className="text-blue-400 hover:text-blue-300 font-medium"
-                          >
-                            {isExpanded ? '▼' : '▶'}
-                          </button>
-                        </td>
-                      </tr>
-
-                      {/* Expanded Attribution Details */}
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={6} className="bg-gray-900/50 px-4 py-3">
-                            <div className="ml-8">
-                              <div className="text-gray-400 text-xs font-semibold mb-2">Attribution Breakdown:</div>
-                              <table className="w-full text-xs">
-                                <thead>
-                                  <tr className="text-gray-500">
-                                    <th className="text-left pb-1">Strategy</th>
-                                    <th className="text-right pb-1">Ownership %</th>
-                                    <th className="text-right pb-1">Qty</th>
-                                    <th className="text-right pb-1">Value</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {holding.strategies.map((strat) => (
-                                    <tr key={strat.strategyId} className="text-gray-300">
-                                      <td className="py-1">{strat.strategyName}</td>
-                                      <td className="text-right">{(strat.allocationPct * 100).toFixed(2)}%</td>
-                                      <td className="text-right">{strat.qty.toFixed(4)}</td>
-                                      <td className="text-right">${strat.marketValue.toFixed(2)}</td>
-                                    </tr>
-                                  ))}
-                                  <tr className="border-t border-gray-700 font-semibold text-gray-200">
-                                    <td className="py-1 pt-2">Total</td>
-                                    <td className="text-right pt-2">
-                                      {(holding.strategies.reduce((sum, s) => sum + s.allocationPct, 0) * 100).toFixed(2)}%
-                                    </td>
-                                    <td className="text-right pt-2">{holding.qty.toFixed(4)}</td>
-                                    <td className="text-right pt-2">${holding.marketValue.toFixed(2)}</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-
-                {/* Cash Row */}
-                {data && (
-                  <tr className="bg-gray-700 font-semibold">
-                    <td className="px-4 py-3 text-white">Cash (Remainder)</td>
-                    <td className="px-4 py-3 text-right text-gray-300">-</td>
-                    <td className="px-4 py-3 text-right text-gray-300">${data.cashBalance.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-gray-300">{data.totalPortfolioValue > 0 ? ((data.cashBalance / data.totalPortfolioValue) * 100).toFixed(2) : '0.00'}%</td>
-                    <td className="px-4 py-3 text-center text-gray-400">Unattributed</td>
-                    <td className="px-4 py-3"></td>
+              return (
+                <React.Fragment key={holding.symbol}>
+                  {/* Main Row */}
+                  <tr>
+                    <td style={styles.tableCell}>
+                      <strong>{holding.symbol}</strong>
+                    </td>
+                    <td style={styles.tableCellRight}>
+                      {holding.qty.toFixed(4)}
+                    </td>
+                    <td style={styles.tableCellRight}>
+                      ${holding.marketValue.toFixed(2)}
+                    </td>
+                    <td style={styles.tableCellRight}>
+                      {(holding.weight * 100).toFixed(2)}%
+                    </td>
+                    <td style={styles.tableCellCenter}>
+                      <span style={styles.validationBadge(isValid)}>
+                        {isValid ? '✓ 100%' : `⚠ ${(holding.strategies.reduce((sum, s) => sum + s.allocationPct, 0) * 100).toFixed(1)}%`}
+                      </span>
+                    </td>
+                    <td style={styles.tableCellCenter}>
+                      <button
+                        onClick={() => toggleRow(holding.symbol)}
+                        style={styles.expandButton}
+                      >
+                        {isExpanded ? '▼ Hide' : '▶ Details'}
+                      </button>
+                    </td>
                   </tr>
-                )}
 
-                {/* Total Row */}
-                {data && (
-                  <tr className="bg-gray-600 font-bold">
-                    <td className="px-4 py-3 text-white">TOTAL</td>
-                    <td className="px-4 py-3 text-right text-white">-</td>
-                    <td className="px-4 py-3 text-right text-white">${data.totalPortfolioValue.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-white">100.00%</td>
-                    <td className="px-4 py-3"></td>
-                    <td className="px-4 py-3"></td>
-                  </tr>
-                )}
-              </>
+                  {/* Expanded Attribution Details */}
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "0 12px 12px 12px", borderBottom: "1px solid #f4f4f4" }}>
+                        <div style={styles.attributionBox}>
+                          <div style={styles.attributionTitle}>Attribution Breakdown</div>
+                          <table style={{ ...styles.table, fontSize: 12 }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...styles.tableHeader, borderBottom: "1px solid #e6e6e6" }}>Strategy</th>
+                                <th style={{ ...styles.tableHeaderRight, borderBottom: "1px solid #e6e6e6" }}>Ownership %</th>
+                                <th style={{ ...styles.tableHeaderRight, borderBottom: "1px solid #e6e6e6" }}>Qty</th>
+                                <th style={{ ...styles.tableHeaderRight, borderBottom: "1px solid #e6e6e6" }}>Value</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {holding.strategies.map((strat) => (
+                                <tr key={strat.strategyId}>
+                                  <td style={{ ...styles.tableCell, fontSize: 12 }}>{strat.strategyName}</td>
+                                  <td style={{ ...styles.tableCellRight, fontSize: 12 }}>{(strat.allocationPct * 100).toFixed(2)}%</td>
+                                  <td style={{ ...styles.tableCellRight, fontSize: 12 }}>{strat.qty.toFixed(4)}</td>
+                                  <td style={{ ...styles.tableCellRight, fontSize: 12 }}>${strat.marketValue.toFixed(2)}</td>
+                                </tr>
+                              ))}
+                              <tr style={{ background: "#fafafa" }}>
+                                <td style={{ ...styles.tableCell, fontSize: 12, fontWeight: 700 }}>Total</td>
+                                <td style={{ ...styles.tableCellRight, fontSize: 12, fontWeight: 700 }}>
+                                  {(holding.strategies.reduce((sum, s) => sum + s.allocationPct, 0) * 100).toFixed(2)}%
+                                </td>
+                                <td style={{ ...styles.tableCellRight, fontSize: 12, fontWeight: 700 }}>{holding.qty.toFixed(4)}</td>
+                                <td style={{ ...styles.tableCellRight, fontSize: 12, fontWeight: 700 }}>${holding.marketValue.toFixed(2)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+
+            {/* Cash Row */}
+            {data && (
+              <tr style={{ background: "#fafafa" }}>
+                <td style={{ ...styles.tableCell, fontWeight: 700 }}>Cash (Remainder)</td>
+                <td style={styles.tableCellRight}>-</td>
+                <td style={{ ...styles.tableCellRight, fontWeight: 700 }}>
+                  ${data.cashBalance.toFixed(2)}
+                </td>
+                <td style={styles.tableCellRight}>
+                  {data.totalPortfolioValue > 0 ? ((data.cashBalance / data.totalPortfolioValue) * 100).toFixed(2) : '0.00'}%
+                </td>
+                <td style={{ ...styles.tableCellCenter, color: "#999", fontSize: 11 }}>Unattributed</td>
+                <td style={styles.tableCellCenter}></td>
+              </tr>
+            )}
+
+            {/* Total Row */}
+            {data && (
+              <tr style={{ background: "#e6e6e6" }}>
+                <td style={{ ...styles.tableCell, fontWeight: 700, fontSize: 14 }}>TOTAL</td>
+                <td style={styles.tableCellRight}>-</td>
+                <td style={{ ...styles.tableCellRight, fontWeight: 700, fontSize: 14 }}>
+                  ${data.totalPortfolioValue.toFixed(2)}
+                </td>
+                <td style={{ ...styles.tableCellRight, fontWeight: 700 }}>100.00%</td>
+                <td style={styles.tableCellCenter}></td>
+                <td style={styles.tableCellCenter}></td>
+              </tr>
             )}
           </tbody>
         </table>
-      </div>
+      )}
     </div>
   );
 }
