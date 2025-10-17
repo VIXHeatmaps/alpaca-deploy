@@ -1084,9 +1084,17 @@ tradingRouter.get('/portfolio/holdings', requireAuth, async (req: Request, res: 
     const strategies = await getActiveStrategiesByUserId(userId);
     const activeStrategies = strategies.filter(s => s.status === 'active');
 
-    // Calculate total portfolio value
+    // Calculate strategy portfolio total (sum of all active strategy initial capital)
+    const strategyTotalInvested = activeStrategies.reduce((sum, s) => sum + parseFloat(String(s.initial_capital || 0)), 0);
+
+    // Calculate total positions value from Alpaca
     const totalPositionsValue = alpacaPositions.reduce((sum, p) => sum + p.market_value, 0);
-    const totalPortfolioValue = totalPositionsValue + cashBalance;
+
+    // Cash remainder is the unfilled portion of strategy capital
+    const strategyCashRemainder = strategyTotalInvested - totalPositionsValue;
+
+    // Total portfolio value for this view is the strategy total
+    const totalPortfolioValue = strategyTotalInvested;
 
     // Build holdings array with attribution breakdown
     const holdings: Array<{
@@ -1145,7 +1153,7 @@ tradingRouter.get('/portfolio/holdings', requireAuth, async (req: Request, res: 
     return res.json({
       totalPortfolioValue,
       totalPositionsValue,
-      cashBalance,
+      cashBalance: strategyCashRemainder,
       holdings,
       cashRemainderStrategies,
     });
