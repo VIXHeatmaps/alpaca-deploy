@@ -395,10 +395,27 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
 
     console.log('Elements received for deployment:', JSON.stringify(elements, null, 2));
 
-    const { evaluation: executionResult } = await prepareStrategyEvaluation(elements as StrategyElement[], apiKey, apiSecret, false);
+    const { evaluation: executionResult, decisionDate, executionDate, indicatorData } = await prepareStrategyEvaluation(elements as StrategyElement[], apiKey, apiSecret, true);
+
+    console.log('\n=== STRATEGY EVALUATION DEBUG ===');
+    console.log('Decision Date:', decisionDate);
+    console.log('Execution Date:', executionDate);
+    console.log('Indicator Data:', indicatorData);
+    console.log('Execution Result:', JSON.stringify(executionResult, null, 2));
+    console.log('=================================\n');
 
     if (!executionResult.positions || executionResult.positions.length === 0) {
-      return res.status(400).json({ error: 'Strategy did not produce any positions to trade' });
+      console.error('ERROR: Strategy produced no positions!');
+      console.error('Execution errors:', executionResult.errors);
+      console.error('Execution path:', executionResult.executionPath);
+      return res.status(400).json({
+        error: 'Strategy did not produce any positions to trade',
+        debug: {
+          errors: executionResult.errors,
+          executionPath: executionResult.executionPath,
+          gateEvaluations: executionResult.gateEvaluations,
+        }
+      });
     }
 
     console.log('Strategy produced positions:', JSON.stringify(executionResult.positions, null, 2));

@@ -23,6 +23,13 @@
 - Environment variables must be set separately in Railway dashboard
 - **Always define new terminology before using it** - e.g., explain what "verbosity" means before discussing logging changes
 
+## Trading Window Constraints
+- **We work during market close. We are NOT available during market hours.**
+- The trading window and all trades happen while we're away from the computer
+- All trading issues must be debugged the following day after trades have executed
+- We cannot observe live order placement in real-time
+- Comprehensive logging is critical for post-mortem debugging of deployment issues
+
 ## Batch Backtest Scale Requirements
 - **User will run batches of 200k+ backtests eventually**
 - These large batches will take many hours to complete
