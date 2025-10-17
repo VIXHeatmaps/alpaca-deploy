@@ -46,8 +46,8 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
         style={{
           background: '#fff',
           borderRadius: 12,
-          width: '100%',
-          height: '100%',
+          width: '75%',
+          height: '75%',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -90,7 +90,7 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
               onClick={handleExpandToPage}
               style={{
                 padding: '6px 12px',
-                fontSize: 13,
+                fontSize: 16,
                 fontWeight: 600,
                 background: '#1677ff',
                 border: 'none',
@@ -98,8 +98,9 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
                 cursor: 'pointer',
                 color: '#fff',
               }}
+              title="Open in full page"
             >
-              Open Full Page →
+              ⤢
             </button>
             <button
               onClick={onClose}
@@ -116,7 +117,7 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
               }}
               title="Close modal and return to Dashboard"
             >
-              ✕ Close
+              ✕
             </button>
           </div>
         </div>
