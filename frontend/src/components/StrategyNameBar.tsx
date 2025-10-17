@@ -69,10 +69,10 @@ export function StrategyNameBar({
         }}
       >
         <span
-          style={{ fontSize: 16, color: '#6b7280', cursor: 'pointer', userSelect: 'none' }}
+          style={{ fontSize: 12, color: '#374151', cursor: 'pointer', userSelect: 'none' }}
           onClick={() => onExpandedChange(!isExpanded)}
         >
-          {isExpanded ? '🔽' : '▶'}
+          {isExpanded ? '▼' : '▶'}
         </span>
         <input
           type="text"
@@ -81,13 +81,13 @@ export function StrategyNameBar({
           placeholder="Strategy Name"
           style={{
             flex: '0 0 220px',
-            padding: '6px 12px',
-            fontSize: 15,
-            fontWeight: 600,
-            border: '1px solid #d1d5db',
-            borderRadius: 6,
+            padding: '4px 8px',
+            fontSize: 13,
+            fontWeight: 400,
+            border: '1px solid #e5e7eb',
+            borderRadius: 4,
             background: '#fff',
-            color: '#111827',
+            color: '#6b7280',
           }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
