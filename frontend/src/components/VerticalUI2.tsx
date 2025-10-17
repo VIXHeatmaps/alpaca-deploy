@@ -1109,7 +1109,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         <div style={{
           display: 'flex',
           gap: 4,
-          padding: '8px 32px',
+          padding: '4px 32px 8px 32px',
           background: '#fff',
           borderBottom: '1px solid #e5e7eb',
           overflowX: 'auto',
@@ -1257,151 +1257,44 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
             ↷ Redo
           </button>
 
-          {/* Versioning Controls */}
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            color: '#666',
-            cursor: 'pointer',
-            marginLeft: '8px',
-          }}>
-            <input
-              type="checkbox"
-              checked={versioningEnabled}
-              onChange={(e) => setVersioningEnabled(e.target.checked)}
-            />
-            Versions
-          </label>
-
-          {versioningEnabled ? (
-            <>
-              {/* Version badge */}
-              <div style={{
-                padding: '4px 8px',
-                background: '#e0e7ff',
-                border: '1px solid #c7d2fe',
-                borderRadius: '4px',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#4338ca',
-              }}>
-                {formatVersion(version)}
-              </div>
-
-              {/* Save new label */}
-              <span style={{ fontSize: '11px', color: '#666', fontWeight: '500' }}>SAVE NEW:</span>
-
-              {/* Save buttons */}
-              <button
-                onClick={handleSavePatch}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Patch
-              </button>
-              <button
-                onClick={handleSaveMinor}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Minor
-              </button>
-              <button
-                onClick={handleSaveMajor}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Major
-              </button>
-              <button
-                onClick={handleSaveFork}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Fork
-              </button>
-              <button
-                onClick={handleResetVersions}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#dc2626',
-                  background: '#fff',
-                  border: '1px solid #fca5a5',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Reset Versions
-              </button>
-            </>
-          ) : (
-            <>
-              {/* Simple save button */}
-              <button
-                onClick={handleSaveSimple}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
-              >
-                Save
-              </button>
-            </>
-          )}
+          {/* Save buttons */}
+          <button
+            onClick={handleSaveSimple}
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              fontWeight: '500',
+              color: '#374151',
+              background: '#fff',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginLeft: '8px',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+            title="Save changes to current strategy"
+          >
+            Save Over
+          </button>
+          <button
+            onClick={handleSaveSimple}
+            style={{
+              padding: '6px 12px',
+              fontSize: '13px',
+              fontWeight: '500',
+              color: '#374151',
+              background: '#fff',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#fff'}
+            title="Save as new strategy"
+          >
+            Save New
+          </button>
 
           {/* Invest Button */}
           <button
