@@ -1230,8 +1230,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       {/* 1. Main Toolbar */}
       <div style={{
         background: "#fff",
-        padding: '32px 32px 16px 32px',
+        padding: '16px 32px',
         borderBottom: '1px solid #e5e7eb',
+        marginTop: '24px',
       }}>
         <div style={{
           display: 'flex',
