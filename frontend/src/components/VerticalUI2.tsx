@@ -29,6 +29,7 @@ import {
   applyVariablesToElements,
 } from "../utils/verticalVariables";
 import { InvestModal } from "./InvestModal";
+import { StrategyNameBar } from "./StrategyNameBar";
 import {
   type BatchConfirmData,
   type BatchResultsData,
@@ -82,6 +83,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       version,
       createdAt,
       updatedAt,
+      note,
+      description,
+      nameBarExpanded,
+      strategyId,
     },
     actions: {
       setActiveStrategyTabId,
@@ -97,6 +102,10 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       setVersion,
       setCreatedAt,
       setUpdatedAt,
+      setNote,
+      setDescription,
+      setNameBarExpanded,
+      setStrategyId,
       saveToHistory,
       undo,
       redo,
@@ -2116,6 +2125,53 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+        {/* Strategy Name Bar */}
+        <StrategyNameBar
+          strategyId={strategyId}
+          name={strategyName}
+          note={note}
+          description={description}
+          versioningEnabled={versioningEnabled}
+          isExpanded={nameBarExpanded}
+          onNameChange={setStrategyName}
+          onNoteChange={setNote}
+          onDescriptionChange={setDescription}
+          onVersioningToggle={(enabled) => {
+            setVersioningEnabled(enabled);
+            if (enabled) {
+              // Enable versioning: add v0.0.1 if not present
+              const { enableVersioning } = require('../utils/versionHelper');
+              setStrategyName(enableVersioning(strategyName));
+            } else {
+              // Disable versioning: remove version from name
+              const { disableVersioning } = require('../utils/versionHelper');
+              setStrategyName(disableVersioning(strategyName));
+            }
+          }}
+          onVersionButtonClick={(type) => {
+            const {
+              incrementPatch,
+              incrementMinor,
+              incrementMajor,
+              addFork,
+            } = require('../utils/versionHelper');
+
+            if (type === 'patch') {
+              setStrategyName(incrementPatch(strategyName));
+            } else if (type === 'minor') {
+              setStrategyName(incrementMinor(strategyName));
+            } else if (type === 'major') {
+              setStrategyName(incrementMajor(strategyName));
+            } else if (type === 'fork') {
+              const forkSuffix = prompt('Enter fork suffix (e.g., alpha, beta):');
+              if (forkSuffix) {
+                setStrategyName(addFork(strategyName, forkSuffix));
+              }
+            }
+          }}
+          onExpandedChange={setNameBarExpanded}
+        />
+
         {/* Render elements */}
         {elements.length === 0 ? (
           <div style={{ padding: '8px 0px' }}>
