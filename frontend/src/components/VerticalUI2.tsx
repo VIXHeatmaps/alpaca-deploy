@@ -31,6 +31,14 @@ import {
 import { InvestModal } from "./InvestModal";
 import { StrategyNameBar } from "./StrategyNameBar";
 import {
+  enableVersioning,
+  disableVersioning,
+  incrementPatch,
+  incrementMinor,
+  incrementMajor,
+  addFork,
+} from "../utils/versionHelper";
+import {
   type BatchConfirmData,
   type BatchResultsData,
   BatchConfirmModal,
@@ -2140,22 +2148,13 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
             setVersioningEnabled(enabled);
             if (enabled) {
               // Enable versioning: add v0.0.1 if not present
-              const { enableVersioning } = require('../utils/versionHelper');
               setStrategyName(enableVersioning(strategyName));
             } else {
               // Disable versioning: remove version from name
-              const { disableVersioning } = require('../utils/versionHelper');
               setStrategyName(disableVersioning(strategyName));
             }
           }}
           onVersionButtonClick={(type) => {
-            const {
-              incrementPatch,
-              incrementMinor,
-              incrementMajor,
-              addFork,
-            } = require('../utils/versionHelper');
-
             if (type === 'patch') {
               setStrategyName(incrementPatch(strategyName));
             } else if (type === 'minor') {
