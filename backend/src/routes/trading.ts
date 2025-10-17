@@ -121,9 +121,29 @@ const collectTickersFromElements = (elements: any[]): Set<string> => {
 
   const traverse = (els: any[]) => {
     for (const el of els || []) {
+      // Collect tickers from ticker elements
       if (el.type === 'ticker' && el.ticker) {
         tickers.add(String(el.ticker).toUpperCase());
       }
+
+      // Collect tickers from gate conditions
+      if (el.type === 'gate' && el.conditions) {
+        for (const cond of el.conditions) {
+          if (cond.ticker) {
+            tickers.add(String(cond.ticker).toUpperCase());
+          }
+          if (cond.rightTicker) {
+            tickers.add(String(cond.rightTicker).toUpperCase());
+          }
+        }
+      }
+
+      // Collect tickers from scale configs
+      if (el.type === 'scale' && el.config && el.config.ticker) {
+        tickers.add(String(el.config.ticker).toUpperCase());
+      }
+
+      // Traverse children
       if (el.children) traverse(el.children);
       if (el.thenChildren) traverse(el.thenChildren);
       if (el.elseChildren) traverse(el.elseChildren);
