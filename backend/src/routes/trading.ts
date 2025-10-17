@@ -393,13 +393,16 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
       return res.status(400).json({ error: `A LIVE strategy named "${name}" already exists. Please choose a different name or liquidate the existing strategy first.` });
     }
 
+    console.log('Elements received for deployment:', JSON.stringify(elements, null, 2));
+
     const { evaluation: executionResult } = await prepareStrategyEvaluation(elements as StrategyElement[], apiKey, apiSecret, false);
 
     if (!executionResult.positions || executionResult.positions.length === 0) {
       return res.status(400).json({ error: 'Strategy did not produce any positions to trade' });
     }
 
-    console.log('Strategy produced positions:', executionResult.positions);
+    console.log('Strategy produced positions:', JSON.stringify(executionResult.positions, null, 2));
+    console.log('Execution path:', executionResult.executionPath);
 
     const positions = executionResult.positions;
     const totalWeight = positions.reduce((sum: number, pos: any) => sum + pos.weight, 0);
