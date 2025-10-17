@@ -218,6 +218,16 @@ export function LibraryView({
                         fontSize: 12,
                         fontWeight: 600,
                         color: "#6b7280",
+                        textTransform: "uppercase"
+                      }}>
+                        ID
+                      </th>
+                      <th style={{
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#6b7280",
                         textTransform: "uppercase",
                         cursor: "pointer",
                         userSelect: "none"
@@ -248,7 +258,7 @@ export function LibraryView({
                         color: "#6b7280",
                         textTransform: "uppercase"
                       }}>
-                        Version
+                        Note
                       </th>
                       <th style={{
                         padding: "12px 16px",
@@ -281,14 +291,24 @@ export function LibraryView({
                       <tr key={strategy.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                         <td style={{
                           padding: "12px 16px",
+                          fontSize: 13,
+                          color: "#9ca3af",
+                          fontFamily: "monospace"
+                        }}>
+                          #{strategy.id}
+                        </td>
+                        <td style={{
+                          padding: "12px 16px",
                           fontSize: 14,
                           color: "#111827",
-                          fontWeight: 500
+                          fontWeight: 500,
+                          textAlign: "left"
                         }}>
                           {strategy.name}
                         </td>
                         <td style={{
-                          padding: "12px 16px"
+                          padding: "12px 16px",
+                          textAlign: "left"
                         }}>
                           <span style={getStatusBadgeStyle(strategy.status)}>
                             {strategy.status}
@@ -298,14 +318,19 @@ export function LibraryView({
                           padding: "12px 16px",
                           fontSize: 13,
                           color: "#6b7280",
-                          fontFamily: "monospace"
+                          maxWidth: "200px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          textAlign: "left"
                         }}>
-                          {formatVersion(strategy)}
+                          {strategy.note || '-'}
                         </td>
                         <td style={{
                           padding: "12px 16px",
                           fontSize: 13,
-                          color: "#6b7280"
+                          color: "#6b7280",
+                          textAlign: "left"
                         }}>
                           {new Date(strategy.updated_at).toLocaleDateString()} {new Date(strategy.updated_at).toLocaleTimeString()}
                         </td>
