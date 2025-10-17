@@ -66,54 +66,132 @@ export function StrategyNameBar({
           display: 'flex',
           alignItems: 'center',
           gap: 12,
-          cursor: 'pointer',
-          userSelect: 'none',
         }}
-        onClick={() => onExpandedChange(!isExpanded)}
       >
-        <span style={{ fontSize: 16, color: '#6b7280' }}>
+        <span
+          style={{ fontSize: 16, color: '#6b7280', cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => onExpandedChange(!isExpanded)}
+        >
           {isExpanded ? '🔽' : '▶'}
         </span>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => {
-              e.stopPropagation();
-              onNameChange(e.target.value);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            placeholder="Strategy Name"
-            style={{
-              flex: 1,
-              padding: '6px 12px',
-              fontSize: 15,
-              fontWeight: 600,
-              border: '1px solid #d1d5db',
-              borderRadius: 6,
-              background: '#fff',
-            }}
-          />
-          <input
-            type="text"
-            value={note || ''}
-            onChange={(e) => {
-              e.stopPropagation();
-              onNoteChange(e.target.value);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            placeholder="Note (optional)"
-            style={{
-              flex: 1,
-              padding: '6px 12px',
-              fontSize: 14,
-              border: '1px solid #d1d5db',
-              borderRadius: 6,
-              background: '#fff',
-              color: '#6b7280',
-            }}
-          />
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="Strategy Name"
+          style={{
+            flex: '0 0 220px',
+            padding: '6px 12px',
+            fontSize: 15,
+            fontWeight: 600,
+            border: '1px solid #d1d5db',
+            borderRadius: 6,
+            background: '#fff',
+            color: '#111827',
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            color: '#111827',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}>
+            <input
+              type="checkbox"
+              checked={versioningEnabled}
+              onChange={(e) => onVersioningToggle(e.target.checked)}
+            />
+            <span style={{ fontWeight: 600 }}>v</span>
+          </label>
+          {versioningEnabled && (
+            <>
+              <button
+                onClick={() => handleVersionButtonClick('patch')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  color: '#374151',
+                }}
+                title="Increment patch version (0.0.X)"
+              >
+                patch
+              </button>
+              <button
+                onClick={() => handleVersionButtonClick('minor')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  color: '#374151',
+                }}
+                title="Increment minor version (0.X.0)"
+              >
+                minor
+              </button>
+              <button
+                onClick={() => handleVersionButtonClick('major')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  color: '#374151',
+                }}
+                title="Increment major version (X.0.0)"
+              >
+                major
+              </button>
+              <button
+                onClick={() => handleVersionButtonClick('fork')}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  color: '#374151',
+                }}
+                title="Add fork suffix (e.g., -alpha)"
+              >
+                fork
+              </button>
+            </>
+          )}
         </div>
+        <input
+          type="text"
+          value={note || ''}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="Note (optional)"
+          style={{
+            flex: 1,
+            padding: '6px 12px',
+            fontSize: 14,
+            border: '1px solid #d1d5db',
+            borderRadius: 6,
+            background: '#fff',
+            color: '#6b7280',
+          }}
+        />
         {strategyId && (
           <div style={{
             fontSize: 13,
@@ -129,139 +207,25 @@ export function StrategyNameBar({
       {/* Expanded content */}
       {isExpanded && (
         <div style={{ padding: '0 16px 16px 16px' }}>
-          {/* Version Helper */}
-          <div style={{
-            padding: '12px',
-            background: '#fff',
-            border: '1px solid #e5e7eb',
-            borderRadius: 6,
-            marginBottom: 12,
-          }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 12,
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 500,
-            }}>
-              <input
-                type="checkbox"
-                checked={versioningEnabled}
-                onChange={(e) => onVersioningToggle(e.target.checked)}
-              />
-              ⚙️ Version Helper
-            </label>
-
-            {versioningEnabled && (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => handleVersionButtonClick('patch')}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    background: '#eff6ff',
-                    border: '1px solid #bfdbfe',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    color: '#1e40af',
-                  }}
-                  title="Increment patch version (0.0.X)"
-                >
-                  patch
-                </button>
-                <button
-                  onClick={() => handleVersionButtonClick('minor')}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    background: '#f0fdf4',
-                    border: '1px solid #bbf7d0',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    color: '#15803d',
-                  }}
-                  title="Increment minor version (0.X.0)"
-                >
-                  minor
-                </button>
-                <button
-                  onClick={() => handleVersionButtonClick('major')}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    background: '#fef3c7',
-                    border: '1px solid #fde047',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    color: '#92400e',
-                  }}
-                  title="Increment major version (X.0.0)"
-                >
-                  major
-                </button>
-                <button
-                  onClick={() => handleVersionButtonClick('fork')}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    background: '#fef2f2',
-                    border: '1px solid #fecaca',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    color: '#991b1b',
-                  }}
-                  title="Add fork suffix (e.g., -alpha)"
-                >
-                  fork
-                </button>
-              </div>
-            )}
-          </div>
-
           {/* Description */}
           <div>
-            <button
-              onClick={() => setShowDescriptionField(!showDescriptionField)}
+            <textarea
+              value={description || ''}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              placeholder="Description (optional, markdown supported)"
+              rows={6}
               style={{
-                padding: '8px 12px',
+                width: '100%',
+                padding: '12px',
                 fontSize: 13,
-                fontWeight: 500,
-                background: 'transparent',
-                border: 'none',
-                color: '#6b7280',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                background: '#fff',
+                resize: 'vertical',
+                color: '#374151',
               }}
-            >
-              {showDescriptionField ? '🔽' : '▶'} Description
-            </button>
-
-            {showDescriptionField && (
-              <textarea
-                value={description || ''}
-                onChange={(e) => onDescriptionChange(e.target.value)}
-                placeholder="Optional long-form notes (markdown supported)"
-                rows={8}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 6,
-                  background: '#fff',
-                  resize: 'vertical',
-                }}
-              />
-            )}
+            />
           </div>
         </div>
       )}

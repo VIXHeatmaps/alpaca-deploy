@@ -2136,7 +2136,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         {/* Strategy Name Bar */}
         <StrategyNameBar
           strategyId={strategyId}
-          name={strategyName}
+          name={strategyName || 'Untitled Strategy'}
           note={note}
           description={description}
           versioningEnabled={versioningEnabled}
