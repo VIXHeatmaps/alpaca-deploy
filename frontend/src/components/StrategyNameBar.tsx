@@ -81,13 +81,13 @@ export function StrategyNameBar({
           placeholder="Strategy Name"
           style={{
             flex: '0 0 220px',
-            padding: '4px 8px',
-            fontSize: 13,
-            fontWeight: 400,
-            border: '1px solid #e5e7eb',
+            padding: '6px 12px',
+            fontSize: 14,
+            fontWeight: 600,
+            border: '1px solid #d1d5db',
             borderRadius: 4,
             background: '#fff',
-            color: '#6b7280',
+            color: '#374151',
           }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
