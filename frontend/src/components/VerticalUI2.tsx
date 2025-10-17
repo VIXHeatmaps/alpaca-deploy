@@ -501,10 +501,16 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
         nameBarExpanded: nameBarExpanded,
       });
 
-      // Store the strategy ID so we know this is a saved strategy
-      setStrategyId(savedStrategy.id);
+      console.log('Saved strategy response:', savedStrategy);
 
-      alert(`Strategy "${strategyData.name}" saved successfully! (ID: ${savedStrategy.id})`);
+      // Store the strategy ID so we know this is a saved strategy
+      if (savedStrategy && savedStrategy.id) {
+        setStrategyId(savedStrategy.id);
+        alert(`Strategy "${strategyData.name}" saved successfully! (ID: ${savedStrategy.id})`);
+      } else {
+        console.error('No ID returned from save:', savedStrategy);
+        alert(`Strategy "${strategyData.name}" saved successfully! (Warning: No ID returned)`);
+      }
     } catch (error: any) {
       console.error('Failed to save strategy to database:', error);
       alert(`Failed to save strategy to database: ${error.message}`);

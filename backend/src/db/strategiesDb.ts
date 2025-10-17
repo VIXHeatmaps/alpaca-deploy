@@ -78,13 +78,20 @@ export async function saveStrategy(input: CreateStrategyInput): Promise<Strategy
 
   if (existing) {
     // Update existing strategy
+    const updateData: any = {
+      versioning_enabled: input.versioning_enabled,
+      elements: JSON.stringify(input.elements),
+      updated_at: db.fn.now(),
+    };
+
+    // Include optional metadata fields if provided
+    if (input.note !== undefined) updateData.note = input.note;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (input.name_bar_expanded !== undefined) updateData.name_bar_expanded = input.name_bar_expanded;
+
     const [updated] = await db('strategies')
       .where({ id: existing.id })
-      .update({
-        versioning_enabled: input.versioning_enabled,
-        elements: JSON.stringify(input.elements),
-        updated_at: db.fn.now(),
-      })
+      .update(updateData)
       .returning('*');
 
     // Parse JSONB fields
@@ -110,6 +117,11 @@ export async function saveStrategy(input: CreateStrategyInput): Promise<Strategy
     if (input.created_at) {
       strategyData.created_at = input.created_at;
     }
+
+    // Include optional metadata fields if provided
+    if (input.note !== undefined) strategyData.note = input.note;
+    if (input.description !== undefined) strategyData.description = input.description;
+    if (input.name_bar_expanded !== undefined) strategyData.name_bar_expanded = input.name_bar_expanded;
 
     const [created] = await db('strategies')
       .insert(strategyData)

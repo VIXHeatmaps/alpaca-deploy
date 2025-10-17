@@ -46,7 +46,7 @@ strategiesRouter.post('/strategies', requireAuth, async (req: Request, res: Resp
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    const { name, versioningEnabled, version, elements, createdAt } = req.body;
+    const { name, versioningEnabled, version, elements, createdAt, note, description, nameBarExpanded } = req.body;
 
     if (!name || typeof name !== 'string') {
       return res.status(400).json({ error: 'Name is required and must be a string' });
@@ -75,6 +75,9 @@ strategiesRouter.post('/strategies', requireAuth, async (req: Request, res: Resp
       elements,
       created_at: createdAt,
       user_id: userId,
+      note: note || null,
+      description: description || null,
+      name_bar_expanded: nameBarExpanded || false,
     });
 
     return res.status(200).json(saved);
