@@ -22,7 +22,8 @@ const SORT_TIE_EPSILON = 1e-9;
  */
 function evaluateCondition(
   condition: GateCondition,
-  indicatorData: Map<string, IndicatorValue>
+  indicatorData: Map<string, IndicatorValue>,
+  debug = false
 ): boolean {
   // Build key for left side of comparison
   // Use params as source of truth, fallback to period for backward compatibility
@@ -30,9 +31,29 @@ function evaluateCondition(
     ? buildIndicatorKey(condition.ticker, condition.indicator, condition.params)
     : `${condition.ticker}:${condition.indicator}:${condition.period || ''}`;
 
+  if (debug) {
+    console.log(`\n[GATE EVAL] Looking up indicator key: "${leftKey}"`);
+    console.log(`[GATE EVAL] Condition:`, {
+      ticker: condition.ticker,
+      indicator: condition.indicator,
+      period: condition.period,
+      params: condition.params,
+    });
+    console.log(`[GATE EVAL] Available keys in indicatorData:`, Array.from(indicatorData.keys()));
+  }
+
   const leftValue = indicatorData.get(leftKey);
 
   if (!leftValue) {
+    console.error(`\n[GATE EVAL ERROR] Missing indicator data!`);
+    console.error(`[GATE EVAL ERROR] Tried to find key: "${leftKey}"`);
+    console.error(`[GATE EVAL ERROR] Condition details:`, {
+      ticker: condition.ticker,
+      indicator: condition.indicator,
+      period: condition.period,
+      params: condition.params,
+    });
+    console.error(`[GATE EVAL ERROR] Available keys:`, Array.from(indicatorData.keys()));
     throw new Error(
       `Missing indicator data for key "${leftKey}" (ticker=${condition.ticker}, indicator=${condition.indicator})`
     );
@@ -198,7 +219,7 @@ function executeElement(
 
       // Evaluate all conditions
       const conditionResults = conditions.map(cond =>
-        evaluateCondition(cond, context.indicatorData)
+        evaluateCondition(cond, context.indicatorData, debug)
       );
 
       if (debug) {
