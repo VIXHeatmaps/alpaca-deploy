@@ -18,6 +18,11 @@ export interface Strategy {
   status: StrategyStatus;
   created_at: string;
   updated_at: string;
+  note: string | null; // Short description (single line)
+  description: string | null; // Long-form markdown description
+  deployed_at: string | null; // When went LIVE
+  liquidated_at: string | null; // When liquidated
+  name_bar_expanded: boolean; // UI state: is name bar expanded?
 }
 
 export interface SaveStrategyInput {
@@ -31,6 +36,9 @@ export interface SaveStrategyInput {
   };
   elements: any[];
   createdAt?: string; // Optional - preserve original creation time
+  note?: string | null; // Optional short description
+  description?: string | null; // Optional long description
+  nameBarExpanded?: boolean; // Optional UI state
 }
 
 /**

@@ -21,6 +21,11 @@ export interface StrategyDb {
   status: StrategyStatus;
   created_at: Date;
   updated_at: Date;
+  note: string | null; // Short description (single line)
+  description: string | null; // Long-form markdown description
+  deployed_at: Date | null; // When went LIVE
+  liquidated_at: Date | null; // When liquidated
+  name_bar_expanded: boolean; // UI state: is name bar expanded?
 }
 
 export interface CreateStrategyInput {
@@ -34,6 +39,9 @@ export interface CreateStrategyInput {
   user_id: string;
   status?: StrategyStatus; // Optional - defaults to DRAFT
   created_at?: string; // Optional - preserve original creation time if provided
+  note?: string | null; // Optional short description
+  description?: string | null; // Optional long description
+  name_bar_expanded?: boolean; // Optional UI state
 }
 
 export interface UpdateStrategyInput {
@@ -45,6 +53,11 @@ export interface UpdateStrategyInput {
   version_fork?: string;
   elements?: any;
   status?: StrategyStatus;
+  note?: string | null;
+  description?: string | null;
+  name_bar_expanded?: boolean;
+  deployed_at?: Date | null;
+  liquidated_at?: Date | null;
 }
 
 /**
