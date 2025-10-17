@@ -387,6 +387,10 @@ export const useBuilderState = (): UseBuilderStateResult => {
         version: strategyData.version || createDefaultVersion(),
         createdAt: strategyData.createdAt || new Date().toISOString(),
         updatedAt: strategyData.updatedAt || new Date().toISOString(),
+        strategyId: strategyData.id, // Load the strategy ID
+        note: strategyData.note || null,
+        description: strategyData.description || null,
+        nameBarExpanded: strategyData.nameBarExpanded || false,
       });
     } catch (error) {
       console.error("Failed to load strategy from Library:", error);

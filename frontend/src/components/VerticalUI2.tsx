@@ -490,14 +490,21 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
     // Save to database
     try {
-      await strategiesApi.saveStrategy({
+      const savedStrategy = await strategiesApi.saveStrategy({
         name: strategyData.name,
         versioningEnabled: strategyData.versioningEnabled,
         version: strategyData.version,
         elements: strategyData.elements,
         createdAt: strategyData.createdAt,
+        note: note,
+        description: description,
+        nameBarExpanded: nameBarExpanded,
       });
-      alert(`Strategy "${strategyData.name}" saved successfully!`);
+
+      // Store the strategy ID so we know this is a saved strategy
+      setStrategyId(savedStrategy.id);
+
+      alert(`Strategy "${strategyData.name}" saved successfully! (ID: ${savedStrategy.id})`);
     } catch (error: any) {
       console.error('Failed to save strategy to database:', error);
       alert(`Failed to save strategy to database: ${error.message}`);
