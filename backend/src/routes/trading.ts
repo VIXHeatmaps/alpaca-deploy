@@ -217,13 +217,49 @@ async function prepareStrategyEvaluation(
   const executionDate = effectiveDateGrid[decisionIndex + 1];
 
   const indicatorLookup = buildIndicatorLookupMap(elements);
-  const { values: indicatorValuesForDate } = collectIndicatorValuesForDate(
+
+  if (debug) {
+    console.log('\n=== INDICATOR DATA DEBUG ===');
+    console.log('Decision Date:', decisionDate);
+    console.log('Indicator Lookup Map:', Array.from(indicatorLookup.entries()));
+    console.log('Indicator Data Keys:', Object.keys(indicatorData));
+
+    // Show sample of indicator data for each key
+    for (const [key, values] of Object.entries(indicatorData)) {
+      const dates = Object.keys(values).sort();
+      console.log(`  ${key}:`, {
+        totalDates: dates.length,
+        firstDate: dates[0],
+        lastDate: dates[dates.length - 1],
+        hasDecisionDate: decisionDate in values,
+        decisionDateValue: values[decisionDate],
+      });
+    }
+    console.log('=================================\n');
+  }
+
+  const { values: indicatorValuesForDate, missing } = collectIndicatorValuesForDate(
     indicatorLookup,
     indicatorData,
     decisionDate
   );
 
+  if (debug) {
+    console.log('\n=== COLLECTED INDICATOR VALUES ===');
+    console.log('Values collected:', indicatorValuesForDate);
+    console.log('Missing indicators:', missing);
+    console.log('=================================\n');
+  }
+
   const indicatorMap = buildIndicatorMap(indicatorValuesForDate);
+
+  if (debug) {
+    console.log('\n=== INDICATOR MAP ===');
+    console.log('Map keys:', Array.from(indicatorMap.keys()));
+    console.log('Map entries:', Array.from(indicatorMap.entries()));
+    console.log('=================================\n');
+  }
+
   const evaluation = executeStrategy(elements, indicatorMap, debug);
 
   return {
