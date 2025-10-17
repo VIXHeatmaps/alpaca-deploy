@@ -852,15 +852,15 @@ export function Dashboard({
               </div>
             ) : (
               <div>
-                <table style={{ ...styles.table, marginBottom: 0, tableLayout: 'fixed' as const }}>
+                <table style={{ ...styles.table, marginBottom: 0, tableLayout: 'fixed' as const, width: '100%' }}>
                   <colgroup>
-                    <col style={{ width: '40px' }} />
+                    <col style={{ width: '50px' }} />
                     <col style={{ width: 'auto' }} />
-                    <col style={{ width: '100px' }} />
-                    <col style={{ width: '140px' }} />
-                    <col style={{ width: '140px' }} />
-                    <col style={{ width: '120px' }} />
-                    <col style={{ width: '120px' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '15%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '12%' }} />
                   </colgroup>
                   <thead>
                     <tr>

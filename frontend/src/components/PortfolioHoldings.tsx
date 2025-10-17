@@ -237,14 +237,14 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
           No positions yet. Deploy a strategy to see holdings here.
         </div>
       ) : (
-        <table style={{ ...styles.table, tableLayout: 'fixed' as const }}>
+        <table style={{ ...styles.table, tableLayout: 'fixed' as const, width: '100%' }}>
           <colgroup>
-            <col style={{ width: '40px' }} />
-            <col style={{ width: 'auto' }} />
-            <col style={{ width: '120px' }} />
-            <col style={{ width: '140px' }} />
-            <col style={{ width: '100px' }} />
-            <col style={{ width: '140px' }} />
+            <col style={{ width: '50px' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '20%' }} />
           </colgroup>
           <thead>
             <tr>
@@ -272,7 +272,7 @@ export default function PortfolioHoldings({ apiKey, apiSecret }: PortfolioHoldin
                           background: 'transparent',
                           border: 'none',
                           cursor: 'pointer',
-                          fontSize: 14,
+                          fontSize: 18,
                           color: '#666',
                           padding: 0,
                         }}
