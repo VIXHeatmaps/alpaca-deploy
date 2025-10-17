@@ -1121,8 +1121,8 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       {activeTab === "strategy" && (
         <div style={{
           display: 'flex',
-          gap: 4,
-          padding: '0 32px 8px 32px',
+          gap: 8,
+          padding: '0 32px',
           background: '#fff',
           borderBottom: '1px solid #e5e7eb',
           overflowX: 'auto',
@@ -1141,16 +1141,19 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 }
               }}
               style={{
-                padding: '4px 12px',
-                fontSize: 12,
-                background: tab.id === activeStrategyTabId ? '#ffffff' : 'transparent',
-                border: tab.id === activeStrategyTabId ? '1px solid #d1d5db' : '1px solid transparent',
-                borderRadius: '4px 4px 0 0',
+                padding: '8px 16px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: tab.id === activeStrategyTabId ? '#1677ff' : '#6b7280',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: tab.id === activeStrategyTabId ? '2px solid #1677ff' : '2px solid transparent',
                 cursor: 'pointer',
                 display: 'flex',
                 gap: 8,
                 alignItems: 'center',
                 whiteSpace: 'nowrap',
+                transition: 'all 0.2s',
               }}
             >
               {editingTabId === tab.id ? (
@@ -1227,7 +1230,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
       {/* 1. Main Toolbar */}
       <div style={{
         background: "#fff",
-        padding: '24px 32px 16px 32px',
+        padding: '32px 32px 16px 32px',
         borderBottom: '1px solid #e5e7eb',
       }}>
         <div style={{
