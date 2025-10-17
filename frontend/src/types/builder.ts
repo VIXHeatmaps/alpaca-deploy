@@ -97,4 +97,8 @@ export interface StrategyTab {
   version: StrategyVersion;
   createdAt: string;
   updatedAt: string;
+  note?: string | null; // Short description (single line)
+  description?: string | null; // Long-form markdown description
+  nameBarExpanded?: boolean; // UI state: is name bar expanded?
+  strategyId?: number; // Database ID when loaded from saved strategy
 }

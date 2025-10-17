@@ -83,6 +83,10 @@ export interface BuilderState {
   version: StrategyVersion;
   createdAt: string;
   updatedAt: string;
+  note: string | null;
+  description: string | null;
+  nameBarExpanded: boolean;
+  strategyId: number | undefined;
 }
 
 export interface BuilderActions {
@@ -99,6 +103,10 @@ export interface BuilderActions {
   setVersion: (version: StrategyVersion) => void;
   setCreatedAt: (iso: string) => void;
   setUpdatedAt: (iso: string) => void;
+  setNote: (note: string | null) => void;
+  setDescription: (description: string | null) => void;
+  setNameBarExpanded: (expanded: boolean) => void;
+  setStrategyId: (id: number | undefined) => void;
   saveToHistory: (elements: Element[]) => void;
   undo: () => void;
   redo: () => void;
@@ -136,6 +144,10 @@ export const useBuilderState = (): UseBuilderStateResult => {
   const version = currentTab.version ?? createDefaultVersion();
   const createdAt = currentTab.createdAt ?? new Date().toISOString();
   const updatedAt = currentTab.updatedAt ?? new Date().toISOString();
+  const note = currentTab.note ?? null;
+  const description = currentTab.description ?? null;
+  const nameBarExpanded = currentTab.nameBarExpanded ?? false;
+  const strategyId = currentTab.strategyId;
 
   const updateTab = useCallback(
     (tabId: string, updater: TabUpdater) => {
@@ -235,6 +247,34 @@ export const useBuilderState = (): UseBuilderStateResult => {
   const setUpdatedAt = useCallback(
     (iso: string) => {
       setCurrentTab((tab) => ({ ...tab, updatedAt: iso }));
+    },
+    [setCurrentTab]
+  );
+
+  const setNote = useCallback(
+    (note: string | null) => {
+      setCurrentTab((tab) => ({ ...tab, note }));
+    },
+    [setCurrentTab]
+  );
+
+  const setDescription = useCallback(
+    (description: string | null) => {
+      setCurrentTab((tab) => ({ ...tab, description }));
+    },
+    [setCurrentTab]
+  );
+
+  const setNameBarExpanded = useCallback(
+    (expanded: boolean) => {
+      setCurrentTab((tab) => ({ ...tab, nameBarExpanded: expanded }));
+    },
+    [setCurrentTab]
+  );
+
+  const setStrategyId = useCallback(
+    (id: number | undefined) => {
+      setCurrentTab((tab) => ({ ...tab, strategyId: id }));
     },
     [setCurrentTab]
   );
@@ -371,6 +411,10 @@ export const useBuilderState = (): UseBuilderStateResult => {
     version,
     createdAt,
     updatedAt,
+    note,
+    description,
+    nameBarExpanded,
+    strategyId,
   };
 
   const actions: BuilderActions = {
@@ -387,6 +431,10 @@ export const useBuilderState = (): UseBuilderStateResult => {
     setVersion,
     setCreatedAt,
     setUpdatedAt,
+    setNote,
+    setDescription,
+    setNameBarExpanded,
+    setStrategyId,
     saveToHistory,
     undo,
     redo,
