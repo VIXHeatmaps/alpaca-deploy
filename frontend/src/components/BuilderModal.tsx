@@ -47,7 +47,7 @@ export function BuilderModal({ strategy, apiKey, apiSecret, onClose, onLoadStrat
           background: '#fff',
           borderRadius: 12,
           width: '75%',
-          height: '75%',
+          height: '90%',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
