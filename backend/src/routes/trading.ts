@@ -221,6 +221,7 @@ async function prepareStrategyEvaluation(
   if (debug) {
     console.log('\n=== INDICATOR DATA DEBUG ===');
     console.log('Decision Date:', decisionDate);
+    console.log('Testing Railway auto-deploy...');
     console.log('Indicator Lookup Map:', Array.from(indicatorLookup.entries()));
     console.log('Indicator Data Keys:', Object.keys(indicatorData));
 
