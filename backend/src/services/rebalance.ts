@@ -16,6 +16,7 @@ import {
   collectIndicatorValuesForDate,
   buildIndicatorLookupMap,
 } from '../execution/sortRuntime';
+import { TradeExecutionLogger } from './tradeExecutionLogger';
 
 type RebalanceResult = {
   soldSymbols: string[];
@@ -272,6 +273,7 @@ async function executeRebalance(
   toBuy: Array<{ symbol: string; targetDollars: number }>,
   apiKey: string,
   apiSecret: string,
+  logger: TradeExecutionLogger,
   strategyId?: number
 ): Promise<{ newHoldings: Array<{ symbol: string; qty: number; price: number }>; cashRemaining: number }> {
   let availableCash = 0;
@@ -283,13 +285,17 @@ async function executeRebalance(
     try {
       console.log(`  Selling ${qty.toFixed(4)} ${symbol}...`);
       const order = await placeMarketOrder(symbol, qty, 'sell', apiKey, apiSecret, strategyId);
+      logger.logPlacedOrder(order.id, symbol, qty, 'sell');
+
       const { filledQty, avgPrice } = await waitForFill(order.id, apiKey, apiSecret);
 
       const proceeds = filledQty * avgPrice;
       availableCash += proceeds;
+      logger.logFilledOrder(order.id, symbol, filledQty, avgPrice);
       console.log(`  Sold ${filledQty} @ $${avgPrice.toFixed(2)} = $${proceeds.toFixed(2)}`);
     } catch (err: any) {
       console.error(`  Failed to sell ${symbol}:`, err.message);
+      logger.logFailedOrder(symbol, 'sell', err.message);
       throw err;
     }
   }
@@ -308,6 +314,8 @@ async function executeRebalance(
         continue;
       }
 
+      logger.logPlannedOrder(symbol, 'buy', dollarsToSpend);
+
       // Get current price to calculate quantity
       const { getCurrentPrice } = await import('./orders');
       const price = await getCurrentPrice(symbol, apiKey, apiSecret);
@@ -316,6 +324,8 @@ async function executeRebalance(
       console.log(`  Buying ${qty.toFixed(4)} ${symbol} @ $${price.toFixed(2)} = $${dollarsToSpend.toFixed(2)}`);
 
       const order = await placeMarketOrder(symbol, qty, 'buy', apiKey, apiSecret, strategyId);
+      logger.logPlacedOrder(order.id, symbol, qty, 'buy');
+
       const { filledQty, avgPrice, pending } = await waitForFill(order.id, apiKey, apiSecret);
 
       if (pending) {
@@ -325,10 +335,12 @@ async function executeRebalance(
         const spent = filledQty * avgPrice;
         availableCash -= spent;
         newHoldings.push({ symbol, qty: filledQty, price: avgPrice });
+        logger.logFilledOrder(order.id, symbol, filledQty, avgPrice);
         console.log(`  Bought ${filledQty} @ $${avgPrice.toFixed(2)}, cash remaining: $${availableCash.toFixed(2)}`);
       }
     } catch (err: any) {
       console.error(`  Failed to buy ${symbol}:`, err.message);
+      logger.logFailedOrder(symbol, 'buy', err.message);
       // Continue with other buys
     }
   }
@@ -398,6 +410,13 @@ export async function rebalanceActiveStrategy(
   const totalValue = currentHoldings.reduce((sum, h) => sum + h.marketValue, 0);
   console.log(`Current portfolio value: $${totalValue.toFixed(2)}`);
 
+  // Initialize execution logger
+  const logger = new TradeExecutionLogger(strategyId || parseInt(strategy.id), 'rebalance');
+  const { getActiveStrategyById } = await import('../db/activeStrategiesDb');
+  const dbStrategy = strategyId ? await getActiveStrategyById(strategyId) : null;
+  const attributionBefore = dbStrategy?.position_attribution || {};
+  await logger.start(strategy.holdings, totalValue, attributionBefore);
+
   // Extract elements from flowData
   const elements = strategy.flowData.elements || [];
   if (!Array.isArray(elements) || elements.length === 0) {
@@ -414,6 +433,7 @@ export async function rebalanceActiveStrategy(
   );
 
   console.log('[REBALANCE] Target allocation:', targetAllocation);
+  logger.logTargetAllocation(targetAllocation);
 
   // Calculate what needs to change
   const { toSell, toBuy } = calculateRebalanceOrders(currentHoldings, targetAllocation, totalValue);
@@ -455,7 +475,7 @@ export async function rebalanceActiveStrategy(
   }
 
   // Execute rebalance
-  const { newHoldings, cashRemaining } = await executeRebalance(toSell, toBuy, apiKey, apiSecret, strategyId);
+  const { newHoldings, cashRemaining } = await executeRebalance(toSell, toBuy, apiKey, apiSecret, logger, strategyId);
 
   // Update strategy storage
   const newValue = newHoldings.reduce((sum, h) => sum + (h.qty * h.price), cashRemaining);
@@ -485,6 +505,20 @@ export async function rebalanceActiveStrategy(
     strategy.investAmount,
     newHoldings,
     'daily'
+  );
+
+  // Get updated attribution after rebalance
+  const updatedStrategy = strategyId ? await getActiveStrategyById(strategyId) : null;
+  const attributionAfter = updatedStrategy?.position_attribution || {};
+
+  // Finish execution logging
+  await logger.finish(
+    true,
+    newHoldings.map(h => ({ symbol: h.symbol, qty: h.qty })),
+    newValue,
+    attributionAfter,
+    apiKey,
+    apiSecret
   );
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);

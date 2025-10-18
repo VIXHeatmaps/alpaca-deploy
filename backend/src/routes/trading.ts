@@ -23,6 +23,7 @@ import {
 import { upsertSnapshot } from '../db/activeStrategySnapshotsDb';
 import { calculateAttributionOnDeploy, removeStrategyFromAttribution } from '../services/positionAttribution';
 import { placeMarketOrder, waitForFill, getCurrentPrice, getAlpacaPositions } from '../services/orders';
+import { TradeExecutionLogger } from '../services/tradeExecutionLogger';
 
 const tradingRouter = Router();
 
@@ -503,6 +504,11 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
       user_id: userId,
     });
 
+    // Initialize execution logger
+    const logger = new TradeExecutionLogger(dbStrategy.id, 'deployment');
+    await logger.start([], 0, {});
+    logger.logTargetAllocation(allocation);
+
     const holdings: Array<{ symbol: string; qty: number; entry_price?: number }> = [];
     const pendingOrders: Array<{ orderId: string; symbol: string; side: 'buy' | 'sell'; qty: number }> = [];
     let totalInvested = 0;
@@ -513,10 +519,13 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
       const qty = targetDollars / price;
 
       console.log(`Placing market order for ${symbol}: ${qty.toFixed(4)} shares ($${targetDollars.toFixed(2)})`);
+      logger.logPlannedOrder(symbol, 'buy', targetDollars);
 
       try {
         // Pass strategyId for order tagging
         const order = await placeMarketOrder(symbol, qty, 'buy', apiKey, apiSecret, dbStrategy.id);
+        logger.logPlacedOrder(order.id, symbol, qty, 'buy');
+
         const { filledQty, avgPrice, pending } = await waitForFill(order.id, apiKey, apiSecret);
 
         if (pending) {
@@ -527,10 +536,12 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
           const spent = filledQty * avgPrice;
           totalInvested += spent;
           holdings.push({ symbol, qty: filledQty, entry_price: avgPrice });
+          logger.logFilledOrder(order.id, symbol, filledQty, avgPrice);
           console.log(`Filled: ${filledQty} @ $${avgPrice.toFixed(2)} = $${spent.toFixed(2)}`);
         }
       } catch (err: any) {
         console.error(`Failed to buy ${symbol}:`, err.message);
+        logger.logFailedOrder(symbol, 'buy', err.message);
       }
     }
 
@@ -568,7 +579,21 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
       });
     }
 
+    // Get attribution after deployment
+    const updatedStrategy = await getActiveStrategyById(dbStrategy.id);
+    const attributionAfter = updatedStrategy?.position_attribution || {};
+
     await calculateAttributionOnDeploy(dbStrategy.id, holdings);
+
+    // Finish execution logging
+    await logger.finish(
+      true,
+      holdings,
+      totalInvested,
+      attributionAfter,
+      apiKey,
+      apiSecret
+    );
 
     // Auto-save strategy to Library with LIVE status
     console.log('Saving strategy to Library with LIVE status...');
@@ -603,6 +628,7 @@ tradingRouter.post('/invest', requireAuth, async (req: Request, res: Response) =
         holdings: normalizeHoldings(dbStrategy.holdings),
         status: dbStrategy.status,
       },
+      executionLogId: logger.getLogId(),
     });
   } catch (err: any) {
     console.error('POST /api/invest error:', err);
@@ -1237,6 +1263,63 @@ tradingRouter.get('/portfolio/holdings', requireAuth, async (req: Request, res: 
   } catch (err: any) {
     console.error('GET /api/portfolio/holdings error:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch portfolio holdings' });
+  }
+});
+
+/**
+ * GET /api/strategies/:id/execution-logs
+ * Retrieve execution logs for a strategy
+ */
+tradingRouter.get('/strategies/:id/execution-logs', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const strategyId = parseInt(req.params.id);
+    if (!Number.isFinite(strategyId)) {
+      return res.status(400).json({ error: 'Invalid strategy ID' });
+    }
+
+    // Verify strategy ownership
+    const strategy = await getActiveStrategyById(strategyId);
+    if (!strategy) {
+      return res.status(404).json({ error: 'Strategy not found' });
+    }
+    if (strategy.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this strategy' });
+    }
+
+    // Fetch execution logs
+    const db = (await import('../db/connection')).default;
+    const logs = await db('trade_execution_logs')
+      .where({ active_strategy_id: strategyId })
+      .orderBy('execution_date', 'desc')
+      .limit(50);
+
+    return res.json({
+      success: true,
+      logs: logs.map(log => ({
+        id: log.id,
+        executionType: log.execution_type,
+        executionDate: log.execution_date,
+        success: log.success,
+        durationMs: log.execution_duration_ms,
+        targetAllocation: log.target_allocation,
+        plannedOrders: log.planned_orders,
+        filledOrders: log.filled_orders,
+        failedOrders: log.failed_orders,
+        discrepancies: log.discrepancies,
+        preExecutionCapital: log.pre_execution_capital,
+        postExecutionCapital: log.post_execution_capital,
+        attributionValidation: log.attribution_validation,
+        errorMessage: log.error_message,
+      })),
+    });
+  } catch (err: any) {
+    console.error('GET /api/strategies/:id/execution-logs error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch execution logs' });
   }
 });
 
