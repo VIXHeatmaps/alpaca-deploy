@@ -6,8 +6,16 @@
  */
 
 import { getActiveStrategy, setActiveStrategy } from '../storage/activeStrategy';
-import { evaluateFlowWithCurrentPrices } from './flowEval';
 import { placeMarketOrder, waitForFill, getAlpacaPositions } from './orders';
+import { collectRequiredIndicators, executeStrategy, buildIndicatorMap } from '../execution';
+import { fetchPriceData } from '../backtest/v2/dataFetcher';
+import { fetchIndicators } from '../backtest/v2/indicatorCache';
+import { getMarketDateToday } from '../utils/marketTime';
+import {
+  precomputeSortIndicators,
+  collectIndicatorValuesForDate,
+  buildIndicatorLookupMap,
+} from '../execution/sortRuntime';
 
 type RebalanceResult = {
   soldSymbols: string[];
@@ -15,6 +23,191 @@ type RebalanceResult = {
   updatedHoldings: Array<{ symbol: string; qty: number }>;
   cashRemaining: number;
 };
+
+/**
+ * Helper: Collect tickers from elements
+ */
+function collectTickersFromElements(elements: any[]): Set<string> {
+  const tickers = new Set<string>();
+
+  const traverse = (els: any[]) => {
+    for (const el of els || []) {
+      if (el.type === 'ticker' && el.ticker) {
+        tickers.add(String(el.ticker).toUpperCase());
+      }
+      if (el.type === 'gate' && el.conditions) {
+        for (const cond of el.conditions) {
+          if (cond.ticker) tickers.add(String(cond.ticker).toUpperCase());
+          if (cond.rightTicker) tickers.add(String(cond.rightTicker).toUpperCase());
+        }
+      }
+      if (el.type === 'scale' && el.config && el.config.ticker) {
+        tickers.add(String(el.config.ticker).toUpperCase());
+      }
+      if (el.children) traverse(el.children);
+      if (el.thenChildren) traverse(el.thenChildren);
+      if (el.elseChildren) traverse(el.elseChildren);
+      if (el.fromChildren) traverse(el.fromChildren);
+      if (el.toChildren) traverse(el.toChildren);
+    }
+  };
+
+  traverse(elements);
+  return tickers;
+}
+
+/**
+ * Helper: Calculate warmup days needed for indicators
+ */
+function calculateWarmupDays(indicators: Array<{ ticker: string; indicator: string; period: string; params?: Record<string, string> }>): number {
+  if (indicators.length === 0) return 0;
+
+  let maxWarmup = 0;
+  for (const ind of indicators) {
+    const indicator = ind.indicator.toUpperCase();
+    const periodNum = parseInt(ind.period, 10) || 14;
+    let warmup = 0;
+
+    if (indicator === 'MACD' || indicator === 'MACD_LINE' || indicator === 'MACD_SIGNAL' || indicator === 'MACD_HIST') {
+      warmup = 26 + 9;
+    } else if (indicator === 'PPO_LINE') {
+      warmup = 26;
+    } else if (indicator === 'PPO_SIGNAL' || indicator === 'PPO_HIST') {
+      warmup = 26 + 9;
+    } else if (indicator.startsWith('BBANDS')) {
+      warmup = 20 + 2;
+    } else if (indicator === 'STOCH_K') {
+      warmup = 14 + 3;
+    } else if (indicator === 'VOLATILITY') {
+      warmup = 20;
+    } else if (indicator === 'ATR' || indicator === 'ADX' || indicator === 'RSI' || indicator === 'MFI') {
+      warmup = periodNum;
+    } else if (indicator === 'SMA' || indicator === 'EMA') {
+      warmup = periodNum;
+    } else if (indicator.startsWith('AROON')) {
+      warmup = periodNum * 2;
+    } else {
+      warmup = periodNum;
+    }
+
+    if (warmup > maxWarmup) maxWarmup = warmup;
+  }
+
+  return maxWarmup + 10;
+}
+
+/**
+ * Helper: Subtract trading days from a date
+ */
+function subtractTradingDays(dateStr: string, tradingDays: number): string {
+  const date = new Date(dateStr);
+  const calendarDays = Math.ceil(tradingDays * 1.4);
+  date.setDate(date.getDate() - calendarDays);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Evaluate strategy elements to get target allocation
+ * Uses the same logic as deployment
+ */
+async function evaluateStrategyAllocation(
+  elements: any[],
+  apiKey: string,
+  apiSecret: string
+): Promise<Record<string, number>> {
+  console.log('[REBALANCE] Evaluating strategy with elements-based executor...');
+
+  const tickers = collectTickersFromElements(elements);
+  tickers.add('SPY');
+
+  const requiredIndicators = collectRequiredIndicators(elements);
+  const warmupDays = calculateWarmupDays(requiredIndicators);
+  const endDate = getMarketDateToday();
+  const startDate = subtractTradingDays(endDate, warmupDays + 10);
+
+  console.log(`[REBALANCE] Fetching price data for ${tickers.size} tickers from ${startDate} to ${endDate}`);
+  const priceData = await fetchPriceData(Array.from(tickers), startDate, endDate, apiKey, apiSecret);
+
+  const referenceTicker = tickers.has('SPY') ? 'SPY' : Array.from(tickers)[0];
+  const referenceData = priceData[referenceTicker];
+  if (!referenceData) {
+    throw new Error(`Unable to fetch price data for reference ticker ${referenceTicker}`);
+  }
+
+  let dateGrid = Object.keys(referenceData).sort();
+  if (dateGrid.length < 2) {
+    throw new Error('Insufficient price data to evaluate strategy');
+  }
+
+  console.log(`[REBALANCE] Fetching indicators...`);
+
+  // Convert period from string to number for fetchIndicators
+  const indicatorRequests = requiredIndicators.map(ind => ({
+    ticker: ind.ticker,
+    indicator: ind.indicator,
+    period: parseInt(ind.period, 10) || 14,
+    params: ind.params,
+  }));
+
+  const indicatorData = await fetchIndicators(indicatorRequests, priceData);
+
+  console.log(`[REBALANCE] Precomputing Sort indicators if needed...`);
+  const sortStartDate = await precomputeSortIndicators({
+    elements,
+    priceData,
+    indicatorData,
+    dateGrid,
+    executeStrategy,
+    buildIndicatorMap,
+    debug: false,
+  });
+
+  let effectiveDateGrid = dateGrid;
+  if (sortStartDate) {
+    const filtered = dateGrid.filter(d => d >= sortStartDate);
+    if (filtered.length < 2) {
+      throw new Error(`Insufficient price data after sort warmup`);
+    }
+    effectiveDateGrid = filtered;
+  }
+
+  // Use T-1 decision date (yesterday's close) for T-10 execution
+  const decisionIndex = effectiveDateGrid.length - 2;
+  const decisionDate = effectiveDateGrid[decisionIndex];
+
+  console.log(`[REBALANCE] Using decision date: ${decisionDate}`);
+
+  const indicatorLookup = buildIndicatorLookupMap(elements);
+  const { values: indicatorValuesForDate } = collectIndicatorValuesForDate(
+    indicatorLookup,
+    indicatorData,
+    decisionDate
+  );
+
+  const indicatorMap = buildIndicatorMap(indicatorValuesForDate);
+
+  console.log('[REBALANCE] Executing strategy to get target positions...');
+  const evaluation = executeStrategy(elements, indicatorMap, false);
+
+  if (!evaluation.positions || evaluation.positions.length === 0) {
+    console.error('[REBALANCE] Strategy produced no positions!');
+    throw new Error('Strategy evaluation produced no positions');
+  }
+
+  console.log(`[REBALANCE] Strategy produced ${evaluation.positions.length} positions`);
+
+  // Convert positions to allocation percentages
+  const totalWeight = evaluation.positions.reduce((sum, p) => sum + p.weight, 0);
+  const allocation: Record<string, number> = {};
+
+  for (const pos of evaluation.positions) {
+    const weightPct = (pos.weight / totalWeight);
+    allocation[pos.ticker] = weightPct;
+    console.log(`[REBALANCE]   ${pos.ticker}: ${(weightPct * 100).toFixed(2)}%`);
+  }
+
+  return allocation;
+}
 
 /**
  * Calculate the difference between current and target allocations
@@ -205,14 +398,22 @@ export async function rebalanceActiveStrategy(
   const totalValue = currentHoldings.reduce((sum, h) => sum + h.marketValue, 0);
   console.log(`Current portfolio value: $${totalValue.toFixed(2)}`);
 
-  // Evaluate Flow with current prices to get target allocation
-  const targetAllocation = await evaluateFlowWithCurrentPrices(
-    strategy.flowData,
+  // Extract elements from flowData
+  const elements = strategy.flowData.elements || [];
+  if (!Array.isArray(elements) || elements.length === 0) {
+    throw new Error('Invalid strategy: flowData.elements is missing or empty');
+  }
+
+  console.log(`[REBALANCE] Strategy has ${elements.length} elements`);
+
+  // Evaluate strategy with elements-based executor to get target allocation
+  const targetAllocation = await evaluateStrategyAllocation(
+    elements,
     apiKey,
     apiSecret
   );
 
-  console.log('Target allocation:', targetAllocation);
+  console.log('[REBALANCE] Target allocation:', targetAllocation);
 
   // Calculate what needs to change
   const { toSell, toBuy } = calculateRebalanceOrders(currentHoldings, targetAllocation, totalValue);
