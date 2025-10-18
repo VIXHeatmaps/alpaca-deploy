@@ -1229,10 +1229,9 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
 
       {/* 1. Main Toolbar */}
       <div style={{
-        background: "#fff",
-        padding: '16px 32px',
-        borderBottom: '1px solid #e5e7eb',
-        marginTop: '24px',
+        background: "repeating-linear-gradient(135deg, #ffffff, #ffffff 20px, #f3f4f6 20px, #f3f4f6 40px)",
+        padding: '4px 32px',
+        marginTop: '12px',
       }}>
         <div style={{
           display: 'flex',
@@ -1438,7 +1437,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
               <div style={{
                 width: '100%',
                 display: 'flex',
-                justifyContent: 'space-between',
+                justifyContent: 'flex-start',
                 alignItems: 'center',
                 padding: '16px 24px',
                 background: '#fff',
@@ -1480,75 +1479,78 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                   {isBacktesting ? '⏳ Running...' : (hasVariables ? '▶️ Batch Backtest' : '▶️ Backtest')}
                 </button>
 
-                {/* Benchmark field */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
-                    Benchmark:
-                  </label>
-                  <input
-                    value={benchmarkSymbol}
-                    onChange={(e) => setBenchmarkSymbol(e.target.value.toUpperCase())}
-                    placeholder="SPY"
-                    style={{
-                      width: '60px',
-                      padding: '4px 6px',
-                      fontSize: '12px',
-                      border: isBenchmarkUnknown ? '2px solid #ef4444' : '1px solid #d1d5db',
-                      borderRadius: '4px',
-                      background: isBenchmarkUnknown ? '#fee2e2' : '#fff',
-                      color: isBenchmarkUnknown ? '#b91c1c' : '#111827',
-                    }}
-                    title={
-                      isBenchmarkUnknown
-                        ? `${normalizedBenchmark} not found in Alpaca asset list`
-                        : undefined
-                    }
-                  />
-                </div>
+                {/* Right-aligned group: Benchmark, Start, End */}
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Benchmark field */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                      Benchmark:
+                    </label>
+                    <input
+                      value={benchmarkSymbol}
+                      onChange={(e) => setBenchmarkSymbol(e.target.value.toUpperCase())}
+                      placeholder="SPY"
+                      style={{
+                        width: '60px',
+                        padding: '4px 6px',
+                        fontSize: '12px',
+                        border: isBenchmarkUnknown ? '2px solid #ef4444' : '1px solid #d1d5db',
+                        borderRadius: '4px',
+                        background: isBenchmarkUnknown ? '#fee2e2' : '#fff',
+                        color: isBenchmarkUnknown ? '#b91c1c' : '#111827',
+                      }}
+                      title={
+                        isBenchmarkUnknown
+                          ? `${normalizedBenchmark} not found in Alpaca asset list`
+                          : undefined
+                      }
+                    />
+                  </div>
 
-                {/* Start Date field */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
-                    Start:
-                  </label>
-                  <input
-                    type="date"
-                    defaultValue={startDate === "max" ? "" : startDate}
-                    onBlur={(e) => setStartDate(e.target.value || "max")}
-                    placeholder="Max"
-                    style={{
-                      width: '140px',
-                      padding: '4px 6px',
-                      fontSize: '12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '4px',
-                    }}
-                  />
-                </div>
+                  {/* Start Date field */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                      Start:
+                    </label>
+                    <input
+                      type="date"
+                      defaultValue={startDate === "max" ? "" : startDate}
+                      onBlur={(e) => setStartDate(e.target.value || "max")}
+                      placeholder="Max"
+                      style={{
+                        width: '140px',
+                        padding: '4px 6px',
+                        fontSize: '12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '4px',
+                      }}
+                    />
+                  </div>
 
-                {/* End Date field */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
-                    End:
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    style={{
-                      width: '140px',
-                      padding: '4px 6px',
-                      fontSize: '12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '4px',
-                    }}
-                  />
+                  {/* End Date field */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                      End:
+                    </label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      style={{
+                        width: '140px',
+                        padding: '4px 6px',
+                        fontSize: '12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '4px',
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <span style={{
                   fontSize: '14px',
                   cursor: 'pointer',
-                  marginLeft: 'auto',
+                  marginLeft: '12px',
                   transform: backtestResultsOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
                   transition: 'transform 0.2s',
                   display: 'inline-block',
@@ -1926,7 +1928,7 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
             <div style={{
               width: '100%',
               display: 'flex',
-              justifyContent: 'space-between',
+              justifyContent: 'flex-start',
               alignItems: 'center',
               padding: '16px 24px',
               background: '#fff',
@@ -1967,62 +1969,65 @@ export default function VerticalUI2({ apiKey = "", apiSecret = "" }: VerticalUI2
                 {isBacktesting ? '⏳ Running...' : (hasVariables ? '▶️ Batch Backtest' : '▶️ Backtest')}
               </button>
 
-              {/* Benchmark field */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
-                  Benchmark:
-                </label>
-                <input
-                  value={benchmarkSymbol}
-                  onChange={(e) => setBenchmarkSymbol(e.target.value.toUpperCase())}
-                  placeholder="SPY"
-                  style={{
-                    width: '60px',
-                    padding: '4px 6px',
-                    fontSize: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                  }}
-                />
-              </div>
+              {/* Right-aligned group: Benchmark, Start, End */}
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {/* Benchmark field */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                    Benchmark:
+                  </label>
+                  <input
+                    value={benchmarkSymbol}
+                    onChange={(e) => setBenchmarkSymbol(e.target.value.toUpperCase())}
+                    placeholder="SPY"
+                    style={{
+                      width: '60px',
+                      padding: '4px 6px',
+                      fontSize: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
 
-              {/* Start Date field */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
-                  Start:
-                </label>
-                <input
-                  type="date"
-                  defaultValue={startDate === "max" ? "" : startDate}
-                  onBlur={(e) => setStartDate(e.target.value || "max")}
-                  placeholder="Max"
-                  style={{
-                    width: '140px',
-                    padding: '4px 6px',
-                    fontSize: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                  }}
-                />
-              </div>
+                {/* Start Date field */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                    Start:
+                  </label>
+                  <input
+                    type="date"
+                    defaultValue={startDate === "max" ? "" : startDate}
+                    onBlur={(e) => setStartDate(e.target.value || "max")}
+                    placeholder="Max"
+                    style={{
+                      width: '140px',
+                      padding: '4px 6px',
+                      fontSize: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
 
-              {/* End Date field */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
-                  End:
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  style={{
-                    width: '140px',
-                    padding: '4px 6px',
-                    fontSize: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                  }}
-                />
+                {/* End Date field */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', whiteSpace: 'nowrap' }}>
+                    End:
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    style={{
+                      width: '140px',
+                      padding: '4px 6px',
+                      fontSize: '12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                    }}
+                  />
+                </div>
               </div>
             </div>
           )}
