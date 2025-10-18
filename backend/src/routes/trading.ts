@@ -1240,4 +1240,79 @@ tradingRouter.get('/portfolio/holdings', requireAuth, async (req: Request, res: 
   }
 });
 
+/**
+ * POST /api/recalculate-attribution
+ * Manually recalculate attribution for all active strategies
+ * Useful for fixing corrupted attribution data
+ */
+tradingRouter.post('/recalculate-attribution', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    console.log('\n=== MANUAL ATTRIBUTION RECALCULATION ===');
+    console.log(`Triggered by user ${userId}`);
+
+    const { getAllActiveStrategies, updateActiveStrategy } = await import('../db/activeStrategiesDb');
+    const { validateAttribution } = await import('../services/positionAttribution');
+
+    const allStrategies = await getAllActiveStrategies();
+    console.log(`Found ${allStrategies.length} active strategies`);
+
+    // Build symbol totals across all strategies
+    const symbolTotals: Record<string, number> = {};
+    const strategyHoldingsMap: Record<number, any[]> = {};
+
+    for (const strategy of allStrategies) {
+      const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
+      strategyHoldingsMap[strategy.id] = holdings;
+
+      for (const holding of holdings) {
+        symbolTotals[holding.symbol] = (symbolTotals[holding.symbol] || 0) + holding.qty;
+      }
+    }
+
+    console.log('Symbol totals:', symbolTotals);
+
+    // Recalculate attribution for each strategy
+    for (const strategy of allStrategies) {
+      const holdings = strategyHoldingsMap[strategy.id] || [];
+      const attribution: Record<string, any> = {};
+
+      for (const holding of holdings) {
+        const totalQty = symbolTotals[holding.symbol] || 0;
+        const allocationPct = totalQty > 0 ? holding.qty / totalQty : 1.0;
+
+        attribution[holding.symbol] = {
+          qty: holding.qty,
+          allocation_pct: allocationPct,
+        };
+
+        console.log(`Strategy #${strategy.id} ${strategy.name}: ${holding.symbol} = ${(allocationPct * 100).toFixed(2)}%`);
+      }
+
+      await updateActiveStrategy(strategy.id, {
+        position_attribution: attribution,
+      });
+    }
+
+    // Validate
+    const validation = await validateAttribution();
+
+    console.log('=== RECALCULATION COMPLETE ===\n');
+
+    return res.json({
+      success: true,
+      strategiesUpdated: allStrategies.length,
+      symbolTotals,
+      validation,
+    });
+  } catch (err: any) {
+    console.error('POST /api/recalculate-attribution error:', err);
+    return res.status(500).json({ error: err.message || 'Attribution recalculation failed' });
+  }
+});
+
 export default tradingRouter;

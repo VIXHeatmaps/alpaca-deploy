@@ -28,15 +28,25 @@ export async function calculateAttributionOnDeploy(
   newStrategyId: number,
   newHoldings: StrategyHolding[]
 ): Promise<void> {
-  console.log('[ATTRIBUTION] Calculating attribution for new strategy deployment...');
+  console.log('\n=== [ATTRIBUTION] CALCULATING ATTRIBUTION ===');
+  console.log(`[ATTRIBUTION] New Strategy ID: ${newStrategyId}`);
+  console.log(`[ATTRIBUTION] New Holdings:`, JSON.stringify(newHoldings, null, 2));
 
   // Get all active strategies (excluding the new one)
   const allStrategies = await getAllActiveStrategies();
+  console.log(`[ATTRIBUTION] Total active strategies found: ${allStrategies.length}`);
+
   const existingStrategies = allStrategies.filter(s => s.id !== newStrategyId);
   const newStrategy = allStrategies.find(s => s.id === newStrategyId);
 
   if (!newStrategy) {
     throw new Error(`Strategy ${newStrategyId} not found`);
+  }
+
+  console.log(`[ATTRIBUTION] Existing strategies (excluding new): ${existingStrategies.length}`);
+  for (const strat of existingStrategies) {
+    console.log(`[ATTRIBUTION]   - Strategy #${strat.id}: ${strat.name}`);
+    console.log(`[ATTRIBUTION]     Holdings:`, JSON.stringify(strat.holdings, null, 2));
   }
 
   // Build a map of symbol → total quantity across all strategies
@@ -49,6 +59,7 @@ export async function calculateAttributionOnDeploy(
     strategyHoldingsMap[strategy.id] = holdings;
 
     for (const holding of holdings) {
+      console.log(`[ATTRIBUTION] Adding from strategy #${strategy.id}: ${holding.qty} ${holding.symbol}`);
       symbolTotals[holding.symbol] = (symbolTotals[holding.symbol] || 0) + holding.qty;
     }
   }
@@ -56,19 +67,24 @@ export async function calculateAttributionOnDeploy(
   // Add holdings from new strategy
   strategyHoldingsMap[newStrategyId] = newHoldings;
   for (const holding of newHoldings) {
+    console.log(`[ATTRIBUTION] Adding from NEW strategy #${newStrategyId}: ${holding.qty} ${holding.symbol}`);
     symbolTotals[holding.symbol] = (symbolTotals[holding.symbol] || 0) + holding.qty;
   }
 
-  console.log('[ATTRIBUTION] Symbol totals:', symbolTotals);
+  console.log('[ATTRIBUTION] Symbol totals across ALL strategies:', symbolTotals);
 
   // Calculate attribution for each strategy
+  console.log('\n[ATTRIBUTION] Calculating allocation percentages for each strategy...');
   for (const strategy of allStrategies) {
     const holdings = strategyHoldingsMap[strategy.id] || [];
     const attribution: PositionAttribution = {};
 
+    console.log(`[ATTRIBUTION] Processing strategy #${strategy.id}: ${strategy.name}`);
     for (const holding of holdings) {
       const totalQty = symbolTotals[holding.symbol] || 0;
       const allocationPct = totalQty > 0 ? holding.qty / totalQty : 1.0;
+
+      console.log(`[ATTRIBUTION]   ${holding.symbol}: ${holding.qty} / ${totalQty} = ${(allocationPct * 100).toFixed(2)}%`);
 
       attribution[holding.symbol] = {
         qty: holding.qty,
@@ -81,10 +97,24 @@ export async function calculateAttributionOnDeploy(
       position_attribution: attribution,
     });
 
-    console.log(`[ATTRIBUTION] Updated strategy ${strategy.id} attribution:`, attribution);
+    console.log(`[ATTRIBUTION] ✓ Updated strategy #${strategy.id} attribution:`, attribution);
   }
 
-  console.log('[ATTRIBUTION] ✓ Attribution calculation complete');
+  // VALIDATION: Ensure attribution percentages sum to 1.0 for each symbol
+  console.log('\n[ATTRIBUTION] Validating attribution integrity...');
+  const validation = await validateAttribution();
+  if (!validation.valid) {
+    console.error('[ATTRIBUTION] ❌ VALIDATION FAILED:');
+    for (const error of validation.errors) {
+      console.error(`[ATTRIBUTION]   - ${error}`);
+    }
+    // Don't throw - log the error but allow deployment to continue
+    // We'll fix attribution recalculation in next phase
+  } else {
+    console.log('[ATTRIBUTION] ✓ Validation passed - all symbols correctly attributed');
+  }
+
+  console.log('[ATTRIBUTION] ✓ Attribution calculation complete\n');
 }
 
 /**
